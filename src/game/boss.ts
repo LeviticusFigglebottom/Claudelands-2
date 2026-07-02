@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { Enemy, enemySpawner, enemyHooks } from './enemies';
-import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, type EnemyDef } from '../data/enemies';
+import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, type EnemyDef } from '../data/enemies';
 import { toonMat, glowMat } from '../render/toon';
 import { fx } from './particles';
 import { audio } from '../audio/synth';
@@ -306,14 +306,91 @@ export class OldManAvalanche extends Boss {
 }
 
 // ---------------------------------------------------------------------------
-export type BossId = 'gutterball' | 'warden_prime' | 'old_man_avalanche';
+// SAINT FURNACE — the Kindled's walking god-stove. Meteor calls, ember
+// novas, offering summons; its firebox door (chest) is the crit zone.
+export class SaintFurnace extends Boss {
+  private firebox: THREE.Mesh;
+
+  constructor(level: number, pos: THREE.Vector3) {
+    super(BOSS_FURNACE, level, pos);
+    const scale = this.def.scale;
+    // furnace dressing: chimney stack + glowing firebox door (crit)
+    const iron = toonMat({ color: 0x3a3430 });
+    const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.14 * scale, 0.2 * scale, 0.9 * scale, 8), iron);
+    stack.position.set(0.25 * scale, 1.95 * scale, 0.1 * scale);
+    this.group.add(stack);
+    this.bodyParts.push(stack);
+    this.firebox = new THREE.Mesh(new THREE.BoxGeometry(0.5 * scale, 0.55 * scale, 0.1 * scale), glowMat(0xff7a1a, 0.95));
+    this.firebox.position.set(0, 1.0 * scale, -0.3 * scale);
+    this.group.add(this.firebox);
+    this.bodyParts.push(this.firebox);
+    this.critZone = this.firebox;
+    audio.bossRoar(true);
+  }
+
+  protected onPhase(phase: number): void {
+    if (phase === 1) {
+      enemyHooks().bark(this.displayName, 'CONGREGATION! FEED THE GUEST TO ME.');
+      for (const s of [new THREE.Vector3(5, 0, 4), new THREE.Vector3(-5, 0, 4), new THREE.Vector3(0, 0, -6)]) {
+        enemySpawner.spawnOne(ENEMIES.fusebug, this.position.clone().add(s), false, 9);
+      }
+    } else {
+      enemyHooks().bark(this.displayName, 'OPEN. THE. DAMPERS.');
+      audio.bossRoar(true);
+      this.def = { ...this.def, speed: this.def.speed * 1.4, attackRate: this.def.attackRate * 1.35 };
+      (this.firebox.material as THREE.MeshBasicMaterial).color.setHex(0xffd23c);
+    }
+  }
+
+  protected specialCooldown(): number { return this.phase >= 2 ? 4 : 6.5; }
+
+  protected special(): void {
+    const playerPos = enemyHooks().playerPos();
+    if (Math.random() < 0.5) {
+      // METEOR RAIN: arcing slag shells bracket the player
+      enemyHooks().bark(this.displayName, 'DONATIONS FROM ABOVE.');
+      for (let i = 0; i < 4; i++) {
+        const target = playerPos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 8));
+        const muzzle = this.position.clone().add(new THREE.Vector3(0, 2.6 * this.def.scale, 0));
+        const aim = target.clone().sub(muzzle);
+        const dist = aim.length();
+        aim.normalize().multiplyScalar(16);
+        aim.y += dist * 0.55;
+        projectiles.spawn({
+          pos: muzzle, vel: aim, damage: 10 * levelScale(this.level), element: 'ember',
+          splash: 3, gravity: 14, fuse: -1, source: 'enemy',
+        });
+      }
+      audio.explosion(false);
+    } else {
+      // EMBER NOVA slam
+      fx.explosion(this.position.clone(), 6, 0xff7a1a);
+      audio.explosion(true);
+      audio.elemental('ember');
+      splashDamage(this.position.clone(), 8.5, 10 * levelScale(this.level), 'ember', { source: 'enemy', elemChance: 0.8 });
+    }
+  }
+
+  override update(dt: number): void {
+    super.update(dt);
+    if (!this.alive) return;
+    // always shedding sparks
+    if (Math.random() < 12 * dt) fx.statusFlames(this.position, 'ember');
+    const m = this.firebox.material as THREE.MeshBasicMaterial;
+    m.opacity = 0.75 + Math.sin(this.wobble * 2.2) * 0.2;
+  }
+}
+
+// ---------------------------------------------------------------------------
+export type BossId = 'gutterball' | 'warden_prime' | 'old_man_avalanche' | 'saint_furnace';
 
 export function spawnBoss(id: BossId, pos: THREE.Vector3): Enemy {
   const level = state.level + 2;
   const boss = id === 'gutterball' ? new Gutterball(level, pos)
     : id === 'warden_prime' ? new WardenPrime(level, pos)
-    : new OldManAvalanche(level, pos);
+    : id === 'old_man_avalanche' ? new OldManAvalanche(level, pos)
+    : new SaintFurnace(level, pos);
   enemySpawner.registerBoss(boss);
-  fx.explosion(pos.clone().add(new THREE.Vector3(0, 1, 0)), 4, id === 'gutterball' ? 0xff8438 : id === 'warden_prime' ? 0x54d4ff : 0x9ad8e8);
+  fx.explosion(pos.clone().add(new THREE.Vector3(0, 1, 0)), 4, id === 'gutterball' ? 0xff8438 : id === 'warden_prime' ? 0x54d4ff : id === 'old_man_avalanche' ? 0x9ad8e8 : 0xff7a1a);
   return boss;
 }

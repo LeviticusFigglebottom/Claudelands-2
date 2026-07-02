@@ -104,7 +104,7 @@ body { font-family: var(--ui-font); user-select: none; }
 #hud-xp .xpbar .fill { height: 100%; background: var(--xp); transform-origin: left; }
 #hud-xp .lvl { font-size: 13px; color: var(--paper); text-shadow: 1px 1px 0 #000; margin-top: 2px; letter-spacing: 0.1em; }
 
-#hud-money { right: 18px; top: 16px; font-family: var(--title-font); font-size: 19px; color: #8fff3d; text-shadow: 2px 2px 0 #000; text-align: right; }
+#hud-money { right: 200px; top: 16px; font-family: var(--title-font); font-size: 19px; color: #8fff3d; text-shadow: 2px 2px 0 #000; text-align: right; }
 #hud-money .grit { font-size: 12px; color: #ffd23c; letter-spacing: 0.1em; }
 #hud-zone { left: 18px; top: 16px; color: var(--paper); text-shadow: 2px 2px 0 #000; }
 #hud-zone .zname { font-family: var(--title-font); font-size: 20px; letter-spacing: 0.12em; }
@@ -403,3 +403,35 @@ body { font-family: var(--ui-font); user-select: none; }
 /* fast travel grouped rows */
 .ft-map-name { font-family: var(--title-font); font-size: 15px; color: var(--hud-edge); letter-spacing: 0.12em; margin: 10px 0 4px; }
 .ft-row { text-align: left; }
+
+/* ---------------------------------------------------------------- minimap */
+#minimap { right: 14px; top: 14px; width: 170px; height: 170px; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.6)); }
+
+/* compass off-range chevrons */
+.compass-marker.off-l::before { content: '◂'; position: absolute; left: -11px; top: 2px; font-size: 11px; }
+.compass-marker.off-r::before { content: '▸'; position: absolute; right: -11px; top: 2px; font-size: 11px; }
+
+/* --------------------------------------------------- BL-style HUD reskin */
+.hud-plate {
+  background: linear-gradient(178deg, rgba(20,16,12,0.9), rgba(8,6,5,0.92));
+  border-width: 1px 1px 3px 1px;
+  border-color: rgba(216,176,40,0.4) rgba(216,176,40,0.4) var(--hud-edge) rgba(216,176,40,0.4);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 4px 10px rgba(0,0,0,0.5);
+}
+#hud-vitals { transform: skewX(-3deg); transform-origin: bottom left; }
+#hud-vitals > * { transform: skewX(3deg); }
+#hud-ammo { transform: skewX(3deg); transform-origin: bottom right; }
+#hud-ammo > * { transform: skewX(-3deg); }
+#hud-ammo .mag { font-size: 46px; text-shadow: 2px 2px 0 #000; }
+/* segmented bar ticks — the BL health/shield read */
+.bar > .fill {
+  background-image: repeating-linear-gradient(90deg, transparent 0 14px, rgba(0,0,0,0.35) 14px 16px) !important;
+  background-blend-mode: multiply;
+}
+.bar.health > .fill { background-color: #e04040; }
+.bar.shield > .fill { background-color: #54d4ff; }
+.bar { border: 1px solid rgba(0,0,0,0.6); box-shadow: inset 0 2px 3px rgba(0,0,0,0.5); height: 17px; }
+#hud-zone { border-left: 4px solid var(--hud-edge); }
+#crosshair .arm { background: rgba(255, 235, 200, 0.95); box-shadow: 0 0 3px rgba(0,0,0,0.9); }
+#crosshair .h { height: 2.5px; width: 11px; }
+#crosshair .v { width: 2.5px; height: 11px; }

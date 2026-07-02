@@ -120,6 +120,33 @@ export const WIRE_LOGS: WireLog[] = [
     ],
   },
   {
+    id: 'log_kindled1',
+    speaker: 'KINDLED LAMPLIGHTER — SOOT-CAKED WIRE SPOOL',
+    lines: [
+      'First Spark Sermon: the Rust rots. The Fire PURIFIES. We left the Duke to his garbage.',
+      'The Saint took its first offering today. A whole supply cart. The warmth was... personal.',
+      'Feed schedule is posted at the kilns. Do NOT be late. Do not BE the meal.',
+    ],
+  },
+  {
+    id: 'log_kindled2',
+    speaker: 'HELIX FOUNDRY 9 — FINAL SHIFT LOG',
+    lines: [
+      'SHIFT NOTE: locals broke in again. They are not stealing. They are... decorating.',
+      'They put a hat on the smelter. They are calling it a saint. HR has no guidance for this.',
+      'FINAL NOTE: the smelter is walking. I quit. Effective yesterday.',
+    ],
+  },
+  {
+    id: 'log_kindled3',
+    speaker: 'KINDLED CHOIRMASTER — WARM WIRE SPOOL',
+    lines: [
+      'The Saint grows hungry near the Court. Double offerings. Triple on feast days.',
+      'A contractor walks the Throat. The Saint says: let them come. Pre-seasoned.',
+      'Hymn 44: crackle, crackle, pop. Repeat until glorious.',
+    ],
+  },
+  {
     id: 'log_icebox',
     speaker: 'UNKNOWN FROSTBORN — REVERENT WIRE SPOOL',
     lines: [

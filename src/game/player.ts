@@ -251,6 +251,19 @@ export class Player implements Damageable {
     }
     const moving = move.lengthSq() > 0;
     if (moving) move.normalize().multiplyScalar(speed * dt);
+    // slope blocking: ridge walls and steep terrain reject uphill movement
+    if (moving) {
+      const hBefore = this.world.groundHeight(this.position.x, this.position.z);
+      const hAfter = this.world.groundHeight(this.position.x + move.x, this.position.z + move.z);
+      if (this.grounded && hAfter - hBefore > move.length() * 1.1) {
+        // try sliding along each axis before rejecting outright
+        const hX = this.world.groundHeight(this.position.x + move.x, this.position.z);
+        const hZ = this.world.groundHeight(this.position.x, this.position.z + move.z);
+        if (hX - hBefore <= Math.abs(move.x) * 1.1) move.z = 0;
+        else if (hZ - hBefore <= Math.abs(move.z) * 1.1) move.x = 0;
+        else move.set(0, 0, 0);
+      }
+    }
     this.position.add(move);
 
     // gravity & jump

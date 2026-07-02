@@ -6,7 +6,7 @@
 // terrain ray-march), and interactables. Consumes data/world.ts only.
 
 import * as THREE from 'three';
-import { WORLD, terrainHeight, terrainNormal, roadFactor, districtAt, type WorldPoi, type DistrictDef } from '../data/world';
+import { WORLD, terrainHeight, terrainNormal, meshHeight, roadFactor, districtAt, TERRAIN_SEGS, TERRAIN_SPAN_FACTOR, type WorldPoi, type DistrictDef } from '../data/world';
 import { toonMat, glowMat, flatMat } from '../render/toon';
 import { groundTexture, rockTexture, corrugatedTexture, posterTexture, swatch, cloudTexture } from '../render/textures';
 import { POSTERS, GRAFFITI } from '../data/flavor';
@@ -90,10 +90,10 @@ export class World {
   constructor(scene: THREE.Scene) {
     this.buildSky(scene);
     this.buildTerrain();
-    this.buildCanyonRing();
-    this.buildScatter();
     this.buildDistricts();
     this.buildPois();
+    this.buildCanyonRing();
+    this.buildScatter();
     this.buildCritters();
     scene.add(this.group);
   }
@@ -196,15 +196,15 @@ export class World {
 
   // ------------------------------------------------------------------ terrain
   private buildTerrain(): void {
-    const span = WORLD.size * 1.7;
-    const segs = 170;
+    const span = WORLD.size * TERRAIN_SPAN_FACTOR;
+    const segs = TERRAIN_SEGS;
     const geo = new THREE.PlaneGeometry(span, span, segs, segs);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.getAttribute('position');
     const colors = new Float32Array(pos.count * 3);
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), z = pos.getZ(i);
-      pos.setY(i, terrainHeight(x, z));
+      pos.setY(i, meshHeight(x, z));
       // vertex tint: roads read as packed dark ruts, no extra geometry
       const road = roadFactor(x, z);
       const shade = 1 - road * 0.38;
@@ -259,7 +259,9 @@ export class World {
     for (let i = 0; i < 26; i++) {
       const x = (rng() - 0.5) * WORLD.size * 0.95;
       const z = (rng() - 0.5) * WORLD.size * 0.95;
-      if (districtAt(x, z)?.id === 'gutterlight') continue;
+      const dd = districtAt(x, z);
+      if (dd && (dd.dress === 'hub' || dd.dress === 'frosthub' || dd.dress === 'throatgate')) continue;
+      if (!this.clearOfAssets(x, z, 2.2)) continue;
       const s = 0.8 + rng() * 2.6;
       const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
       rock.position.set(x, terrainHeight(x, z) + s * 0.3, z);
@@ -285,7 +287,8 @@ export class World {
       const x = (rng() - 0.5) * WORLD.size * 1.15;
       const z = (rng() - 0.5) * WORLD.size * 1.15;
       const d = districtAt(x, z);
-      if (d && (d.id === 'gutterlight' || d.id === 'trashmount')) continue;
+      if (d && (d.dress === 'hub' || d.dress === 'frosthub' || d.dress === 'throne' || d.dress === 'throatgate')) continue;
+      if (!this.clearOfAssets(x, z, 1.2)) continue;
       const sc = 0.6 + rng() * 1.3;
       q.setFromEuler(new THREE.Euler(0.15 * (rng() - 0.5), rng() * Math.PI, 0.15 * (rng() - 0.5)));
       s.set(sc, sc * (0.7 + rng() * 0.8), sc);
@@ -302,6 +305,18 @@ export class World {
     this.colliders.push({ minX: x - hw, maxX: x + hw, minZ: z - hd, maxZ: z + hd });
   }
 
+  /** Scatter keep-out: too close to a collider, POI, or road = don't place. */
+  private clearOfAssets(x: number, z: number, margin = 1.6): boolean {
+    if (roadFactor(x, z) > 0.12) return false;
+    for (const c of this.colliders) {
+      if (x > c.minX - margin && x < c.maxX + margin && z > c.minZ - margin && z < c.maxZ + margin) return false;
+    }
+    for (const p of WORLD.pois) {
+      if (Math.hypot(x - p.x, z - p.z) < 5.5) return false;
+    }
+    return true;
+  }
+
   private buildDistricts(): void {
     for (const d of WORLD.districts) {
       switch (d.dress) {
@@ -314,6 +329,11 @@ export class World {
         case 'pinebreak': this.buildPinebreak(d); break;
         case 'fathom': this.buildFathom(d); break;
         case 'icebox': this.buildIcebox(d); break;
+        case 'throatgate': this.buildThroatGate(d); break;
+        case 'cindercamp': this.buildCinderCamp(d); break;
+        case 'ashflats': this.buildAshFlats(d); break;
+        case 'kilnyard': this.buildKilnYard(d); break;
+        case 'foundrycourt': this.buildFoundryCourt(d); break;
       }
     }
   }
@@ -340,6 +360,184 @@ export class World {
     this.group.add(tree);
     this.staticTargets.push(tree);
     this.addCollider(x, z, 0.35 * scale, 0.35 * scale);
+  }
+
+  /** Charred snag: blackened trunk with bare branch stubs. */
+  private burntTree(x: number, z: number, scale = 1): void {
+    const y = terrainHeight(x, z);
+    const tree = new THREE.Group();
+    const charMat = toonMat({ color: 0x241e1a, map: swatch('#1f1a16', 40) });
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * scale, 0.24 * scale, 3.2 * scale, 6), charMat);
+    trunk.position.y = 1.6 * scale;
+    trunk.rotation.z = (Math.random() - 0.5) * 0.12;
+    tree.add(trunk);
+    for (let i = 0; i < 3; i++) {
+      const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.04 * scale, 0.07 * scale, 1.1 * scale, 5), charMat);
+      const a = Math.random() * Math.PI * 2;
+      branch.position.set(Math.cos(a) * 0.25 * scale, (1.6 + i * 0.6) * scale, Math.sin(a) * 0.25 * scale);
+      branch.rotation.z = 0.9 + Math.random() * 0.5;
+      branch.rotation.y = a;
+      tree.add(branch);
+    }
+    // a few embers still glowing in the bark
+    const ember = new THREE.Mesh(new THREE.SphereGeometry(0.05 * scale, 5, 5), glowMat(0xff6a1a, 0.9));
+    ember.position.set(0.1 * scale, 0.8 * scale, 0.1 * scale);
+    ember.name = 'blinker';
+    tree.add(ember);
+    tree.position.set(x, y, z);
+    tree.rotation.y = Math.random() * Math.PI;
+    tree.traverse((o) => (o.castShadow = true));
+    this.group.add(tree);
+    this.staticTargets.push(tree);
+    this.addCollider(x, z, 0.3 * scale, 0.3 * scale);
+  }
+
+  private lavaPool(x: number, z: number, r: number): void {
+    const y = terrainHeight(x, z);
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(r, 14), glowMat(0xff7a1a, 0.7));
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.set(x, y + 0.05, z);
+    pool.layers.set(FX_LAYER);
+    this.group.add(pool);
+    const core = new THREE.Mesh(new THREE.CircleGeometry(r * 0.5, 12), glowMat(0xffd23c, 0.85));
+    core.rotation.x = -Math.PI / 2;
+    core.position.set(x, y + 0.07, z);
+    core.layers.set(FX_LAYER);
+    this.group.add(core);
+    const light = new THREE.PointLight(0xff6a1a, 14, r * 5);
+    light.position.set(x, y + 1.2, z);
+    this.group.add(light);
+    this.barrelFlames.push(new THREE.Vector3(x, y + 0.4, z));
+  }
+
+  // --------------------------------------------------- Cinder Throat dresses
+  private buildThroatGate(d: DistrictDef): void {
+    const rng = mulberry32(6001);
+    // scorched arch over the entry
+    const charMat = toonMat({ color: 0x2c2624, map: swatch('#241f1c', 60) });
+    const postL = new THREE.Mesh(new THREE.BoxGeometry(1.2, 8, 1.2), charMat);
+    postL.position.set(-7, terrainHeight(-7, 118) + 4, 118);
+    const postR = postL.clone(); postR.position.x = 7;
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(15.6, 1.4, 1.4), charMat);
+    lintel.position.set(0, terrainHeight(0, 118) + 7.6, 118);
+    const skullSign = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 2),
+      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['THE', 'KINDLED', 'WELCOME FUEL'], style: 'warning', bg: '#d8843c', fg: '#1a1210', accent: '#1a1210' }), side: THREE.DoubleSide }));
+    skullSign.position.set(0, terrainHeight(0, 118) + 5.4, 118.8);
+    this.group.add(postL, postR, lintel, skullSign);
+    this.staticTargets.push(postL, postR);
+    this.campfire(5, 128);
+    this.junkPiles(rng, d.cx, d.cz + 4, 12, 3);
+    for (let i = 0; i < 5; i++) this.burntTree(d.cx + (rng() - 0.5) * 30, d.cz + (rng() - 0.5) * 26, 0.8 + rng() * 0.6);
+  }
+
+  private buildCinderCamp(d: DistrictDef): void {
+    const rng = mulberry32(6002);
+    const tentMat = toonMat({ color: 0x6a4434, map: swatch('#5a3a2c', 70) });
+    for (const [x, z] of [[d.cx + 6, d.cz - 4], [d.cx - 8, d.cz + 6], [d.cx + 2, d.cz + 10]] as const) {
+      const tent = new THREE.Mesh(new THREE.ConeGeometry(1.8, 2.6, 6), tentMat);
+      tent.position.set(x, terrainHeight(x, z) + 1.2, z);
+      tent.castShadow = true;
+      this.group.add(tent);
+      this.staticTargets.push(tent);
+      this.addCollider(x, z, 1.5, 1.5);
+    }
+    this.campfire(d.cx, d.cz);
+    this.campfire(d.cx - 12, d.cz - 8);
+    this.lavaPool(d.cx + 14, d.cz + 4, 2.4);
+    this.explosiveBarrel(d.cx + 8, d.cz + 8);
+    this.explosiveBarrel(d.cx - 14, d.cz + 2);
+    this.junkPiles(rng, d.cx, d.cz, 18, 5);
+    for (let i = 0; i < 8; i++) this.burntTree(d.cx + (rng() - 0.5) * 44, d.cz + (rng() - 0.5) * 40, 0.7 + rng() * 0.7);
+    this.poster(d.cx + 5, d.cz - 3, Math.PI, 0);
+    this.graffiti(d.cx - 7, d.cz + 7.2, 0.4, 1);
+  }
+
+  private buildAshFlats(d: DistrictDef): void {
+    const rng = mulberry32(6003);
+    // open killing field: bone-char mounds, lava seams, wrecked hauler cart
+    for (let i = 0; i < 6; i++) {
+      const a = rng() * Math.PI * 2;
+      const r = rng() * d.radius * 0.7;
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      const mound = new THREE.Mesh(new THREE.SphereGeometry(1 + rng() * 1.6, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), toonMat({ color: 0x3a322e, map: swatch('#332c28', 60) }));
+      mound.position.set(x, terrainHeight(x, z), z);
+      mound.castShadow = true;
+      this.group.add(mound);
+      this.staticTargets.push(mound);
+      this.addCollider(x, z, 1.4, 1.4);
+    }
+    this.lavaPool(d.cx - 8, d.cz + 10, 3);
+    this.lavaPool(d.cx + 12, d.cz - 6, 2.2);
+    const cart = new THREE.Mesh(new THREE.BoxGeometry(4, 2, 2.4), toonMat({ map: corrugatedTexture('#5a4a42', '#7a3a20') }));
+    cart.position.set(d.cx + 2, terrainHeight(d.cx + 2, d.cz + 16) + 1, d.cz + 16);
+    cart.rotation.z = 0.3;
+    cart.castShadow = true;
+    this.group.add(cart);
+    this.staticTargets.push(cart);
+    this.addCollider(d.cx + 2, d.cz + 16, 2.4, 1.6);
+    this.explosiveBarrel(d.cx - 12, d.cz - 10);
+    this.explosiveBarrel(d.cx + 16, d.cz + 6);
+    for (let i = 0; i < 10; i++) this.burntTree(d.cx + (rng() - 0.5) * 52, d.cz + (rng() - 0.5) * 48, 0.7 + rng() * 0.8);
+  }
+
+  private buildKilnYard(d: DistrictDef): void {
+    const rng = mulberry32(6004);
+    // brick kilns: squat domes with glowing mouths
+    const brickMat = toonMat({ color: 0x6a4434, map: swatch('#5e3c2e', 90) });
+    for (const [x, z] of [[d.cx - 8, d.cz - 6], [d.cx + 10, d.cz + 4], [d.cx - 2, d.cz + 12]] as const) {
+      const y = terrainHeight(x, z);
+      const kiln = new THREE.Mesh(new THREE.SphereGeometry(2.2, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), brickMat);
+      kiln.position.set(x, y, z);
+      const mouth = new THREE.Mesh(new THREE.CircleGeometry(0.7, 10), glowMat(0xff7a1a, 0.9));
+      mouth.position.set(x, y + 0.8, z + 2.1);
+      const chimney = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 1.6, 8), brickMat);
+      chimney.position.set(x, y + 2.6, z);
+      kiln.castShadow = true;
+      this.group.add(kiln, mouth, chimney);
+      this.staticTargets.push(kiln);
+      this.addCollider(x, z, 2.2, 2.2);
+      this.barrelFlames.push(new THREE.Vector3(x, y + 3.4, z));
+    }
+    this.campfire(d.cx + 4, d.cz - 12);
+    this.lavaPool(d.cx - 14, d.cz + 8, 2);
+    this.explosiveBarrel(d.cx + 14, d.cz - 4);
+    this.junkPiles(rng, d.cx, d.cz, 16, 4);
+    this.poster(d.cx - 7.8, d.cz - 6, Math.PI / 2, 2);
+  }
+
+  private buildFoundryCourt(d: DistrictDef): void {
+    const rng = mulberry32(6005);
+    // the stolen Helix foundry: a hulking furnace facade at the court's back
+    const hullMat = toonMat({ color: 0x4a4442, map: swatch('#413c3a', 70) });
+    const teal = toonMat({ color: 0x2ba8a0 });
+    const facade = new THREE.Group();
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(26, 12, 3), hullMat);
+    wall.position.y = 6;
+    const maw = new THREE.Mesh(new THREE.PlaneGeometry(7, 8), glowMat(0xff6a1a, 0.85));
+    maw.position.set(0, 4.5, 1.6);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(26.2, 1, 3.2), teal);
+    stripe.position.y = 10.5;
+    for (let i = 0; i < 4; i++) {
+      const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 6, 8), hullMat);
+      stack.position.set(-9 + i * 6, 14, 0);
+      facade.add(stack);
+    }
+    const logo = new THREE.Mesh(new THREE.PlaneGeometry(5, 3),
+      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['HELIX', 'FOUNDRY 9', '(UNDER NEW MGMT)'], style: 'warning', bg: '#4a4442', fg: '#ffd23c', accent: '#2ba8a0' }) }));
+    logo.position.set(8, 8, 1.6);
+    facade.add(wall, maw, stripe, logo);
+    facade.position.set(d.cx, terrainHeight(d.cx, d.cz - 14), d.cz - 14);
+    facade.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
+    this.group.add(facade);
+    this.staticTargets.push(facade);
+    this.addCollider(d.cx, d.cz - 14, 13, 2);
+    // offering piles + lava moat accents
+    this.lavaPool(d.cx - 12, d.cz + 6, 2.6);
+    this.lavaPool(d.cx + 12, d.cz + 4, 2.2);
+    this.campfire(d.cx - 6, d.cz + 14);
+    this.campfire(d.cx + 6, d.cz + 14);
+    this.junkPiles(rng, d.cx, d.cz + 6, 14, 4);
+    for (let i = 0; i < 4; i++) this.burntTree(d.cx + (rng() - 0.5) * 40, d.cz + 16 + rng() * 8, 0.9 + rng() * 0.5);
   }
 
   private campfire(x: number, z: number): void {
@@ -1453,6 +1651,13 @@ export class World {
         const r = Math.random() * 22;
         const p = playerPos.clone().add(new THREE.Vector3(Math.cos(a) * r, 6 + Math.random() * 6, Math.sin(a) * r));
         fx.emit(p, new THREE.Vector3(0.35 + Math.random() * 0.3, -1.1, 0.15), 0xffffff, 0.07, 6, 0.02);
+      }
+    } else if (WORLD.biome.ambientParticle === 'ash') {
+      if (Math.random() < 30 * dt) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * 20;
+        const p = playerPos.clone().add(new THREE.Vector3(Math.cos(a) * r, 5 + Math.random() * 6, Math.sin(a) * r));
+        fx.emit(p, new THREE.Vector3(0.2, -0.7, 0.1), Math.random() > 0.85 ? 0xff6a1a : 0x8a8078, 0.06, 7, 0.01);
       }
     } else if (Math.random() < 6 * dt) {
       const a = Math.random() * Math.PI * 2;

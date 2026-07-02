@@ -7,7 +7,7 @@
 import type { ElementId } from '../game/types';
 
 export type EnemyBehavior = 'rusher' | 'gunner' | 'lobber' | 'brute' | 'flyer' | 'suicide';
-export type Faction = 'rustborn' | 'helix' | 'frostborn';
+export type Faction = 'rustborn' | 'helix' | 'frostborn' | 'kindled';
 
 export interface EnemyDef {
   id: string;
@@ -181,6 +181,36 @@ export const ENEMIES: Record<string, EnemyDef> = {
     barks: ['I AM THE WEATHER!', '*glacial cracking noises*', 'The mountain sent me PERSONALLY!'],
     weight: 8,
   },
+  // ------------------------------------------------------------- THE KINDLED
+  ashwalker: {
+    id: 'ashwalker', name: 'Ashwalker', badassName: 'Big Damn Ashwalker',
+    faction: 'kindled', behavior: 'gunner',
+    flesh: 1, shield: 0, armor: 0,
+    hpMult: 1.2, damageMult: 1.15, speed: 3.6, attackRange: 15, attackRate: 0.95, aggroRange: 27,
+    scale: 1.05, tint: 0x5a4038, dropTier: 0, xp: 16,
+    barks: ['The Furnace sees you, fuel!', 'Burn bright, burn BRIEF!', 'Yer ashes will feed the Saint!', 'Kindling! KINDLING!'],
+    projectile: { speed: 28, element: 'ember' },
+    weight: 26,
+  },
+  ash_shrike: {
+    id: 'ash_shrike', name: 'Ash Shrike', badassName: 'Big Damn Cinder Shrike',
+    faction: 'kindled', behavior: 'flyer',
+    flesh: 0.75, shield: 0.25, armor: 0,
+    hpMult: 0.95, damageMult: 1.1, speed: 5.4, attackRange: 14, attackRate: 1.0, aggroRange: 30,
+    scale: 0.8, tint: 0x8a5a3a, dropTier: 1, xp: 18,
+    barks: ['*a shriek full of sparks*', '*wings trailing smoke*', '*SKREE, but flammable*'],
+    projectile: { speed: 32, element: 'ember' },
+    weight: 16,
+  },
+  cinderhulk: {
+    id: 'cinderhulk', name: 'Cinderhulk', badassName: 'Big Damn Cinderhulk',
+    faction: 'kindled', behavior: 'brute',
+    flesh: 0.4, shield: 0, armor: 0.6,
+    hpMult: 3.0, damageMult: 1.7, speed: 2.8, attackRange: 2.5, attackRate: 0.6, aggroRange: 22,
+    scale: 1.6, tint: 0x4a3a34, dropTier: 1, xp: 38,
+    barks: ['I AM PRE-HEATED!', '*sound of a walking bonfire*', 'The Saint breathes through ME!'],
+    weight: 9,
+  },
 };
 
 // ------------------------------------------------------------------ bosses
@@ -212,6 +242,16 @@ export const BOSS_AVALANCHE: EnemyDef = {
   hpMult: 30, damageMult: 2.3, speed: 3.4, attackRange: 3.4, attackRate: 0.8, aggroRange: 65,
   scale: 2.7, tint: 0xcfe0ec, dropTier: 3, xp: 700,
   barks: ['WINTER TAKES ITS TIME. I DON’T.', 'I buried better hikers than you!', 'The Hollow feeds ME first!', 'Hear that rumble? That’s FAMILY.'],
+  weight: 0,
+};
+
+export const BOSS_FURNACE: EnemyDef = {
+  id: 'saint_furnace', name: 'SAINT FURNACE', badassName: 'SAINT FURNACE',
+  faction: 'kindled', behavior: 'brute',
+  flesh: 0.35, shield: 0, armor: 0.65,
+  hpMult: 40, damageMult: 2.5, speed: 3.2, attackRange: 3.6, attackRate: 0.8, aggroRange: 70,
+  scale: 3.0, tint: 0x4a3a34, dropTier: 3, xp: 1200,
+  barks: ['THE FURNACE ACCEPTS ALL DONATIONS.', 'YOU ARRIVE PRE-SEASONED. THOUGHTFUL.', 'MY CONGREGATION BURNS FOR YOU. LITERALLY.', 'ASH TO ASH. YOU FIRST.'],
   weight: 0,
 };
 

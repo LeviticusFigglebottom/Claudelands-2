@@ -63,16 +63,18 @@ export class Compass {
       el.style.color = m.color;
       const bearing = Math.atan2(m.x - playerPos.x, m.z - playerPos.z);
       const rel = this.wrap(bearing - facing);
-      if (Math.abs(rel) > HALF_FOV) {
-        // clamp to edge as an arrow hint
-        el.style.left = `${(rel > 0 ? width - 10 : 10)}px`;
-        el.style.opacity = '0.45';
-      } else {
-        el.style.left = `${(0.5 + rel / (HALF_FOV * 2)) * width}px`;
-        el.style.opacity = '1';
-      }
+      // smooth clamp: markers slide continuously to the bar's edge, and get
+      // a direction chevron when the target is outside the view cone
+      const clamped = Math.max(-HALF_FOV, Math.min(HALF_FOV, rel));
+      el.style.left = `${(0.5 + clamped / (HALF_FOV * 2)) * (width - 24) + 12}px`;
+      const off = Math.abs(rel) > HALF_FOV;
+      el.style.opacity = off ? '0.55' : '1';
+      el.classList.toggle('off-l', off && rel < 0);
+      el.classList.toggle('off-r', off && rel > 0);
       const dist = Math.hypot(m.x - playerPos.x, m.z - playerPos.z);
       el.dataset.dist = `${Math.round(dist)}m`;
+      // quest diamond rides above other icons so overlaps never hide it
+      el.style.zIndex = m.id === 'quest' ? '3' : m.id === 'boss' ? '2' : '1';
     }
     for (const [id, el] of this.markerEls) {
       if (!seen.has(id)) { el.remove(); this.markerEls.delete(id); }

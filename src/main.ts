@@ -27,6 +27,8 @@ import { generateShield, generateGrenadeMod } from './gen/geargen';
 import { DamageNumberSystem } from './ui/damagenumbers';
 import { Hud } from './ui/hud';
 import { Compass, type CompassMarker } from './ui/compass';
+import { Minimap } from './ui/minimap';
+import { FullMapPanel } from './ui/fullmap';
 import { InventoryPanel } from './ui/inventory';
 import { SkillTreePanel } from './ui/skilltree';
 import { VendorPanel } from './ui/vendor';
@@ -166,6 +168,8 @@ function switchMap(mapId: string, toX?: number, toZ?: number): void {
 // ---------------------------------------------------------------- UI
 const hud = new Hud();
 const compass = new Compass();
+const minimap = new Minimap();
+const fullMapPanel = new FullMapPanel();
 const questTracker = new QuestTracker();
 const intro = new IntroOverlay();
 player.onHurtFrom = (rel) => hud.hurtFrom(rel);
@@ -188,7 +192,7 @@ const questLogPanel = new QuestLogPanel();
 const dialoguePanel = new DialoguePanel();
 const pausePanel = new PausePanel();
 
-type PanelKind = 'none' | 'inventory' | 'skills' | 'vendor_gun' | 'vendor_med' | 'questlog' | 'dialogue' | 'pause' | 'fasttravel';
+type PanelKind = 'none' | 'inventory' | 'skills' | 'vendor_gun' | 'vendor_med' | 'questlog' | 'dialogue' | 'pause' | 'fasttravel' | 'map';
 let openPanel: PanelKind = 'none';
 let dialogueGiver: QuestGiver = 'quibb';
 
@@ -219,6 +223,7 @@ function setPanel(kind: PanelKind): void {
         () => setPanel('none'));
       break;
     case 'fasttravel': renderFastTravel(panel); break;
+    case 'map': fullMapPanel.render(panel, player.position, player.yaw, fullmapExtras()); break;
     default:
       vendorPanel.render(panel, kind, {
         onBuyItem: (item) => { state.inventory.push(item); feedPickup(item); },
@@ -400,6 +405,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Tab') { e.preventDefault(); setPanel(openPanel === 'inventory' ? 'none' : 'inventory'); return; }
   if (e.code === 'KeyK') { setPanel(openPanel === 'skills' ? 'none' : 'skills'); return; }
   if (e.code === 'KeyJ') { setPanel(openPanel === 'questlog' ? 'none' : 'questlog'); return; }
+  if (e.code === 'KeyM') { setPanel(openPanel === 'map' ? 'none' : 'map'); return; }
   if (e.code === 'Escape') {
     if (openPanel !== 'none') setPanel('none');
     else setPanel('pause');
@@ -487,25 +493,30 @@ function compareFor(item: ItemInstance): ItemInstance | null {
   }
 }
 
-// ---------------------------------------------------------------- compass markers
+// ---------------------------------------------------------------- map/compass markers
+/** Active-map quest point: real objective here, else nearest discovered station. */
+function questPointOnMap(): { x: number; z: number } | null {
+  const qm = questSystem.markerPos();
+  if (!qm) return null;
+  if (qm.mapId === activeMap().id) return { x: qm.x, z: qm.z };
+  let best: { x: number; z: number } | null = null;
+  let bestD = Infinity;
+  for (const poi of WORLD.pois) {
+    if (poi.kind !== 'fast_travel' || !discoveredStations.has(poi.data ?? '')) continue;
+    const d = Math.hypot(player.position.x - poi.x, player.position.z - poi.z);
+    if (d < bestD) { bestD = d; best = { x: poi.x, z: poi.z }; }
+  }
+  return best;
+}
+
+function fullmapExtras() {
+  return { quest: questPointOnMap(), discovered: discoveredStations };
+}
+
 function compassMarkers(): CompassMarker[] {
   const markers: CompassMarker[] = [];
-  const qm = questSystem.markerPos();
-  if (qm) {
-    if (qm.mapId === activeMap().id) {
-      markers.push({ x: qm.x, z: qm.z, icon: '◆', color: '#ffd23c', id: 'quest' });
-    } else {
-      // objective is off-world: point at the nearest discovered station
-      let best: { x: number; z: number } | null = null;
-      let bestD = Infinity;
-      for (const poi of WORLD.pois) {
-        if (poi.kind !== 'fast_travel' || !discoveredStations.has(poi.data ?? '')) continue;
-        const d = Math.hypot(player.position.x - poi.x, player.position.z - poi.z);
-        if (d < bestD) { bestD = d; best = poi; }
-      }
-      if (best) markers.push({ x: best.x, z: best.z, icon: '◆', color: '#ffd23c', id: 'quest' });
-    }
-  }
+  const qp = questPointOnMap();
+  if (qp) markers.push({ x: qp.x, z: qp.z, icon: '◆', color: '#ffd23c', id: 'quest' });
   for (const poi of WORLD.pois) {
     if (poi.kind === 'fast_travel' && discoveredStations.has(poi.data ?? '')) {
       markers.push({ x: poi.x, z: poi.z, icon: '⬡', color: '#54d4ff', id: 'ft_' + poi.id });
@@ -591,6 +602,10 @@ function frame(): void {
   hud.update(player, dt);
   questTracker.update();
   compass.update(player.position, player.yaw, compassMarkers());
+  minimap.update(player.position, player.yaw, {
+    quest: questPointOnMap(),
+    stations: WORLD.pois.filter((p) => p.kind === 'fast_travel' && discoveredStations.has(p.data ?? '')).map((p) => ({ x: p.x, z: p.z })),
+  });
   updatePrompts();
 
   // map-switch fade + downed desat share the post knob

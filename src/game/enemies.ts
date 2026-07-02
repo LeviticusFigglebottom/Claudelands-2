@@ -19,6 +19,7 @@ import { state } from './state';
 import { weightedPick, pick, chance } from '../util/rng';
 import { ELEMENTS } from '../data/elements';
 import { difficulty } from './settings';
+import { terrainHeight } from '../data/world';
 import type { ElementId } from './types';
 
 export interface EnemyHooks {
@@ -337,10 +338,23 @@ export class Enemy implements Damageable {
     if (to.length() < 1.5) { this.pickPatrolTarget(); return; }
     const dir = to.normalize();
     const speed = this.def.speed * 0.35 * slow;
-    this.position.addScaledVector(dir, speed * dt);
+    this.moveBlocked(dir, speed * dt);
     this.wobble += dt * 5 * slow;
     this.group.rotation.y = Math.atan2(dir.x, dir.z) + Math.PI;
     this.settleToGround(true);
+  }
+
+  /** Move along dir, refusing steep uphill (ridge walls). Flyers ignore. */
+  protected moveBlocked(dir: THREE.Vector3, dist: number): void {
+    if (this.def.behavior === 'flyer') {
+      this.position.addScaledVector(dir, dist);
+      return;
+    }
+    const hBefore = terrainHeight(this.position.x, this.position.z);
+    const nx = this.position.x + dir.x * dist, nz = this.position.z + dir.z * dist;
+    if (terrainHeight(nx, nz) - hBefore > dist * 1.1) return;
+    this.position.x = nx;
+    this.position.z = nz;
   }
 
   protected settleToGround(moving = false): void {
@@ -382,7 +396,7 @@ export class Enemy implements Damageable {
         const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(Math.sin(this.wobble * 0.7) * 0.6);
         dir.add(side).normalize();
       }
-      this.position.addScaledVector(dir, speed * dt);
+      this.moveBlocked(dir, speed * dt);
       this.wobble += dt * 2;
       this.settleToGround(true);
     } else {

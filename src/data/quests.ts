@@ -17,7 +17,7 @@ export interface QuestDef {
     label: string;
     count: number;
     districtId?: string;
-    faction?: 'rustborn' | 'helix' | 'frostborn';
+    faction?: 'rustborn' | 'helix' | 'frostborn' | 'kindled';
     bossId?: string;
     markerX?: number; markerZ?: number;
     mapId?: string;                // which map the marker/boss lives on (default claudelands)
@@ -145,6 +145,49 @@ export const QUESTS: QuestDef[] = [
     objective: { kind: 'boss', label: 'Old Man Avalanche put to bed', count: 1, bossId: 'old_man_avalanche', markerX: 0, markerZ: -85, mapId: 'frosthollow' },
     rewardCash: 2000, rewardXp: 2500, rewardItem: 'legendary',
     completeLine: 'The Old Man sleeps forever. The Hollow is quieter. Still freezing, but quieter.',
+  },
+  {
+    id: 'q9_throat',
+    name: 'Smoke Signals',
+    giver: 'quibb',
+    briefing: [
+      'Contractor. Remember Helix Foundry 9? Decommissioned years back, down in the Cinder Throat.',
+      'A Rustborn splinter cult — they call themselves THE KINDLED — moved in and lit the whole ravine.',
+      'They worship the furnace. They feed it. Lately the smoke smells like... plans. Walk the Throat and see.',
+    ],
+    acceptLine: 'The Throat Gate node is live! South-southeast! Follow the smoke!',
+    objective: { kind: 'goto', label: 'Enter the Cinder Throat', count: 1, markerX: 0, markerZ: 130, mapId: 'cinderthroat' },
+    rewardCash: 800, rewardXp: 1200,
+    completeLine: 'You\u2019re in the Throat. Everything is on fire in a very organized way. That\u2019s worse.',
+    unlocksStation: 'Throat Gate',
+  },
+  {
+    id: 'q10_kindling',
+    name: 'De-Kindling',
+    giver: 'quibb',
+    briefing: [
+      'The Kindled hold the whole ravine — camp, flats, kilns. One road, and they own every meter of it.',
+      'Fight your way down the Throat. Twelve of them should unclog the path to the foundry.',
+      'And contractor — they throw fire. Try to be somewhere else when it lands.',
+    ],
+    acceptLine: 'Twelve Kindled! Downhill! The scenic route!',
+    objective: { kind: 'kill_faction', label: 'Kindled culled', count: 12, faction: 'kindled', markerX: -30, markerZ: -32, mapId: 'cinderthroat' },
+    rewardCash: 1500, rewardXp: 2200, rewardItem: 'epic',
+    completeLine: 'Twelve Kindled, extinguished. The road to the foundry is open. It is also on fire.',
+  },
+  {
+    id: 'q11_saint',
+    name: 'The Patron Saint of Arson',
+    giver: 'quibb',
+    briefing: [
+      'End of the road. The Kindled bolted their god together from Foundry 9\u2019s smelter and it WALKS.',
+      'They call it SAINT FURNACE. It calls everything else fuel.',
+      'Rake out its firebox, contractor. That glowing door on its chest? That\u2019s a TIP.',
+    ],
+    acceptLine: 'The Foundry Court! Bottom of the Throat! Bring marshmallows or vengeance!',
+    objective: { kind: 'boss', label: 'Saint Furnace raked out', count: 1, bossId: 'saint_furnace', markerX: 0, markerZ: -118, mapId: 'cinderthroat' },
+    rewardCash: 4000, rewardXp: 5000, rewardItem: 'legendary',
+    completeLine: 'The Saint is slag. The Kindled are unemployed. The Throat still smokes, but it\u2019s just smoke now.',
   },
 ];
 

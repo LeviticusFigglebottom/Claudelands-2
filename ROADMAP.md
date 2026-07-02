@@ -1,5 +1,27 @@
 # ROADMAP
 
+## Pass 4 status — the Cinder Throat, maps & radar, UI polish
+
+**Third main area, THE CINDER THROAT**: a large linear gauntlet (320m map) —
+a serpentine walkable corridor carved between impassable ridge walls (slope
+blocking on player and AI), opening into arena nodes: Throat Gate → Cinder
+Camp → Ash Flats → Kiln Yard → the Foundry Court, culminating in SAINT
+FURNACE (meteor rain, ember novas, offering summons, glowing firebox crit
+zone). Volcanic biome via the same texture system: basalt ground with
+glowing ember cracks, lava pools, brick kilns, burnt snag trees, ash fall,
+the Kindled cult (3 new archetypes + reused bombers), quests q9–q11.
+
+**Navigation**: circular minimap radar (enemy/boss/loot-rarity/station/quest
+blips, rotating with view) + full map on M (districts, roads/corridor,
+stations, boss, quest, player arrow). Compass markers now smooth-clamp with
+edge chevrons and layered icons.
+
+**Fixes/polish**: terrain queries are grid-matched to the rendered mesh
+(bilinear over the same vertex grid) so props/characters no longer float or
+clip — the throne and boneyard placements sit true; scatter (rocks/tufts)
+respects keep-out margins around structures, POIs, and roads; BL-style HUD
+reskin (skewed plates, segmented bars, amber trim, bigger ammo numerals).
+
 ## Pass 3 status — two worlds, two heroes
 
 **The Frosthollow**: a second full map (frozen highland biome — snow terrain,

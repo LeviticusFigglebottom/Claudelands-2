@@ -7,7 +7,7 @@
 
 import { clamp01, lerp } from '../util/maff';
 
-export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox';
+export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt';
 
 export interface DistrictDef {
   id: string;
@@ -16,7 +16,7 @@ export interface DistrictDef {
   dress: DistrictDress;
   cx: number; cz: number; radius: number;
   baseHeight: number;
-  faction: 'rustborn' | 'helix' | 'frostborn' | 'none';
+  faction: 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'none';
   spawnTable: { enemyId: string; weight: number }[];
   maxAlive: number;
   respawnDelay: number;
@@ -34,8 +34,8 @@ export interface BiomeDef {
   ground: { base: string; light: string; dark: string; crack: string };
   rock: string;
   scrub: number;               // scrub tuft color
-  ambientParticle: 'dust' | 'snow';
-  trees: 'cactus' | 'pine';
+  ambientParticle: 'dust' | 'snow' | 'ash';
+  trees: 'cactus' | 'pine' | 'burnt';
   aurora: boolean;
   weeds: boolean;              // tumbleweeds roam
 }
@@ -55,6 +55,9 @@ export interface WorldDef {
     roads: { x0: number; z0: number; x1: number; z1: number }[];
     crater?: { x: number; z: number; r: number };
     lake?: { x: number; z: number; r: number; level: number };
+    /** Linear-level support: walkable serpentine corridor; outside it the
+     *  terrain rises into impassable ridge walls. */
+    corridor?: { pts: { x: number; z: number }[]; width: number; arenas: { x: number; z: number; r: number }[]; wallHeight: number };
   };
   districts: DistrictDef[];
   pois: WorldPoi[];
@@ -243,9 +246,118 @@ export const FROSTHOLLOW: WorldDef = {
   spawn: { x: 0, z: 90 },
 };
 
+// ===========================================================================
+// MAP 3 — THE CINDER THROAT (scorched ravine; a linear gauntlet winding down
+// to the Kindled cult's stolen Helix foundry. One way in. One boss out.)
+const THROAT_PATH = [
+  { x: 0, z: 130 },     // Throat Gate (entry)
+  { x: -10, z: 84 },
+  { x: -46, z: 58 },    // Cinder Camp arena
+  { x: -60, z: 6 },
+  { x: -30, z: -32 },   // Ash Flats arena
+  { x: 22, z: -38 },
+  { x: 58, z: -6 },     // Kiln Yard arena
+  { x: 84, z: -52 },
+  { x: 40, z: -96 },    // approach
+  { x: 0, z: -118 },    // Foundry Court (boss)
+];
+
+export const CINDERTHROAT: WorldDef = {
+  id: 'cinderthroat',
+  name: 'THE CINDER THROAT',
+  size: 320,
+  skyTop: 0x5a3234,
+  skyHorizon: 0xe89a4c,
+  sun: { color: 0xffc088, intensity: 2.4, dirX: 0.3, dirY: 0.65, dirZ: 0.55 },
+  ambient: { sky: 0xa87a68, ground: 0x6a4a3c, intensity: 1.35 },
+  fog: { color: 0x9a6a4c, near: 60, far: 300 },
+  biome: {
+    ground: { base: '#5c504a', light: '#7d6a60', dark: '#3a322e', crack: 'rgba(255,106,26,0.55)' },
+    rock: '#3f3733',
+    scrub: 0x5a4a3a,
+    ambientParticle: 'ash',
+    trees: 'burnt',
+    aurora: false,
+    weeds: false,
+  },
+  terrain: {
+    duneAmp: 0.8,
+    roughAmp: 1.1,
+    roads: [],
+    corridor: {
+      pts: THROAT_PATH,
+      width: 13,
+      arenas: [
+        { x: 0, z: 130, r: 20 },
+        { x: -46, z: 58, r: 26 },
+        { x: -30, z: -32, r: 30 },
+        { x: 58, z: -6, r: 26 },
+        { x: 0, z: -118, r: 30 },
+      ],
+      wallHeight: 20,
+    },
+  },
+  districts: [
+    {
+      id: 'throatgate', name: 'THE THROAT GATE', subtitle: 'Last Exit Before the Furnace', dress: 'throatgate',
+      cx: 0, cz: 130, radius: 20, baseHeight: 0,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 0,
+    },
+    {
+      id: 'cindercamp', name: 'CINDER CAMP', subtitle: 'The Kindled Cook Here. Everything.', dress: 'cindercamp',
+      cx: -46, cz: 58, radius: 26, baseHeight: 0.4,
+      faction: 'kindled',
+      spawnTable: [
+        { enemyId: 'ashwalker', weight: 26 }, { enemyId: 'fusebug', weight: 14 },
+        { enemyId: 'ash_shrike', weight: 14 }, { enemyId: 'cinderhulk', weight: 7 },
+      ],
+      maxAlive: 7, respawnDelay: 15, levelOffset: 7,
+    },
+    {
+      id: 'ashflats', name: 'THE ASH FLATS', subtitle: 'Openly Hostile. Also Just Open.', dress: 'ashflats',
+      cx: -30, cz: -32, radius: 30, baseHeight: 0.2,
+      faction: 'kindled',
+      spawnTable: [
+        { enemyId: 'ashwalker', weight: 22 }, { enemyId: 'ash_shrike', weight: 18 },
+        { enemyId: 'cinderhulk', weight: 10 }, { enemyId: 'fusebug', weight: 12 },
+      ],
+      maxAlive: 8, respawnDelay: 14, levelOffset: 8,
+    },
+    {
+      id: 'kilnyard', name: 'THE KILN YARD', subtitle: 'Where the Kindled Fire Their Best Work (You)', dress: 'kilnyard',
+      cx: 58, cz: -6, radius: 26, baseHeight: 0.6,
+      faction: 'kindled',
+      spawnTable: [
+        { enemyId: 'ashwalker', weight: 20 }, { enemyId: 'cinderhulk', weight: 14 },
+        { enemyId: 'ash_shrike', weight: 12 },
+      ],
+      maxAlive: 7, respawnDelay: 14, levelOffset: 9,
+    },
+    {
+      id: 'foundrycourt', name: 'THE FOUNDRY COURT', subtitle: 'The Saint Is In.', dress: 'foundrycourt',
+      cx: 0, cz: -118, radius: 30, baseHeight: 1.2,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 10,
+    },
+  ],
+  pois: [
+    { id: 'ft_throat', kind: 'fast_travel', x: 0, z: 134, data: 'Throat Gate' },
+    { id: 'sign_throat', kind: 'sign', x: 4, z: 122, rot: 0, data: 'ONE WAY. THE KINDLED INSIST.' },
+    { id: 'log_c1', kind: 'wirelog', x: -44, z: 62, data: 'log_kindled1' },
+    { id: 'chest_c1', kind: 'chest', x: -52, z: 52, rot: 0.8 },
+    { id: 'log_c2', kind: 'wirelog', x: -34, z: -26, data: 'log_kindled2' },
+    { id: 'ft_kiln', kind: 'fast_travel', x: 52, z: 0, data: 'Kiln Yard' },
+    { id: 'chest_c2', kind: 'chest', x: 64, z: -12, rot: -1.9 },
+    { id: 'log_c3', kind: 'wirelog', x: 44, z: -92, data: 'log_kindled3' },
+    { id: 'chest_c3', kind: 'chest', x: 8, z: -124, rot: 0.4 },
+    { id: 'sign_foundry', kind: 'sign', x: -4, z: -100, rot: 0, data: 'OFFERINGS AHEAD. BE ONE.' },
+  ],
+  spawn: { x: 0, z: 130 },
+};
+
 export const MAPS: Record<string, WorldDef> = {
   claudelands: CLAUDELANDS,
   frosthollow: FROSTHOLLOW,
+  cinderthroat: CINDERTHROAT,
 };
 
 let active: WorldDef = CLAUDELANDS;
@@ -285,7 +397,7 @@ export function roadFactor(x: number, z: number): number {
   return f;
 }
 
-export function terrainHeight(x: number, z: number): number {
+function rawTerrainHeight(x: number, z: number): number {
   const T = active.terrain;
   let h = (Math.sin(x * 0.021 + 1.7) * Math.cos(z * 0.024) * 0.5 + 0.5) * 2.6 * T.duneAmp
     + Math.sin(x * 0.045 + z * 0.037 + 2.2) * 0.7 * T.roughAmp + 0.7;
@@ -321,12 +433,49 @@ export function terrainHeight(x: number, z: number): number {
     h = lerp(h, target, t);
   }
 
+  if (T.corridor) {
+    const C = T.corridor;
+    let d = Infinity;
+    for (let i = 0; i < C.pts.length - 1; i++) {
+      d = Math.min(d, distToSegment(x, z, { x0: C.pts[i].x, z0: C.pts[i].z, x1: C.pts[i + 1].x, z1: C.pts[i + 1].z }));
+    }
+    let inside = 1 - smooth(C.width, C.width + 9, d); // 1 in corridor, 0 outside
+    for (const a of C.arenas) {
+      inside = Math.max(inside, 1 - smooth(a.r, a.r + 9, Math.hypot(x - a.x, z - a.z)));
+    }
+    h = h * (0.4 + inside * 0.6) + (1 - inside) * C.wallHeight;
+  }
+
   const road = roadFactor(x, z);
   if (road > 0) {
     h = lerp(h, Math.min(h, 0.25 + h * 0.35), road);
   }
   return h;
 }
+
+// Terrain queries are grid-matched: bilinear interpolation over the same
+// vertex grid the mesh uses, so props/characters sit exactly on the rendered
+// surface instead of the analytic ideal (which caused floating/clipping).
+export const TERRAIN_SEGS = 200;
+export const TERRAIN_SPAN_FACTOR = 1.7;
+
+export function terrainHeight(x: number, z: number): number {
+  const span = active.size * TERRAIN_SPAN_FACTOR;
+  const cell = span / TERRAIN_SEGS;
+  const gx = (x + span / 2) / cell;
+  const gz = (z + span / 2) / cell;
+  const x0 = Math.floor(gx), z0 = Math.floor(gz);
+  const fx = gx - x0, fz = gz - z0;
+  const wx0 = x0 * cell - span / 2, wz0 = z0 * cell - span / 2;
+  const h00 = rawTerrainHeight(wx0, wz0);
+  const h10 = rawTerrainHeight(wx0 + cell, wz0);
+  const h01 = rawTerrainHeight(wx0, wz0 + cell);
+  const h11 = rawTerrainHeight(wx0 + cell, wz0 + cell);
+  return lerp(lerp(h00, h10, fx), lerp(h01, h11, fx), fz);
+}
+
+/** Raw analytic height — used ONLY by the terrain mesh builder. */
+export function meshHeight(x: number, z: number): number { return rawTerrainHeight(x, z); }
 
 export function terrainNormal(x: number, z: number): { x: number; y: number; z: number } {
   const e = 0.6;
