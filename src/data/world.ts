@@ -7,7 +7,7 @@
 
 import { clamp01, lerp } from '../util/maff';
 
-export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza';
+export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible';
 
 export interface DistrictDef {
   id: string;
@@ -435,11 +435,53 @@ export const BRASSHAVEN: WorldDef = {
   ],
 };
 
+// ===========================================================================
+// ARENA — THE CRUCIBLE (endless mode). Tovah's old fighting pit: a bowl of
+// scorched sand ringed by scrap bleachers, floodlights, and bad decisions.
+export const CRUCIBLE: WorldDef = {
+  id: 'crucible',
+  name: 'The Crucible',
+  tagline: 'the crowd is mostly vultures. they still boo.',
+  size: 120,
+  skyTop: 0x2a1a2e, skyHorizon: 0xc86a3a,
+  sun: { color: 0xffd2a0, intensity: 1.15, dirX: -0.5, dirY: 0.75, dirZ: 0.3 },
+  ambient: { sky: 0x8a6a8a, ground: 0x4a3428, intensity: 0.62 },
+  fog: { color: 0x3a2430, near: 60, far: 220 },
+  biome: {
+    ground: { base: '#7a5030', light: '#a87848', dark: '#4a3020', crack: 'rgba(20,10,8,0.5)' },
+    rock: '#5a4a44',
+    scrub: 0x6a5a3a,
+    ambientParticle: 'dust',
+    trees: 'burnt',
+    aurora: false,
+    weeds: false,
+  },
+  terrain: {
+    duneAmp: 0.5,
+    roughAmp: 0.3,
+    roads: [],
+  },
+  districts: [
+    {
+      id: 'pit', name: 'THE CRUCIBLE', subtitle: 'Last One Standing Drinks Free',
+      cx: 0, cz: 0, radius: 46, dress: 'crucible', baseHeight: 0,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 0,
+    },
+  ],
+  pois: [
+    { id: 'vg_pit', kind: 'vendor_gun', x: -8, z: 40, rot: Math.PI },
+    { id: 'vm_pit', kind: 'vendor_med', x: 8, z: 40, rot: Math.PI },
+    { id: 'sign_pit', kind: 'sign', x: 0, z: 34, rot: 0, data: 'THE CRUCIBLE: NO REFUNDS. NO SURVIVORS. NO PARKING.' },
+  ],
+  spawn: { x: 0, z: 30 },
+};
+
 export const MAPS: Record<string, WorldDef> = {
   claudelands: CLAUDELANDS,
   frosthollow: FROSTHOLLOW,
   cinderthroat: CINDERTHROAT,
   brasshaven: BRASSHAVEN,
+  crucible: CRUCIBLE,
 };
 
 let active: WorldDef = CLAUDELANDS;

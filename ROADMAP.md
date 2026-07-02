@@ -1,5 +1,40 @@
 # ROADMAP
 
+## Pass 7 status — the front end, the Crucible, and the boss that lives
+
+**Saint Furnace fixed** (and every boss with him): boss spawns were one-shot
+bookkeeping, so leaving a boss map mid-quest (now trivially easy with zone
+edges) wiped the boss forever. `ensureBosses()` re-arms the arena on every
+entry to the boss's map while its quest is active.
+
+**Cinematic title screen**: the controls overlay is gone; behind the menu
+the camera now tours the live world — slow orbits over Gutterlight, the
+Gully fort, the Boneyard, the crash site, and Trash Mountain, with enemies
+wandering their districts (the invisible "player" is parked sky-high so
+spawners run but nothing aggros, and the population is pre-warmed).
+
+**A real main menu**: PRESS ANY KEY → CAMPAIGN (Continue / New Contract /
+Veteran Start) · ENDLESS MODE · SETTINGS. Settings is a persisted panel of
+graphics/feel options: ink outlines, cross-hatching, bloom, FXAA, film
+grain, vignette, color saturation, screen shake, damage numbers, and FOV —
+all applied live and stored in localStorage. Character select got the full
+treatment: playstyle summary, action-skill detail with cooldown, and a
+three-tree preview with capstones for each Vault-Rat.
+
+**ENDLESS MODE — THE CRUCIBLE**: a purpose-built fighting-pit arena map
+(scrap bleachers, floodlights, pit vendors, scorched center ring). Waves
+scale in level and spawn tempo with rising badass odds; every 5th wave is a
+boss from the campaign roster (cycling all four) with its guaranteed
+legendary; 12s intermissions heal you up, pay a purse, and leave time to
+shop. Best wave persists; endless runs NEVER touch the campaign autosave.
+
+**Veteran Start (skip the tutorial)**: begin in Brasshaven at level 10 with
+9 skill points, $2500, and a random common-through-epic loadout — the city
+open, all four Re-Constructor nodes known, side jobs unlocked, and the
+Mayor waiting. The starter chain (q1–q11) stays fully playable in parallel;
+the quest system now supports multiple available mainline quests and the
+tracker points at the chain frontier.
+
 ## Pass 6 status — side jobs, the Mayor, zone edges, four Vault-Rats
 
 **All four classes playable.** THE HOUNDMASTER (Kez Okafor) summons RIVET,

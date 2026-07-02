@@ -17,7 +17,10 @@ export class DamageNumberSystem {
     this.camera = camera;
   }
 
+  enabled = true;
+
   spawn(worldPos: THREE.Vector3, amount: number, element: ElementId, crit: boolean, kind: 'damage' | 'heal' | 'immune' = 'damage'): void {
+    if (!this.enabled) return;
     if (amount < 1 && kind === 'damage') return;
     this.v.copy(worldPos).project(this.camera);
     if (this.v.z > 1) return; // behind camera

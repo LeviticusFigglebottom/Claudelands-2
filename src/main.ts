@@ -25,6 +25,7 @@ import { setPlayerClass, getPlayerClass } from './data/classes';
 import { audio } from './audio/synth';
 import { music } from './audio/music';
 import { starterWeapon, generateWeapon } from './gen/weapongen';
+import { generateClassMod } from './gen/geargen';
 import { generateShield, generateGrenadeMod } from './gen/geargen';
 import { DamageNumberSystem } from './ui/damagenumbers';
 import { Hud } from './ui/hud';
@@ -36,10 +37,12 @@ import { SkillTreePanel } from './ui/skilltree';
 import { VendorPanel } from './ui/vendor';
 import { QuestTracker, QuestLogPanel, DialoguePanel } from './ui/quests';
 import { PausePanel } from './ui/pause';
-import { showClassSelect } from './ui/classselect';
+import { MainMenu, type StartMode } from './ui/mainmenu';
 import { IntroOverlay, INTRO_PATH } from './ui/intro';
+import { endless } from './game/endless';
+import { prefs, onPrefsChanged } from './game/prefs';
 import { CinematicSystem, bossCine, biomeCine, charCine, BOSS_EPITHETS, NPC_INTROS, type CineDef } from './ui/cinematics';
-import { feedPickup, feedText, bark, playWireLog, showInteract, setDownedOverlay, banner, buildTitleScreen } from './ui/misc';
+import { feedPickup, feedText, bark, playWireLog, showInteract, setDownedOverlay, banner } from './ui/misc';
 import { itemCardHTML } from './ui/itemcard';
 import { pick } from './util/rng';
 import { SECOND_WIND_LINES, LEVELUP_LINES, VICTORY_LINES } from './data/flavor';
@@ -61,6 +64,23 @@ camera.layers.enable(1);
 scene.add(camera);
 
 const post = new PostPipeline(renderer, scene, camera, window.innerWidth, window.innerHeight);
+
+// ---------------------------------------------------------------- prefs
+function applyPrefs(): void {
+  const p = prefs();
+  post.ink.uniforms.uInk.value = p.inkOutlines ? 1.0 : 0.0;
+  post.ink.uniforms.uHatch.value = p.crossHatch ? 0.5 : 0.0;
+  post.ink.uniforms.uGrain.value = p.filmGrain ? 0.035 : 0.0;
+  post.ink.uniforms.uVignette.value = p.vignette ? 0.34 : 0.0;
+  post.ink.uniforms.uSaturation.value = p.saturation;
+  post.bloom.enabled = p.bloom;
+  post.fxaa.enabled = p.fxaa;
+  camera.fov = p.fov;
+  camera.updateProjectionMatrix();
+  juice.shakeScale = p.screenShake ? 1 : 0;
+  dmgNumbers.enabled = p.damageNumbers;
+}
+onPrefsChanged(applyPrefs);
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -138,6 +158,9 @@ setEnemyHooks({
   },
 });
 enemySpawner.attach(scene);
+
+// ---------------------------------------------------------------- game mode
+let gameMode: 'campaign' | 'endless' = 'campaign';
 
 // ---------------------------------------------------------------- map manager
 const discoveredStations = new Set<string>(['Gutterlight Plaza']);
@@ -438,7 +461,7 @@ document.addEventListener('player-respawned', () => {
 
 // ---------------------------------------------------------------- save
 function autosave(): void {
-  if (!started) return;
+  if (!started || gameMode !== 'campaign') return; // endless runs never touch the campaign save
   writeSave({
     quests: questSystem.serialize(),
     sidequests: questSystem.serializeSides(),
@@ -556,7 +579,7 @@ document.addEventListener('keydown', (e) => {
 
   if (e.code === 'KeyT') {
     // remote Re-Constructor uplink — anywhere, as long as nothing is shooting at you
-    if (player.downed) return;
+    if (player.downed || gameMode === 'endless') return;
     if (enemySpawner.aggroCount() > 0) { feedText('RE-CONSTRUCTOR UPLINK REFUSED — finish the argument first', '#ff5a5a'); audio.dryFire(); return; }
     setPanel('fasttravel');
     return;
@@ -649,6 +672,7 @@ function compareFor(item: ItemInstance): ItemInstance | null {
 // ---------------------------------------------------------------- map/compass markers
 /** Active-map quest point: real objective here, else nearest discovered station. */
 function questPointOnMap(): { x: number; z: number } | null {
+  if (gameMode === 'endless') return null;
   const qm = questSystem.markerPos();
   if (!qm) return null;
   if (qm.mapId === activeMap().id) return { x: qm.x, z: qm.z };
@@ -709,6 +733,7 @@ function stepSim(dt: number): void {
   world.update(dt, player.position);
   debris.update(dt, player.position);
   fx.update(dt);
+  if (gameMode === 'endless') endless.update(dt);
 
   // station discovery + respawn point
   let bestD = Infinity;
@@ -728,7 +753,7 @@ function frame(): void {
   const now = performance.now();
   let dt = Math.min((now - last) / 1000, 0.05);
   last = now;
-  if (!started) { post.render(dt); return; }
+  if (!started) { updateAttract(dt); post.render(dt); return; }
 
   const timeScale = juice.update(dt);
   dt *= timeScale;
@@ -767,11 +792,12 @@ function frame(): void {
   music.update(dt, bossActive ? 2 : enemySpawner.aggroCount() > 0 ? 1 : 0);
 
   const d = districtAt(player.position.x, player.position.z);
-  hud.setDistrict(d?.name ?? WORLD.name, d?.subtitle ?? 'The open waste.');
+  if (gameMode === 'endless') hud.setDistrict('THE CRUCIBLE', endless.hudLine);
+  else hud.setDistrict(d?.name ?? WORLD.name, d?.subtitle ?? 'The open waste.');
 
   if (player.downed) setDownedOverlay(true, player.downedT / player.downedMax);
   hud.update(player, dt);
-  questTracker.update();
+  if (gameMode === 'campaign') questTracker.update();
   compass.update(player.position, player.yaw, compassMarkers());
   minimap.update(player.position, player.yaw, {
     quest: questPointOnMap(),
@@ -784,22 +810,79 @@ function frame(): void {
   post.ink.uniforms.uDesat.value = player.downed ? 0.65 : mapFadeT * 0.8;
   post.render(dt);
 }
-frame();
+
+// ---------------------------------------------------------------- attract mode
+// While the menu is up, the camera tours the live world: slow orbits over
+// the hub, the gully fort, the boneyard, the crash site, and the mountain.
+// The (invisible) player is parked high above each shot so districts
+// populate and enemies wander without ever aggroing.
+const ATTRACT_SHOTS = [
+  { x: 0, z: 88, r: 30, h: 12 },     // Gutterlight
+  { x: 0, z: 5, r: 34, h: 14 },      // Gully Seven fort
+  { x: -85, z: -25, r: 40, h: 16 },  // the Boneyard leviathan
+  { x: 82, z: -22, r: 38, h: 14 },   // Slagflats crash site
+  { x: 0, z: -98, r: 42, h: 20 },    // Trash Mountain
+];
+let attractT = 0;
+const SHOT_LEN = 11;
+
+function updateAttract(dt: number): void {
+  attractT += dt;
+  const idx = Math.floor(attractT / SHOT_LEN) % ATTRACT_SHOTS.length;
+  const t = attractT % SHOT_LEN;
+  const s = ATTRACT_SHOTS[idx];
+  // park the player sky-high over the shot so spawners run but nothing aggros
+  player.position.set(s.x, 220, s.z);
+  const a = t * 0.09 + idx * 1.7;
+  const gy = world.groundHeight(s.x, s.z);
+  camera.position.set(s.x + Math.sin(a) * s.r, gy + s.h + Math.sin(t * 0.35) * 1.5, s.z + Math.cos(a) * s.r);
+  camera.lookAt(s.x, gy + 3, s.z);
+  world.update(dt, camera.position);
+  world.followSun(camera.position);
+  enemySpawner.update(dt);
+  fx.update(dt);
+  debris.update(dt, camera.position);
+  statsys.update(dt);
+}
 
 // ---------------------------------------------------------------- boot
-buildTitleScreen(hasSave(), (continueRun) => {
-  audio.unlock();
-  if (continueRun && restoreSave()) {
-    started = true;
-    feedText('CONTRACT RESUMED. The paperwork missed you.', '#ffd23c');
-    canvas.requestPointerLock();
-    return;
-  }
-  clearSave();
-  showClassSelect((classId, difficultyId: DifficultyId) => {
-    setPlayerClass(classId);
-    setDifficulty(difficultyId);
-    hud.setCharacter();
+const mainMenu = new MainMenu();
+
+/** Level-10 gear spread for veteran/endless starts: common → epic. */
+function giveVeteranKit(): void {
+  const starter = generateWeapon({ level: 10, rarityId: 'rare' });
+  state.equippedWeapons[0] = starter;
+  const rarities = ['uncommon', 'rare', 'rare', 'epic'];
+  for (const r of rarities) state.inventory.push(generateWeapon({ level: 10, rarityId: r }));
+  state.shield = generateShield(10, Math.random() < 0.4 ? 'rare' : 'uncommon');
+  state.grenadeMod = generateGrenadeMod(10, 'rare');
+  state.classMod = generateClassMod(10, Math.random() < 0.3 ? 'epic' : 'rare');
+  state.level = 10;
+  state.skillPoints = 9;
+  state.money = 2500;
+  player.recomputeVitals();
+  player.shield = player.maxShield;
+  player.flesh = player.maxFlesh;
+  player.equipWeapon(starter, true);
+}
+
+/** Skip-tutorial: Brasshaven open, the Mayor waiting, starter chain still playable. */
+function veteranQuestState(): void {
+  const q12 = questSystem.quests.find((q) => q.def.id === 'q12_city');
+  const q13 = questSystem.quests.find((q) => q.def.id === 'q13_notoriety');
+  if (q12) q12.status = 'complete';
+  if (q13) q13.status = 'available';
+  for (const s of questSystem.sides) if (s.status === 'locked') s.status = 'available';
+  for (const name of ['Gutterlight Plaza', 'Chatterjaw Landing', 'Throat Gate', 'Brasshaven Gate']) discoveredStations.add(name);
+}
+
+function startRun(mode: StartMode, classId: string, difficultyId: DifficultyId): void {
+  setPlayerClass(classId);
+  setDifficulty(difficultyId);
+  hud.setCharacter();
+  if (mode === 'new') {
+    clearSave();
+    gameMode = 'campaign';
     giveStartingKit();
     started = true;
     cinematicT = 0;
@@ -809,8 +892,64 @@ buildTitleScreen(hasSave(), (continueRun) => {
     document.getElementById('ui-root')?.classList.add('cine-on'); // HUD hides for the cutscene
     intro.start();
     autosave();
+    return;
+  }
+  if (mode === 'veteran') {
+    document.getElementById('ui-root')?.classList.remove('cine-on');
+    clearSave();
+    gameMode = 'campaign';
+    giveVeteranKit();
+    veteranQuestState();
+    seenCines.add('map_claudelands');
+    started = true;
+    switchMap('brasshaven', 0, 54);
+    feedText('VETERAN CONTRACT — the city knows your name. The Mayor is waiting.', '#ffd23c');
+    autosave();
+    canvas.requestPointerLock();
+    return;
+  }
+  // endless: never touches the campaign save
+  document.getElementById('ui-root')?.classList.remove('cine-on');
+  gameMode = 'endless';
+  giveVeteranKit();
+  seenCines.add('map_claudelands');
+  started = true;
+  switchMap('crucible');
+  endless.start({
+    playerPos: () => player.position,
+    groundHeight: (x, z) => world.groundHeight(x, z),
+    banner,
+    toast: feedText,
+    healPlayer: () => { player.heal(player.maxFlesh); player.shield = player.maxShield; },
   });
+  document.getElementById('quest-tracker')!.innerHTML = '';
+  canvas.requestPointerLock();
+}
+
+// HUD hides behind the menu; the attract world pre-warms so enemies are
+// already wandering in the first shot.
+document.getElementById('ui-root')?.classList.add('cine-on');
+for (let i = 0; i < 240; i++) enemySpawner.update(0.05);
+
+mainMenu.show({
+  hasSave,
+  bestWave: () => endless.bestWave(),
+  onContinue: () => {
+    document.getElementById('ui-root')?.classList.remove('cine-on');
+    audio.unlock();
+    gameMode = 'campaign';
+    if (restoreSave()) {
+      started = true;
+      feedText('CONTRACT RESUMED. The paperwork missed you.', '#ffd23c');
+      canvas.requestPointerLock();
+    }
+  },
+  onStart: (mode, classId, difficultyId) => {
+    audio.unlock();
+    startRun(mode, classId, difficultyId);
+  },
 });
+applyPrefs();
 canvas.addEventListener('click', () => {
   if (started && cinematicT < 0 && openPanel === 'none' && document.pointerLockElement !== canvas) canvas.requestPointerLock();
 });
@@ -819,7 +958,8 @@ canvas.addEventListener('click', () => {
 // Used by tools/screenshot.mjs and integration tests. fastForward steps the
 // sim without rendering (headless CI runs at ~2fps).
 (window as unknown as Record<string, unknown>).__game = {
-  player, camera, state, enemySpawner, loot, questSystem, actionSkill,
+  player, camera, state, enemySpawner, loot, questSystem, actionSkill, endless,
+  startRunDebug: startRun,
   get world() { return world; },
   gen: { generateWeapon, generateShield, generateGrenadeMod },
   equip: (w: import('./game/types').WeaponInstance) => {
@@ -846,3 +986,6 @@ canvas.addEventListener('click', () => {
 document.addEventListener('intro-finished', () => {
   if (cinematicT >= 0) endCinematic();
 });
+
+// kick the loop off last — everything above (attract shots, menu, seam) must exist first
+frame();

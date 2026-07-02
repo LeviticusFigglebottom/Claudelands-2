@@ -121,7 +121,7 @@ export class PostPipeline {
   composer: EffectComposer;
   bloom: UnrealBloomPass;
   ink: ShaderPass;
-  private fxaa: ShaderPass;
+  fxaa: ShaderPass;
   private normalRT: THREE.WebGLRenderTarget;
   private normalMat = new THREE.MeshNormalMaterial();
   private time = 0;

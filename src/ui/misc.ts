@@ -92,24 +92,4 @@ export function banner(text: string): void {
 }
 
 // ---------------------------------------------------------------- title
-export function buildTitleScreen(saveExists: boolean, onStart: (continueRun: boolean) => void): void {
-  const el = document.getElementById('title-screen')!;
-  el.innerHTML = `
-    <div class="t-super">A RUST-BITTEN LOOTER-SHOOTER</div>
-    <div class="t-logo">CLAUDELANDS <span class="two">2</span></div>
-    <div class="t-tag">“Rust never sleeps. Neither do the guns.”</div>
-    <div class="t-buttons">
-      ${saveExists ? '<div class="t-start" id="t-continue">CONTINUE CONTRACT</div>' : ''}
-      <div class="t-start ${saveExists ? 't-secondary' : ''}" id="t-new">${saveExists ? 'NEW CONTRACT' : 'CLICK TO DEPLOY'}</div>
-    </div>
-    <div class="t-controls">
-      <b>WASD</b> move · <b>Mouse</b> aim · <b>LMB</b> fire · <b>RMB</b> aim down sights · <b>R</b> reload · <b>F</b> action skill · <b>G</b> grenade<br>
-      <b>E</b> interact · <b>1-4</b> weapon slots · <b>TAB</b> inventory · <b>K</b> skill tree · <b>J</b> quest log · <b>ESC</b> pause
-    </div>`;
-  const start = (continueRun: boolean) => {
-    el.classList.add('hidden');
-    onStart(continueRun);
-  };
-  document.getElementById('t-continue')?.addEventListener('click', (e) => { e.stopPropagation(); start(true); }, { once: true });
-  document.getElementById('t-new')?.addEventListener('click', (e) => { e.stopPropagation(); start(false); }, { once: true });
-}
+

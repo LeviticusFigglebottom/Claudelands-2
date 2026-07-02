@@ -384,8 +384,8 @@ export class SaintFurnace extends Boss {
 // ---------------------------------------------------------------------------
 export type BossId = 'gutterball' | 'warden_prime' | 'old_man_avalanche' | 'saint_furnace';
 
-export function spawnBoss(id: BossId, pos: THREE.Vector3): Enemy {
-  const level = state.level + 2;
+export function spawnBoss(id: BossId, pos: THREE.Vector3, levelOverride?: number): Enemy {
+  const level = levelOverride ?? state.level + 2;
   const boss = id === 'gutterball' ? new Gutterball(level, pos)
     : id === 'warden_prime' ? new WardenPrime(level, pos)
     : id === 'old_man_avalanche' ? new OldManAvalanche(level, pos)

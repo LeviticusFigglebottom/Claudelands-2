@@ -513,3 +513,46 @@ body { font-family: var(--ui-font); user-select: none; }
 #zone-screen .zs-name { font-family: var(--title-font); font-size: clamp(44px, 7vw, 92px); color: var(--paper);
   text-shadow: 5px 5px 0 #000, -2px -2px 0 rgba(216,176,40,0.35); letter-spacing: 0.05em; transform: skew(-4deg); margin: 8px 0 6px; }
 #zone-screen .zs-tag { font-size: 17px; font-style: italic; color: #d8c8a4; }
+
+/* --- main menu (attract mode behind) --- */
+#title-screen .mm-topfade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.72), rgba(0,0,0,0.25) 40%, rgba(0,0,0,0.65)); pointer-events: none; }
+#title-screen .mm-logo-sm { position: absolute; top: 22px; left: 34px; font-family: var(--title-font); font-size: 30px; color: var(--paper);
+  text-shadow: 3px 3px 0 #000; letter-spacing: 0.05em; transform: skew(-4deg); }
+#title-screen .mm-logo-sm .two { color: var(--gold); }
+.mm-press { margin-top: 60px; font-size: 17px; letter-spacing: 0.5em; color: var(--paper); animation: mm-blink 1.6s ease-in-out infinite; position: relative; }
+@keyframes mm-blink { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+.mm-menu { display: flex; flex-direction: column; gap: 14px; margin-top: 8vh; position: relative; width: min(560px, 80vw); }
+.mm-btn { background: rgba(10, 8, 6, 0.72); border: 2px solid rgba(216,176,40,0.5); color: var(--paper); text-align: left;
+  font-family: var(--title-font); font-size: 26px; letter-spacing: 0.08em; padding: 14px 22px; cursor: pointer; transform: skew(-3deg); transition: border-color 0.15s, background 0.15s; }
+.mm-btn:hover { border-color: var(--gold); background: rgba(30, 22, 8, 0.85); }
+.mm-btn .mm-sub { display: block; font-family: inherit; font-size: 13px; letter-spacing: 0.06em; color: #bda87c; margin-top: 4px; font-weight: 400; }
+.mm-back { position: absolute; bottom: 26px; left: 34px; color: #bda87c; letter-spacing: 0.2em; font-size: 14px; cursor: pointer; }
+.mm-back:hover { color: var(--paper); }
+
+/* character select detail */
+.mm-detail { width: min(1060px, 92vw); background: rgba(8, 7, 5, 0.78); border: 1px solid rgba(216,176,40,0.35); padding: 14px 20px; margin-top: 14px; position: relative; text-align: left; }
+.mm-detail-head { font-family: var(--title-font); font-size: 24px; color: var(--paper); letter-spacing: 0.05em; }
+.mm-detail-name { color: var(--gold); }
+.mm-playstyle { color: #e6d6ae; font-size: 15px; margin: 6px 0; font-style: italic; }
+.mm-askill { color: #9fdbe4; font-size: 14px; margin-bottom: 10px; }
+.mm-trees { display: flex; gap: 14px; }
+.mm-tree { flex: 1; border: 1px solid rgba(216,176,40,0.25); background: rgba(20,16,10,0.5); padding: 10px 12px; }
+.mm-tree-name { color: var(--gold); font-weight: 700; letter-spacing: 0.1em; font-size: 14px; }
+.mm-tree-blurb { color: #bda87c; font-size: 12px; font-style: italic; margin: 2px 0 8px; }
+.mm-tree-skills { font-size: 12px; color: #d8c8a4; }
+.mm-skill { margin: 3px 0; }
+.mm-capstone { color: #ffd23c; }
+.mm-capstone span { color: #bda87c; display: block; margin-left: 14px; }
+
+/* settings */
+.mm-settings { width: min(680px, 90vw); background: rgba(8, 7, 5, 0.82); border: 1px solid rgba(216,176,40,0.35); padding: 16px 24px; margin-top: 20px; position: relative;
+  max-height: 64vh; overflow-y: auto; text-align: left; }
+.mm-set-group { color: var(--gold); letter-spacing: 0.3em; font-size: 13px; margin: 14px 0 6px; border-bottom: 1px solid rgba(216,176,40,0.25); padding-bottom: 4px; }
+.mm-setting { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 7px 0; }
+.mm-set-label { color: var(--paper); font-size: 15px; }
+.mm-set-val { color: var(--gold); font-size: 13px; }
+.mm-set-hint { color: #9a8a68; font-size: 12px; }
+.mm-toggle { min-width: 74px; background: rgba(40, 30, 12, 0.7); border: 1px solid rgba(216,176,40,0.4); color: #9a8a68;
+  font-family: inherit; font-weight: 700; letter-spacing: 0.15em; padding: 6px 0; cursor: pointer; }
+.mm-toggle.on { background: var(--gold); color: #241a06; border-color: var(--gold); }
+.mm-slider { width: 180px; accent-color: var(--gold); }

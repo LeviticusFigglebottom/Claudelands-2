@@ -10,6 +10,7 @@ import { audio } from '../audio/synth';
 import { generateWeapon } from '../gen/weapongen';
 import { loot } from './loot';
 import { spawnBoss, type BossId } from './boss';
+import { enemySpawner } from './enemies';
 import { levelScale } from '../gen/weapongen';
 import { activeMap } from '../data/world';
 import type { Enemy } from './enemies';
@@ -40,9 +41,6 @@ class QuestSystem {
   /** Brasshaven side jobs — unlocked when the city opens (q12). */
   sides: QuestRuntime[] = SIDE_QUESTS.map((def) => ({ def, status: 'locked', progress: 0 }));
   private hooks: QuestHooks | null = null;
-  private bossSpawned = new Set<string>();
-  /** Boss spawns waiting for the player to reach the right map. */
-  private pendingBosses: { bossId: BossId; mapId: string; x: number; z: number }[] = [];
   /** Elite packs waiting for the player to reach the right map. */
   private pendingElites: { enemyId: string; count: number; x: number; z: number; mapId: string; levelOffset: number; tag: string }[] = [];
 
@@ -56,13 +54,20 @@ class QuestSystem {
   }
 
   get available(): QuestRuntime | null {
-    return this.quests.find((q) => q.status === 'available') ?? null;
+    // furthest chain progress first — veteran runs keep the starter chain
+    // available in parallel, but the tracker should point at the frontier
+    for (let i = this.quests.length - 1; i >= 0; i--) {
+      if (this.quests[i].status === 'available') return this.quests[i];
+    }
+    return null;
   }
 
-  /** The next quest offered by a specific giver (for their dialogue panel). */
+  /** The next quest offered by a specific giver (for their dialogue panel).
+   *  Multiple mainline quests can be available at once (veteran starts run
+   *  the starter chain and the Brasshaven chain in parallel). */
   availableFrom(giver: QuestGiver): QuestRuntime | null {
-    const q = this.available;
-    if (q && q.def.giver === giver) return q;
+    const q = this.quests.find((r) => r.status === 'available' && r.def.giver === giver);
+    if (q) return q;
     if (!this.activeSide) {
       const s = this.sides.find((r) => r.status === 'available' && r.def.giver === giver);
       if (s) return s;
@@ -72,8 +77,8 @@ class QuestSystem {
 
   /** Accept whatever this giver is offering (main line first, then side jobs). */
   acceptFrom(giver: QuestGiver): QuestRuntime | null {
-    const main = this.available;
-    if (main && main.def.giver === giver) return this.accept();
+    const main = this.quests.find((r) => r.status === 'available' && r.def.giver === giver);
+    if (main) return this.acceptQuest(main);
     const s = this.sides.find((r) => r.status === 'available' && r.def.giver === giver);
     if (!s || this.activeSide) return null;
     s.status = 'active';
@@ -113,41 +118,42 @@ class QuestSystem {
   }
 
   accept(): QuestRuntime | null {
-    const q = this.available;
-    if (!q) return null;
+    return this.acceptQuest(this.available);
+  }
+
+  acceptQuest(q: QuestRuntime | null): QuestRuntime | null {
+    if (!q || q.status !== 'available' || this.active) return null;
     q.status = 'active';
     audio.questAccept();
     this.hooks?.toast(`QUEST ACCEPTED — <b>${q.def.name}</b>`, '#ffd23c');
     if (q.def.unlocksGate) this.hooks?.openGate(q.def.unlocksGate);
     if (q.def.unlocksStation) this.hooks?.discoverStation(q.def.unlocksStation);
     if (q.def.objective.kind === 'boss' && q.def.objective.bossId) {
-      this.armBoss(q.def);
+      this.ensureBosses();
     }
     return q;
   }
 
-  private armBoss(def: QuestDef): void {
-    const bossId = def.objective.bossId as BossId;
-    if (this.bossSpawned.has(bossId)) return;
-    this.bossSpawned.add(bossId);
-    const mapId = def.objective.mapId ?? 'claudelands';
-    const { markerX, markerZ } = def.objective;
-    if (activeMap().id === mapId) {
-      spawnBoss(bossId, new THREE.Vector3(markerX ?? 0, 0, markerZ ?? 0));
-    } else {
-      this.pendingBosses.push({ bossId, mapId, x: markerX ?? 0, z: markerZ ?? 0 });
+  /** A boss-quest boss must exist whenever the player is on its map and the
+   *  quest is still active — leaving mid-quest wipes enemies, so this re-arms
+   *  the arena on every entry instead of spawning exactly once. */
+  ensureBosses(): void {
+    const mapId = activeMap().id;
+    for (const q of this.quests) {
+      if (q.status !== 'active') continue;
+      const obj = q.def.objective;
+      if (obj.kind !== 'boss' || !obj.bossId) continue;
+      if ((obj.mapId ?? 'claudelands') !== mapId) continue;
+      const cur = enemySpawner.boss;
+      if (cur && cur.alive && cur.def.id === obj.bossId) continue;
+      spawnBoss(obj.bossId as BossId, new THREE.Vector3(obj.markerX ?? 0, 0, obj.markerZ ?? 0));
     }
   }
 
   /** Call after every map switch: spawn any boss/elite pack on this map. */
   onMapChanged(): void {
     const mapId = activeMap().id;
-    for (let i = this.pendingBosses.length - 1; i >= 0; i--) {
-      const p = this.pendingBosses[i];
-      if (p.mapId !== mapId) continue;
-      spawnBoss(p.bossId, new THREE.Vector3(p.x, 0, p.z));
-      this.pendingBosses.splice(i, 1);
-    }
+    this.ensureBosses();
     for (let i = this.pendingElites.length - 1; i >= 0; i--) {
       const e = this.pendingElites[i];
       if (e.mapId !== mapId) continue;
@@ -250,12 +256,12 @@ class QuestSystem {
     }
 
     const idx = this.quests.indexOf(q);
-    if (idx + 1 < this.quests.length) {
-      const next = this.quests[idx + 1];
+    const next = idx + 1 < this.quests.length ? this.quests[idx + 1] : null;
+    if (next && next.status === 'locked') {
       next.status = 'available';
       const g = GIVERS[next.def.giver];
       this.hooks?.toast(`New work waiting: <b>${g.name}</b> (${g.where.replace(/^(in|at) /, '')})`, '#ffd23c');
-    } else {
+    } else if (this.allDone) {
       this.hooks?.onVictory();
     }
   }
@@ -319,10 +325,8 @@ class QuestSystem {
         if (q.def.unlocksGate) reopenGates(q.def.unlocksGate);
         if (q.def.unlocksStation) rediscover(q.def.unlocksStation);
       }
-      if (row.s === 'active' && q.def.objective.kind === 'boss' && q.def.objective.bossId) {
-        this.armBoss(q.def);
-      }
     }
+    this.ensureBosses();
     if (this.quests.find((q) => q.def.id === 'q12_city')?.status === 'complete') this.unlockSides();
   }
 }

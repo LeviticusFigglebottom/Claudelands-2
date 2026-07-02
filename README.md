@@ -8,8 +8,10 @@ the frozen Frosthollow, the volcanic Cinder Throat gauntlet, and BRASSHAVEN,
 the sanctuary city in a beached mega-hauler — FOUR playable Vault-Rats,
 fourteen main quests plus Brasshaven side jobs with quest-only unique
 legendaries, four bosses, in-game cinematics, BL2-style zone-edge
-transitions, bazillions of guns — and a scrapship being built for the
-distress signal from VELDT MINOR.
+transitions, bazillions of guns — plus ENDLESS MODE in the Crucible
+fighting pit, a cinematic attract-mode main menu with graphics settings and
+a Veteran Start, and a scrapship being built for the distress signal from
+VELDT MINOR.
 
 Everything is procedural — meshes, textures, sound, *music* — and everything
 that is content (guns, parts, manufacturers, elements, skills, enemies,

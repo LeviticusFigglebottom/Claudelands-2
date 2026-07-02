@@ -31,6 +31,8 @@ export interface ClassDef {
   name: string;          // class archetype name
   charName: string;      // the character
   blurb: string;
+  /** One-line "how it plays" summary for the character select screen. */
+  playstyle: string;
   actionSkill: { id: string; name: string; desc: string; cooldown: number; duration: number };
   trees: SkillTreeDef[];
   playable: boolean;
@@ -45,6 +47,7 @@ const gunsmith: ClassDef = {
   name: 'The Gunsmith',
   charName: 'Harlan Vex',
   blurb: 'Ex-armory foreman of the Helix Combine. Quit loudly. Took the tools.',
+  playstyle: 'Set up a killzone and hold it: turret cover, raw gun stats, and an economy that pays for the ammo it burns.',
   actionSkill: {
     id: 'sentry_rig',
     name: 'Sentry Rig',
@@ -109,6 +112,7 @@ const stormcaller: ClassDef = {
   name: 'The Stormcaller',
   charName: 'Sable Anders',
   blurb: 'Struck by lightning six times. On a first-name basis with the seventh.',
+  playstyle: 'Elemental tempo: proc chains, shield play, and a transform window where every trigger pull is free violence.',
   actionSkill: {
     id: 'tempest_shell',
     name: 'Tempest Shell',
@@ -170,6 +174,7 @@ const stormcaller: ClassDef = {
 const houndmaster: ClassDef = {
   id: 'houndmaster', name: 'The Houndmaster', charName: 'Kez Okafor',
   blurb: 'Rebuilt a scrap-hound from a wreck. It rebuilt her right back.',
+  playstyle: 'Run-and-gun with a partner: Rivet holds aggro and mauls while you flank, loot, and keep the kill-skills rolling.',
   actionSkill: { id: 'iron_hound', name: 'Iron Hound', desc: 'Summon RIVET, a bounding scrap-hound that runs down your enemies and mauls them with recycled enthusiasm.', cooldown: 30, duration: 16 },
   trees: [
     {
@@ -226,6 +231,7 @@ const houndmaster: ClassDef = {
 const ravager: ClassDef = {
   id: 'ravager', name: 'The Ravager', charName: 'Tovah Grimm',
   blurb: 'Former pit champion. Retired undefeated. Un-retired immediately.',
+  playstyle: 'Get close and stay there: shockwave slams, damage shrugged off, and a health bar that runs on spite.',
   actionSkill: { id: 'red_mist', name: 'Red Mist', desc: 'See red: shed 40% of incoming damage and slam the ground in rolling shockwaves while it lasts. The yelling is load-bearing.', cooldown: 28, duration: 12 },
   trees: [
     {

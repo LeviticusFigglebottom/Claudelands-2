@@ -25,7 +25,10 @@ class JuiceSystem {
   recoilBack = 0;
   private t = 0;
 
-  addTrauma(amount: number): void { this.trauma = clamp01(this.trauma + amount); }
+  /** Global screen-shake multiplier (0 = off) — set from prefs. */
+  shakeScale = 1;
+
+  addTrauma(amount: number): void { this.trauma = clamp01(this.trauma + amount * this.shakeScale); }
   addHitstop(seconds: number): void { this.hitstop = Math.max(this.hitstop, seconds); }
   kickFov(amount: number): void { this.fovKick += amount; }
   kickRecoil(pitch: number, back: number): void {

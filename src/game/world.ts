@@ -345,6 +345,7 @@ export class World {
         case 'kilnyard': this.buildKilnYard(d); break;
         case 'foundrycourt': this.buildFoundryCourt(d); break;
         case 'brassplaza': this.buildBrassPlaza(d); break;
+        case 'crucible': this.buildCrucible(d); break;
       }
     }
   }
@@ -1569,6 +1570,62 @@ export class World {
     this.group.add(g);
     this.addCollider(poi.x, poi.z, 0.5, 0.5);
     this.interactables.push({ kind: 'npc', pos: new THREE.Vector3(poi.x, y, poi.z), label: look.label, data: poi.data });
+  }
+
+  /** THE CRUCIBLE — endless-mode fighting pit: scrap bleachers, floodlights,
+   *  faction banners, and a scorched center ring. */
+  private buildCrucible(d: DistrictDef): void {
+    const rng = mulberry32(777);
+    const scrapMat = toonMat({ map: corrugatedTexture() });
+    const darkMat = toonMat({ color: 0x3a322e, map: swatch('#332c28', 60) });
+    // ring of bleacher stands
+    const SEGS = 14;
+    for (let i = 0; i < SEGS; i++) {
+      const a = (i / SEGS) * Math.PI * 2;
+      if (Math.abs(Math.sin(a)) < 0.28 && Math.cos(a) > 0) continue; // gap at the north entrance
+      const r = 48 + rng() * 3;
+      const x = Math.sin(a) * r, z = Math.cos(a) * r;
+      const stand = new THREE.Group();
+      for (let t = 0; t < 3; t++) {
+        const row = new THREE.Mesh(new THREE.BoxGeometry(16, 1.4, 3), t % 2 ? scrapMat : darkMat);
+        row.position.set(0, 0.7 + t * 1.5, -t * 2.2);
+        stand.add(row);
+      }
+      stand.position.set(x, terrainHeight(x, z), z);
+      stand.rotation.y = a + Math.PI;
+      stand.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
+      this.group.add(stand);
+      this.staticTargets.push(stand);
+      this.addCollider(x, z, 8, 4);
+    }
+    // floodlight pylons
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + 0.3;
+      const x = Math.sin(a) * 40, z = Math.cos(a) * 40;
+      const y = terrainHeight(x, z);
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 11, 6), darkMat);
+      pole.position.set(x, y + 5.5, z);
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), glowMat(0xffe8b0, 1));
+      lamp.position.set(x, y + 11, z);
+      lamp.name = 'blinker';
+      this.group.add(pole, lamp);
+      this.staticTargets.push(pole);
+      this.addCollider(x, z, 0.4, 0.4);
+    }
+    // center ring scorch + announcer board
+    const ring = new THREE.Mesh(new THREE.RingGeometry(10, 11, 40), toonMat({ color: 0x2a1a12 }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(d.cx, terrainHeight(d.cx, d.cz) + 0.04, d.cz);
+    this.group.add(ring);
+    const banner = World.textSign(10, 2.2, { lines: ['THE CRUCIBLE'], style: 'propaganda', bg: '#6a1a1a', fg: '#ffd23c', accent: 'rgba(255,220,120,0.2)' }, { twoSided: true });
+    banner.position.set(0, terrainHeight(0, 44) + 7, 44);
+    this.group.add(banner);
+    this.fireBarrel(-14, 30);
+    this.fireBarrel(14, 30);
+    this.explosiveBarrel(-20, -10);
+    this.explosiveBarrel(20, -12);
+    this.explosiveBarrel(0, -24);
+    for (let i = 0; i < 4; i++) this.junkPiles(rng, d.cx, d.cz, 30, 2);
   }
 
   /** Zone-exit arch: two posts, a lintel, and the destination on a board. */
