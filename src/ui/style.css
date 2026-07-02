@@ -361,3 +361,45 @@ body { font-family: var(--ui-font); user-select: none; }
 #sandbox-ui label { display: block; margin-top: 8px; font-size: 11px; letter-spacing: 0.1em; color: #b09a60; }
 #sandbox-ui input[type=range] { width: 100%; }
 #sandbox-ui button { margin-top: 10px; width: 100%; font-family: var(--ui-font); font-weight: 700; background: #3a2e1c; color: var(--paper); border: 1px solid var(--hud-edge); padding: 6px; cursor: pointer; }
+
+/* ---------------------------------------------------------------- class select */
+.class-row { display: flex; gap: 16px; margin-top: 20px; }
+.class-card {
+  width: 200px; padding: 16px 14px; cursor: pointer;
+  background: linear-gradient(165deg, rgba(40,30,18,0.95), rgba(18,12,8,0.95));
+  border: 2px solid #665; text-align: center;
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+}
+.class-card.chosen { border-color: var(--hud-edge); box-shadow: 0 0 22px rgba(216,176,40,0.5); transform: scale(1.04); }
+.class-card.locked { opacity: 0.35; cursor: default; }
+.class-card .cc-name { font-family: var(--title-font); font-size: 19px; color: var(--paper); letter-spacing: 0.05em; }
+.class-card .cc-class { font-size: 12px; color: var(--hud-edge); letter-spacing: 0.14em; margin-top: 2px; }
+.class-card .cc-skill { font-size: 12px; color: #54d4ff; margin-top: 8px; }
+.class-card .cc-blurb { font-size: 11px; color: #b8ac90; margin-top: 8px; line-height: 1.5; min-height: 48px; }
+.diff-row { display: flex; gap: 10px; margin-top: 12px; }
+.diff-btn {
+  font-family: var(--title-font); font-size: 14px; letter-spacing: 0.1em; cursor: pointer;
+  background: #3a2e1c; color: var(--paper); border: 2px solid #665; padding: 8px 22px;
+  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+}
+.diff-btn.tab-on { background: var(--hud-edge); color: var(--ink); border-color: var(--hud-edge); }
+.diff-blurb { margin-top: 10px; font-size: 13px; color: #b8ac90; font-style: italic; }
+
+/* ---------------------------------------------------------------- cutscene */
+.cine-bar { position: absolute; left: 0; right: 0; height: 11vh; background: #000; z-index: 3; }
+.cine-bar.top { top: 0; } .cine-bar.bottom { bottom: 0; }
+#cine-cards { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: flex-start; padding: 14vh 6vw; pointer-events: none; }
+.cine-card { animation: cine-in 0.5s ease-out; }
+.cine-card.gone { opacity: 0; transition: opacity 0.5s; }
+.cine-title { font-family: var(--title-font); font-size: clamp(34px, 5.4vw, 64px); color: var(--paper); text-shadow: 4px 4px 0 #000; letter-spacing: 0.06em; transform: skew(-4deg); }
+.cine-sub { font-size: 16px; color: #d8c8a4; text-shadow: 2px 2px 0 #000; font-style: italic; margin-top: 4px; }
+@keyframes cine-in { 0% { opacity: 0; transform: translateY(24px); } }
+.cine-skip { position: absolute; right: 24px; bottom: 12.5vh; color: #998a6a; font-size: 12px; letter-spacing: 0.15em; z-index: 4; }
+.char-splash { text-align: left; animation: cine-in 0.4s ease-out; }
+.char-splash .char-name { font-family: var(--title-font); font-size: clamp(44px, 7vw, 92px); color: var(--hud-edge); text-shadow: 5px 5px 0 #000; transform: skew(-6deg) rotate(-1.5deg); }
+.char-splash .char-as { font-size: 18px; color: #d8c8a4; font-style: italic; margin: 2px 0 2px 8px; }
+.char-splash .char-class { font-family: var(--title-font); font-size: clamp(24px, 3.4vw, 44px); color: var(--paper); text-shadow: 3px 3px 0 #000; transform: skew(-6deg); }
+
+/* fast travel grouped rows */
+.ft-map-name { font-family: var(--title-font); font-size: 15px; color: var(--hud-edge); letter-spacing: 0.12em; margin: 10px 0 4px; }
+.ft-row { text-align: left; }

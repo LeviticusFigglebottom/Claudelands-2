@@ -84,15 +84,15 @@ export function corrugatedTexture(base = '#8a7f6d', rust = '#8a4a26', repeat = 2
   return tex(c, repeat);
 }
 
-/** Cracked dry-earth ground. */
-export function groundTexture(base = '#a3703f'): THREE.CanvasTexture {
+/** Cracked ground — biome palette drives desert dirt or packed snow. */
+export function groundTexture(base = '#a3703f', light = '#c99a5e', dark = '#6b4326', crack = 'rgba(30,18,10,0.55)'): THREE.CanvasTexture {
   const [c, ctx] = canvas(512, 512);
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, 512, 512);
-  grunge(ctx, 512, 512, '#c99a5e', 90, 10, 70, 0.10);
-  grunge(ctx, 512, 512, '#6b4326', 120, 8, 60, 0.12);
+  grunge(ctx, 512, 512, light, 90, 10, 70, 0.10);
+  grunge(ctx, 512, 512, dark, 120, 8, 60, 0.12);
   // crack polylines
-  ctx.strokeStyle = 'rgba(30,18,10,0.55)';
+  ctx.strokeStyle = crack;
   for (let i = 0; i < 40; i++) {
     ctx.lineWidth = 1 + Math.random() * 2.2;
     let x = Math.random() * 512, y = Math.random() * 512;

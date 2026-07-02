@@ -32,7 +32,7 @@ export class Hud {
         <div class="grit" id="grit-val"></div>
       </div>
       <div class="hud-corner hud-plate" id="hud-vitals">
-        <div class="charname">${PLAYER_CLASS.charName} — ${PLAYER_CLASS.name}</div>
+        <div class="charname" id="char-name">${PLAYER_CLASS.charName} — ${PLAYER_CLASS.name}</div>
         <div class="bar shield"><div class="fill" id="bar-shield"></div><div class="lbl" id="lbl-shield"></div></div>
         <div class="bar health"><div class="fill" id="bar-health"></div><div class="lbl" id="lbl-health"></div></div>
       </div>
@@ -42,7 +42,7 @@ export class Hud {
         <div class="gren" id="gren-count"></div>
         <div class="slots" id="weapon-slots"></div>
       </div>
-      <div class="hud-corner" id="hud-skill"><div class="skill-ring" id="skill-ring">SENTRY<br>RIG</div></div>
+      <div class="hud-corner" id="hud-skill"><div class="skill-ring" id="skill-ring"></div></div>
       <div class="hud-corner" id="hud-xp">
         <div class="xpbar"><div class="fill" id="bar-xp"></div></div>
         <div class="lvl" id="lbl-xp"></div>
@@ -59,6 +59,12 @@ export class Hud {
     this.crossArms = ['ca-l', 'ca-r', 'ca-t', 'ca-b'].map((id) => document.getElementById(id)!);
 
     // damage direction arc responder
+  }
+
+  /** Refresh class-dependent labels (call after class select / load). */
+  setCharacter(): void {
+    const el = document.getElementById('char-name');
+    if (el) el.textContent = `${PLAYER_CLASS.charName} — ${PLAYER_CLASS.name}`;
   }
 
   /** Rotate + flash the hurt-direction arc. relAngle: 0 = ahead, +right. */
@@ -108,7 +114,8 @@ export class Hud {
     if (actionSkill.ready) {
       ring.classList.add('ready');
       ring.style.setProperty('--cd', '100%');
-      ring.innerHTML = 'SENTRY<br>RIG<br><span style="font-size:9px">[F]</span>';
+      const label = PLAYER_CLASS.actionSkill.name.toUpperCase().split(' ').join('<br>');
+      ring.innerHTML = `${label}<br><span style="font-size:9px">[F]</span>`;
     } else {
       ring.classList.remove('ready');
       const f = actionSkill.activeCount > 0 ? 1 : 1 - actionSkill.cooldownRemaining / actionSkill.cooldownTotal;

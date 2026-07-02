@@ -58,6 +58,18 @@ export const LEGENDARIES: LegendaryDef[] = [
     effectLabel: 'Every hit repeats itself a beat later.',
     effect: { kind: 'echo_round', delay: 0.35 },
   },
+  {
+    id: 'leg_avalanche', name: 'The Avalanche', maker: 'vulkram', type: 'shotgun',
+    redText: '“It comes down all at once.”',
+    effectLabel: 'A wall of freezing pellets; impacts call a second, delayed burst.',
+    effect: { kind: 'meteor', radius: 4 }, forceElement: 'rime',
+  },
+  {
+    id: 'leg_smalltalk', name: 'Small Talk', maker: 'aetheric', type: 'pistol',
+    redText: '“So. Cold enough for ya?”',
+    effectLabel: 'Volt hits chain twice instead of once.',
+    effect: { kind: 'bouncing_orbs' }, forceElement: 'volt',
+  },
 ];
 
 export function legendaryFor(type: WeaponType, roll: number): LegendaryDef | null {

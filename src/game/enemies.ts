@@ -18,6 +18,7 @@ import { projectiles } from './projectiles';
 import { state } from './state';
 import { weightedPick, pick, chance } from '../util/rng';
 import { ELEMENTS } from '../data/elements';
+import { difficulty } from './settings';
 import type { ElementId } from './types';
 
 export interface EnemyHooks {
@@ -73,7 +74,7 @@ export class Enemy implements Damageable {
     this.position.copy(pos);
     this.homeDistrict = districtAt(pos.x, pos.z);
 
-    const hpBudget = 55 * def.hpMult * levelScale(level) * (badass ? BADASS_HP_MULT : 1);
+    const hpBudget = 55 * def.hpMult * levelScale(level) * (badass ? BADASS_HP_MULT : 1) * difficulty().enemyHp;
     this.maxFlesh = Math.max(1, hpBudget * def.flesh);
     this.maxShield = hpBudget * def.shield;
     this.maxArmor = hpBudget * def.armor;
@@ -160,7 +161,7 @@ export class Enemy implements Damageable {
         break;
       }
       default: {
-        if (this.def.id === 'scrapmutt') {
+        if (this.def.id === 'scrapmutt' || this.def.id === 'frostmutt') {
           const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5 * scale, 0.45 * scale, 1.0 * scale), bodyMat);
           torso.position.y = 0.5 * scale;
           for (let i = 0; i < 4; i++) {
@@ -484,9 +485,23 @@ export class EnemySpawner {
 
   attach(scene: THREE.Scene): void {
     this.scene = scene;
+    this.refreshDistricts();
+  }
+
+  /** Re-read districts from the active map (call on map switch). */
+  refreshDistricts(): void {
     this.pops = WORLD.districts
       .filter((d) => d.spawnTable.length > 0)
       .map((def) => ({ def, respawnT: 2 + Math.random() * 4 }));
+  }
+
+  /** Clear all live enemies and gibs (map switch). */
+  reset(): void {
+    for (const e of this.enemies) this.scene.remove(e.group);
+    this.enemies = [];
+    for (const g of this.gibs) this.scene.remove(g.mesh);
+    this.gibs = [];
+    this.boss = null;
   }
 
   /** Count of enemies currently hunting the player — drives the music. */
@@ -501,12 +516,13 @@ export class EnemySpawner {
   update(dt: number): void {
     const playerPos = enemyHooks().playerPos();
 
-    // district repopulation
+    // district repopulation — refills fast when empty, trickles when full-ish
     for (const pop of this.pops) {
       pop.respawnT -= dt;
       if (pop.respawnT > 0) continue;
-      pop.respawnT = pop.def.respawnDelay * (0.7 + Math.random() * 0.6);
       const alive = this.enemies.filter((e) => e.alive && e.homeDistrict?.id === pop.def.id).length;
+      const fill = pop.def.maxAlive > 0 ? alive / pop.def.maxAlive : 1;
+      pop.respawnT = pop.def.respawnDelay * (0.7 + Math.random() * 0.6) * Math.max(0.12, fill * fill);
       if (alive >= pop.def.maxAlive) continue;
       // only populate when the player is near-ish but not on top of the spawn
       const distToDistrict = Math.hypot(playerPos.x - pop.def.cx, playerPos.z - pop.def.cz);

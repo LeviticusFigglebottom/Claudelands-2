@@ -46,6 +46,12 @@ export class ProjectileSystem {
 
   attach(scene: THREE.Scene): void { this.scene = scene; }
 
+  /** Clear all live projectiles (map switch). */
+  reset(): void {
+    for (const p of this.list) if (!p.dead) this.scene.remove(p.mesh);
+    this.list = [];
+  }
+
   spawn(opts: Partial<Projectile> & { pos: THREE.Vector3; vel: THREE.Vector3; damage: number; element: ElementId }): Projectile {
     const color = ELEMENTS[opts.element].color;
     let mesh = opts.mesh;

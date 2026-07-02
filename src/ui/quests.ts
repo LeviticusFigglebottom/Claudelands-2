@@ -3,6 +3,8 @@
 
 import { questSystem, type QuestRuntime } from '../game/quests';
 import { QUEST_DONE_IDLE, QUIBB_GREETINGS } from '../data/quests';
+import type { QuestGiver } from '../data/quests';
+import { ZAZA_GREETINGS } from '../data/flavor';
 import { audio } from '../audio/synth';
 import { pick } from '../util/rng';
 
@@ -65,17 +67,23 @@ export class QuestLogPanel {
 export class DialoguePanel {
   private typing: number | null = null;
 
-  render(root: HTMLElement, onAccept: () => void, onClose: () => void): void {
-    const available: QuestRuntime | null = questSystem.available;
-    const greeting = pick(Math.random as never, QUIBB_GREETINGS);
+  render(root: HTMLElement, giver: QuestGiver, onAccept: () => void, onClose: () => void): void {
+    const available: QuestRuntime | null = questSystem.availableFrom(giver);
+    const zaza = giver === 'zaza';
+    const greeting = pick(Math.random as never, zaza ? ZAZA_GREETINGS : QUIBB_GREETINGS);
+    const otherGiverHint = questSystem.available && !available
+      ? [`Not my department, sugarplum. ${questSystem.available.def.giver === 'zaza' ? 'Madame Zaza' : 'Foreman Quibb'} is holding work for you.`]
+      : null;
     const lines = available
       ? available.def.briefing
       : questSystem.active
-        ? [`Job’s not done, contractor: ${questSystem.active.def.objective.label}.`, 'The wasteland won’t shoot itself. Well. Sometimes it does.']
-        : [pick(Math.random as never, QUEST_DONE_IDLE)];
+        ? (zaza
+          ? [`The spirits say your job isn’t finished, sugar: ${questSystem.active.def.objective.label}.`, 'The spirits are pushy like that.']
+          : [`Job’s not done, contractor: ${questSystem.active.def.objective.label}.`, 'The wasteland won’t shoot itself. Well. Sometimes it does.'])
+        : otherGiverHint ?? [pick(Math.random as never, QUEST_DONE_IDLE)];
 
     root.innerHTML = `
-      <h1>FOREMAN QUIBB</h1>
+      <h1>${zaza ? 'MADAME ZAZA' : 'FOREMAN QUIBB'}</h1>
       <div class="p-sub">${greeting}</div>
       <div class="p-body"><div style="flex:1">
         <div class="dialogue-box" id="dlg-box"></div>

@@ -17,6 +17,7 @@ import { toonMat, glowMat } from '../render/toon';
 import { swatch } from '../render/textures';
 import { chance, pick } from '../util/rng';
 import { CHEST_LINES } from '../data/flavor';
+import { difficulty } from './settings';
 
 export type PickupKind = 'item' | 'cash' | 'ammo' | 'health' | 'quest';
 
@@ -41,23 +42,31 @@ export class LootSystem {
 
   attach(scene: THREE.Scene): void { this.scene = scene; }
 
+  /** Clear all ground pickups (map switch). */
+  reset(): void {
+    for (const p of this.pickups) this.scene.remove(p.group);
+    this.pickups = [];
+  }
+
   private luck(): number { return statsys.bonus('lootLuck'); }
 
-  /** Enemy died: roll the table for its tier. */
+  /** Enemy died: roll the table for its tier. Trash drops lean; badasses
+   *  and bosses are the ceremony (bosses also floor at rare+). */
   dropForTier(tier: number, level: number, pos: THREE.Vector3): void {
-    // cash almost always
     if (chance(Math.random as never, 0.85)) this.spawnCash(pos, Math.round((6 + level * 3) * (1 + tier) * statsys.mult('cashBonus')));
     if (chance(Math.random as never, 0.5)) this.spawnAmmo(pos);
     if (chance(Math.random as never, 0.12)) this.spawnHealth(pos);
 
-    const gunChance = [0.28, 0.55, 1.0, 1.0][Math.min(tier, 3)];
-    const rolls = tier >= 3 ? 3 : tier >= 2 ? 2 : 1;
+    const gunChance = [0.18, 0.45, 1.0, 1.0][Math.min(tier, 3)];
+    const rolls = tier >= 3 ? 4 : tier >= 2 ? 2 : 1;
     for (let i = 0; i < rolls; i++) {
       if (!chance(Math.random as never, gunChance)) continue;
-      const luck = this.luck() + tier * 0.5;
+      const luck = this.luck() + tier * 0.65 + difficulty().lootLuckBonus;
+      // bosses never drop below rare — dying to a white pistol drop is a bug, not comedy
+      const rarityFloor = tier >= 3 ? 'rare' : undefined;
       const roll = Math.random();
       let item: ItemInstance;
-      if (roll < 0.62) item = generateWeapon({ level, luck });
+      if (roll < 0.62) item = generateWeapon({ level, luck, minRarity: rarityFloor });
       else if (roll < 0.78) item = generateShield(level, undefined, luck);
       else if (roll < 0.9) item = generateGrenadeMod(level, undefined, luck);
       else if (roll < 0.96) item = generateClassMod(level, undefined, luck);

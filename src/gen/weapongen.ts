@@ -17,11 +17,14 @@ export function levelScale(level: number): number {
   return Math.pow(1.11, level - 1);
 }
 
-export function rollRarity(rng: Rng, luck = 0): RarityDef {
-  const table = RARITY_LIST.map((r) => ({
-    item: r,
-    w: r.tier === 0 ? r.weight : r.weight * (1 + luck * r.tier),
-  }));
+export function rollRarity(rng: Rng, luck = 0, minRarityId?: string): RarityDef {
+  const floor = minRarityId ? rarityById(minRarityId).tier : 0;
+  const table = RARITY_LIST
+    .filter((r) => r.tier >= floor)
+    .map((r) => ({
+      item: r,
+      w: r.tier === 0 ? r.weight : r.weight * (1 + luck * r.tier * 1.2),
+    }));
   return weightedPick(rng, table);
 }
 
@@ -35,6 +38,7 @@ function pickPart(rng: Rng, slot: PartSlot, type: WeaponType, minGrade: number):
 export interface GenOpts {
   level: number;
   rarityId?: string;
+  minRarity?: string;
   type?: WeaponType;
   makerId?: string;
   seed?: number;
@@ -45,7 +49,7 @@ export function generateWeapon(opts: GenOpts): WeaponInstance {
   const seed = opts.seed ?? freshSeed();
   const rng = mulberry32(seed);
   const level = Math.max(1, Math.round(opts.level));
-  const rarity = opts.rarityId ? rarityById(opts.rarityId) : rollRarity(rng, opts.luck ?? 0);
+  const rarity = opts.rarityId ? rarityById(opts.rarityId) : rollRarity(rng, opts.luck ?? 0, opts.minRarity);
 
   const typeDef = opts.type
     ? WEAPON_TYPES[opts.type]

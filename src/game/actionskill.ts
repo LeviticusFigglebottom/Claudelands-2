@@ -7,7 +7,7 @@ import { toonMat, glowMat } from '../render/toon';
 import { swatch } from '../render/textures';
 import { fx } from './particles';
 import { audio } from '../audio/synth';
-import { applyDamage } from './combat';
+import { applyDamage, splashDamage } from './combat';
 import { levelScale } from '../gen/weapongen';
 import { statsys } from './stats';
 import { state } from './state';
@@ -102,6 +102,11 @@ export class ActionSkillSystem {
   scene!: THREE.Scene;
   enemies: () => Enemy[] = () => [];
   groundHeight: (x: number, z: number) => number = () => 0;
+  playerPos: () => THREE.Vector3 = () => new THREE.Vector3();
+
+  // Stormcaller: Tempest Shell state
+  tempestRemaining = 0;
+  private arcTimer = 0;
 
   attach(scene: THREE.Scene): void { this.scene = scene; }
 
@@ -109,8 +114,20 @@ export class ActionSkillSystem {
     return PLAYER_CLASS.actionSkill.cooldown * statsys.reduction('skillCooldown');
   }
 
-  get ready(): boolean { return this.cooldownRemaining <= 0 && this.turrets.length === 0; }
-  get activeCount(): number { return this.turrets.length; }
+  get tempestActive(): boolean { return this.tempestRemaining > 0; }
+
+  get ready(): boolean { return this.cooldownRemaining <= 0 && this.turrets.length === 0 && !this.tempestActive; }
+  get activeCount(): number { return this.turrets.length + (this.tempestActive ? 1 : 0); }
+
+  /** Squall Line augment while the Shell is up. */
+  get tempestHaste(): boolean { return this.tempestActive && state.hasAugment('tempest_haste'); }
+
+  /** Eye of the Storm capstone: kills extend the Shell. */
+  onKillWhileActive(): void {
+    if (this.tempestActive && statsys.bonus('eyeStorm') > 0) {
+      this.tempestRemaining = Math.min(this.tempestRemaining + 2, 20);
+    }
+  }
 
   /** Returns a taunt position if the Scrap Magnet augment is active. */
   tauntTarget(): THREE.Vector3 | null {
@@ -121,6 +138,14 @@ export class ActionSkillSystem {
 
   deploy(playerPos: THREE.Vector3, forward: THREE.Vector3): boolean {
     if (!this.ready) return false;
+    if (PLAYER_CLASS.actionSkill.id === 'tempest_shell') {
+      this.tempestRemaining = PLAYER_CLASS.actionSkill.duration * statsys.mult('turretDuration');
+      this.cooldownRemaining = this.cooldownTotal;
+      audio.elemental('volt');
+      audio.turretDeploy();
+      fx.burst(playerPos.clone().add(new THREE.Vector3(0, 1.4, 0)), 0x38c8ff, 34, 6, 0.14, 0.9, 3);
+      return true;
+    }
     const duration = PLAYER_CLASS.actionSkill.duration * statsys.mult('turretDuration');
     const damage = 6 * levelScale(state.level) * statsys.mult('turretDamage');
     const ember = state.hasAugment('rig_ember');
@@ -145,12 +170,45 @@ export class ActionSkillSystem {
   }
 
   update(dt: number): void {
-    if (this.turrets.length === 0 && this.cooldownRemaining > 0) {
+    if (this.turrets.length === 0 && !this.tempestActive && this.cooldownRemaining > 0) {
       this.cooldownRemaining -= dt;
       if (this.cooldownRemaining <= 0) audio.skillReady();
     }
     for (const t of this.turrets) t.update(dt, this.enemies(), this.scene);
     this.turrets = this.turrets.filter((t) => t.alive);
+
+    statsys.tempestHaste = this.tempestHaste;
+    // Tempest Shell: crackling aura + periodic chain arcs off the player
+    if (this.tempestActive) {
+      this.tempestRemaining -= dt;
+      const pos = this.playerPos();
+      if (Math.random() < 14 * dt) {
+        fx.emit(pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.2, 0.4 + Math.random() * 1.6, (Math.random() - 0.5) * 1.2)),
+          new THREE.Vector3(0, 1.2, 0), 0x38c8ff, 0.09, 0.4, 0);
+      }
+      this.arcTimer -= dt;
+      if (this.arcTimer <= 0) {
+        this.arcTimer = 0.7;
+        const near = this.enemies().filter((e) => e.alive && e.position.distanceTo(pos) < 14);
+        near.sort((a, b) => a.position.distanceTo(pos) - b.position.distanceTo(pos));
+        const targets = state.hasAugment('tempest_fork') ? near.slice(0, 2) : near.slice(0, 1);
+        for (const t of targets) {
+          const from = pos.clone().add(new THREE.Vector3(0, 1.5, 0));
+          const to = t.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+          fx.lightningArc(from, to);
+          applyDamage(t, 8 * levelScale(state.level) * statsys.mult('elemDamage'), 'volt', {
+            source: 'player', elemChance: 0.45, elemDps: 5 * levelScale(state.level),
+          });
+        }
+      }
+      if (this.tempestRemaining <= 0) {
+        // Thunderclap augment: exit nova
+        if (state.hasAugment('tempest_nova')) {
+          splashDamage(pos.clone(), 6, 24 * levelScale(state.level) * statsys.mult('elemDamage'), 'volt', { source: 'player', elemChance: 0.6 });
+        }
+        this.cooldownRemaining = this.cooldownTotal;
+      }
+    }
   }
 }
 

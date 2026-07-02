@@ -7,7 +7,7 @@
 import type { ElementId } from '../game/types';
 
 export type EnemyBehavior = 'rusher' | 'gunner' | 'lobber' | 'brute' | 'flyer' | 'suicide';
-export type Faction = 'rustborn' | 'helix';
+export type Faction = 'rustborn' | 'helix' | 'frostborn';
 
 export interface EnemyDef {
   id: string;
@@ -132,6 +132,55 @@ export const ENEMIES: Record<string, EnemyDef> = {
     projectile: { speed: 24, element: 'blast' },
     weight: 8,
   },
+  // ------------------------------------------------------------- FROSTBORN
+  snowmad: {
+    id: 'snowmad', name: 'Snowmad', badassName: 'Big Damn Snowmad',
+    faction: 'frostborn', behavior: 'gunner',
+    flesh: 1, shield: 0, armor: 0,
+    hpMult: 1.15, damageMult: 1.1, speed: 3.5, attackRange: 15, attackRate: 0.9, aggroRange: 26,
+    scale: 1.05, tint: 0x5a7a9a, dropTier: 0, xp: 14,
+    barks: ['The cold keeps what it catches!', 'Yer coat! I claim yer COAT!', 'Winter voted, and you LOST!', 'Fresh meat! Pre-chilled!'],
+    projectile: { speed: 30, element: 'kinetic' },
+    weight: 28,
+  },
+  frostmutt: {
+    id: 'frostmutt', name: 'Frostbite Mutt', badassName: 'Big Damn Frostmutt',
+    faction: 'frostborn', behavior: 'rusher',
+    flesh: 1, shield: 0, armor: 0,
+    hpMult: 0.7, damageMult: 0.9, speed: 6.8, attackRange: 1.8, attackRate: 1.2, aggroRange: 26,
+    scale: 0.75, tint: 0xb8d0dc, dropTier: 0, xp: 10,
+    barks: ['*frosty happy growling*', '*sound of icicle teeth*', '*a sneeze, but menacing*'],
+    weight: 26,
+  },
+  icicle_lobber: {
+    id: 'icicle_lobber', name: 'Icicle Lobber', badassName: 'Big Damn Icicler',
+    faction: 'frostborn', behavior: 'lobber',
+    flesh: 1, shield: 0, armor: 0,
+    hpMult: 1.0, damageMult: 1.3, speed: 3.0, attackRange: 18, attackRate: 0.4, aggroRange: 28,
+    scale: 0.95, tint: 0x8ab4cc, dropTier: 1, xp: 18,
+    barks: ['CATCH! IT’S POINTY!', 'Hail delivery! Extra hail!', 'Compliments of the Hollow!'],
+    projectile: { speed: 16, element: 'rime', arc: true },
+    weight: 12,
+  },
+  frost_shrike: {
+    id: 'frost_shrike', name: 'Frost Shrike', badassName: 'Big Damn Shrike',
+    faction: 'frostborn', behavior: 'flyer',
+    flesh: 0.7, shield: 0.3, armor: 0,
+    hpMult: 0.9, damageMult: 1.05, speed: 5.4, attackRange: 14, attackRate: 1.0, aggroRange: 30,
+    scale: 0.8, tint: 0xd8e8f0, dropTier: 1, xp: 17,
+    barks: ['*a shriek like skates on bad ice*', '*wings made of winter*', '*SKREE, but colder*'],
+    projectile: { speed: 32, element: 'rime' },
+    weight: 20,
+  },
+  avalanche_bruiser: {
+    id: 'avalanche_bruiser', name: 'Avalanche Bruiser', badassName: 'Big Damn Avalanche',
+    faction: 'frostborn', behavior: 'brute',
+    flesh: 0.45, shield: 0, armor: 0.55,
+    hpMult: 2.8, damageMult: 1.6, speed: 2.7, attackRange: 2.4, attackRate: 0.6, aggroRange: 22,
+    scale: 1.55, tint: 0x9ab4c8, dropTier: 1, xp: 34,
+    barks: ['I AM THE WEATHER!', '*glacial cracking noises*', 'The mountain sent me PERSONALLY!'],
+    weight: 8,
+  },
 };
 
 // ------------------------------------------------------------------ bosses
@@ -153,6 +202,16 @@ export const BOSS_WARDEN: EnemyDef = {
   scale: 3.1, tint: 0xe8e4da, dropTier: 3, xp: 800,
   barks: ['SITE CLEANUP: INITIATED.', 'YOUR WARRANTY DOES NOT COVER THIS.', 'CALCULATING ACCEPTABLE LOSSES: YOU.', 'THANK YOU FOR CHOOSING HELIX.'],
   projectile: { speed: 22, element: 'blast', arc: true },
+  weight: 0,
+};
+
+export const BOSS_AVALANCHE: EnemyDef = {
+  id: 'old_man_avalanche', name: 'OLD MAN AVALANCHE', badassName: 'OLD MAN AVALANCHE',
+  faction: 'frostborn', behavior: 'brute',
+  flesh: 0.5, shield: 0, armor: 0.5,
+  hpMult: 30, damageMult: 2.3, speed: 3.4, attackRange: 3.4, attackRate: 0.8, aggroRange: 65,
+  scale: 2.7, tint: 0xcfe0ec, dropTier: 3, xp: 700,
+  barks: ['WINTER TAKES ITS TIME. I DON’T.', 'I buried better hikers than you!', 'The Hollow feeds ME first!', 'Hear that rumble? That’s FAMILY.'],
   weight: 0,
 };
 

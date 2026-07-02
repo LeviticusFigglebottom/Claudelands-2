@@ -1,5 +1,32 @@
 # ROADMAP
 
+## Pass 3 status — two worlds, two heroes
+
+**The Frosthollow**: a second full map (frozen highland biome — snow terrain,
+snow-capped pines and mesas, aurora ribbons, snowfall, a frozen lake with
+something vast under the ice) reached by BL2-style cross-map Re-Constructor
+travel, unlocked through the story. Districts: Chatterjaw Landing (Zaza's
+caravan — she's the second quest giver, in person), the Pinebreak, the Frozen
+Fathom, and the Icebox. Three new quests (q6–q8), five Frostborn archetypes,
+and a third phased boss (OLD MAN AVALANCHE: charge, freezing rime novas, pack
+summons, enrage). Same procedural texture system, parameterized per biome.
+
+**Second playable class**: Sable Anders, the Stormcaller — Tempest Shell
+action skill (shots become chaining Volt, periodic arcs off the player) with
+three full trees (Static / Squall / Groundwire), augments (Forked Sky, Squall
+Line, Thunderclap) and capstones (Live Wire free-ammo shell, Eye of the Storm
+kill-extension, Lightning Rod thorns). Class select + difficulty select on new
+game; class persists in the save.
+
+**Intro cutscene**: skippable letterboxed camera sweep with title cards and
+the character freeze-frame splash.
+
+**Balance**: difficulty tiers (Tourist / Contractor / Badass — enemy hp/damage,
+loot luck, xp), leaner trash gun drops, boss drops floored at rare, stronger
+luck scaling, player hp growth up, district repopulation that refills fast
+when empty and trickles when full. Two new legendaries (The Avalanche, Small
+Talk).
+
 Living document. What shipped per pass, what's stubbed or shallow, and the
 concrete next moves. "Seam" = the extension point already exists in code/data;
 the work is content or depth, not refactoring.

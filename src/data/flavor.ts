@@ -101,7 +101,42 @@ export const WIRE_LOGS: WireLog[] = [
       'INITIATING UNSCHEDULED GROUND ENGAGEMENT. HELIX THANKS YOU.',
     ],
   },
+  {
+    id: 'log_pinebreak',
+    speaker: 'TRAPPER OKSANA — FROSTBITTEN WIRE SPOOL',
+    lines: [
+      'The pines grew in eleven years. ELEVEN. Trees don’t do that.',
+      'The Frostborn say the terraformer dreams them. I say trees don’t DREAM either.',
+      'Day forty: a pine moved. I have decided it did not. Goodnight.',
+    ],
+  },
+  {
+    id: 'log_fathom',
+    speaker: 'HELIX TERRAFORMER TF-09 — MAINTENANCE LOOP',
+    lines: [
+      'CLIMATE TARGET: TEMPERATE. CURRENT OUTPUT: AGGRESSIVELY SIBERIAN.',
+      'ERROR ACKNOWLEDGED. ERROR EMBRACED. ERROR IS HOME NOW.',
+      'THE LAKE IS A FEATURE. THE THING UNDER THE LAKE IS A FOOTNOTE.',
+    ],
+  },
+  {
+    id: 'log_icebox',
+    speaker: 'UNKNOWN FROSTBORN — REVERENT WIRE SPOOL',
+    lines: [
+      'Verse one of the Long Cold: the Old Man was here before the snow.',
+      'Verse two: feed him hikers, and he stays asleep. Mostly.',
+      'Verse three: if the ground rumbles, congratulations. You’re a verse now.',
+    ],
+  },
 ];
+
+export const ZAZA_GREETINGS = [
+  'Zaza foresaw your visit, sugar. The crystal ball is a snow globe now. Budget cuts.',
+  'Welcome to the caravan! Everything’s frozen except the prices.',
+  'The spirits say hello. They also say duck more.',
+];
+
+export const FROST_WIRE_LOGS_NOTE = 'see WIRE_LOGS — frost entries appended';
 
 /** Quibb's ambient mutterings when idle near him. */
 export const QUIBB_MUTTERS = [

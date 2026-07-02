@@ -83,6 +83,8 @@ export class World {
   private rats: { mesh: THREE.Group; vel: THREE.Vector3; wanderT: number; home: THREE.Vector3 }[] = [];
   private vultures: { mesh: THREE.Group; angle: number; r: number; cx: number; cz: number; h: number; speed: number }[] = [];
   private quibb: THREE.Group | null = null;
+  private zaza: THREE.Group | null = null;
+  private hemi!: THREE.HemisphereLight;
   private raycaster = new THREE.Raycaster();
 
   constructor(scene: THREE.Scene) {
@@ -94,6 +96,16 @@ export class World {
     this.buildPois();
     this.buildCritters();
     scene.add(this.group);
+  }
+
+  /** Tear down for a map switch: remove everything this world added. */
+  dispose(scene: THREE.Scene): void {
+    scene.remove(this.group);
+    scene.remove(this.sun, this.sun.target, this.hemi);
+    this.group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.geometry) m.geometry.dispose();
+    });
   }
 
   get arenaHalf(): number { return WORLD.size / 2; }
@@ -152,7 +164,28 @@ export class World {
     this.sun.shadow.camera.far = 320;
     this.sun.shadow.bias = -0.002;
     scene.add(this.sun, this.sun.target);
-    scene.add(new THREE.HemisphereLight(WORLD.ambient.sky, WORLD.ambient.ground, WORLD.ambient.intensity));
+    this.hemi = new THREE.HemisphereLight(WORLD.ambient.sky, WORLD.ambient.ground, WORLD.ambient.intensity);
+    scene.add(this.hemi);
+
+    // aurora ribbons — the Frosthollow's night-sky signature
+    if (WORLD.biome.aurora) {
+      for (let i = 0; i < 3; i++) {
+        const ribbon = new THREE.Mesh(
+          new THREE.PlaneGeometry(340 + i * 60, 26 + i * 8, 24, 1),
+          glowMat([0x54ffb4, 0x54d4ff, 0xc06bff][i], 0.16),
+        );
+        const p = ribbon.geometry.getAttribute('position');
+        for (let v = 0; v < p.count; v++) {
+          p.setY(v, p.getY(v) + Math.sin(p.getX(v) * 0.03 + i * 2) * 14);
+          p.setZ(v, Math.sin(p.getX(v) * 0.02 + i) * 20);
+        }
+        ribbon.position.set(i * 40 - 40, 150 + i * 22, -220 - i * 30);
+        ribbon.rotation.x = 0.35;
+        ribbon.layers.set(FX_LAYER);
+        ribbon.name = 'aurora';
+        this.group.add(ribbon);
+      }
+    }
   }
 
   /** Big world: the shadow frustum follows the player. */
@@ -182,7 +215,8 @@ export class World {
     }
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
-    const mat = toonMat({ map: groundTexture(), rim: 0 });
+    const g = WORLD.biome.ground;
+    const mat = toonMat({ map: groundTexture(g.base, g.light, g.dark, g.crack), rim: 0 });
     mat.vertexColors = true;
     mat.map!.repeat.set(24, 24);
     const ground = new THREE.Mesh(geo, mat);
@@ -192,7 +226,7 @@ export class World {
   }
 
   private buildCanyonRing(): void {
-    const rockMat = toonMat({ map: rockTexture() });
+    const rockMat = toonMat({ map: rockTexture(WORLD.biome.rock) });
     const rng = mulberry32(1234);
     const ringR = this.arenaHalf + 14;
     const n = 34;
@@ -206,6 +240,13 @@ export class World {
       mesa.castShadow = true; mesa.receiveShadow = true;
       this.group.add(mesa);
       this.staticTargets.push(mesa);
+      if (WORLD.biome.trees === 'pine') {
+        const cap = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.58, w * 0.72, h * 0.12, 6), toonMat({ color: 0xf0f6fa }));
+        cap.position.copy(mesa.position);
+        cap.position.y = h - 2 + h * 0.02;
+        cap.rotation.y = mesa.rotation.y;
+        this.group.add(cap);
+      }
     }
     for (let i = 0; i < 10; i++) {
       const a = rng() * Math.PI * 2;
@@ -234,7 +275,7 @@ export class World {
     // instanced scrub tufts + pebbles — cheap ground life across the map
     const rng = mulberry32(31337);
     const tuftGeo = new THREE.ConeGeometry(0.16, 0.5, 5);
-    const tuftMat = toonMat({ color: 0x7d8a4a });
+    const tuftMat = toonMat({ color: WORLD.biome.scrub });
     const tufts = new THREE.InstancedMesh(tuftGeo, tuftMat, 700);
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
@@ -262,11 +303,288 @@ export class World {
   }
 
   private buildDistricts(): void {
-    this.buildGutterlight();
-    this.buildGully();
-    this.buildBoneyard();
-    this.buildSlagflats();
-    this.buildTrashMountain();
+    for (const d of WORLD.districts) {
+      switch (d.dress) {
+        case 'hub': this.buildGutterlight(); break;
+        case 'fort': this.buildGully(); break;
+        case 'boneyard': this.buildBoneyard(); break;
+        case 'slagflats': this.buildSlagflats(); break;
+        case 'throne': this.buildTrashMountain(); break;
+        case 'frosthub': this.buildChatterjaw(d); break;
+        case 'pinebreak': this.buildPinebreak(d); break;
+        case 'fathom': this.buildFathom(d); break;
+        case 'icebox': this.buildIcebox(d); break;
+      }
+    }
+  }
+
+  /** Toon pine: stacked cones on a trunk. The Frosthollow staple. */
+  private pine(x: number, z: number, scale = 1): void {
+    const y = terrainHeight(x, z);
+    const tree = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.14 * scale, 0.2 * scale, 1.1 * scale, 6), toonMat({ color: 0x5a4030, map: swatch('#4e3828', 50) }));
+    trunk.position.y = 0.55 * scale;
+    tree.add(trunk);
+    const green = toonMat({ color: 0x2e5a44, map: swatch('#28503c', 40) });
+    for (let i = 0; i < 3; i++) {
+      const tier = new THREE.Mesh(new THREE.ConeGeometry((1.35 - i * 0.34) * scale, 1.5 * scale, 7), green);
+      tier.position.y = (1.4 + i * 0.95) * scale;
+      tree.add(tier);
+      const snow = new THREE.Mesh(new THREE.ConeGeometry((1.0 - i * 0.26) * scale, 0.45 * scale, 7), toonMat({ color: 0xf0f6fa }));
+      snow.position.y = (1.85 + i * 0.95) * scale;
+      tree.add(snow);
+    }
+    tree.position.set(x, y, z);
+    tree.rotation.y = Math.random() * Math.PI;
+    tree.traverse((o) => (o.castShadow = true));
+    this.group.add(tree);
+    this.staticTargets.push(tree);
+    this.addCollider(x, z, 0.35 * scale, 0.35 * scale);
+  }
+
+  private campfire(x: number, z: number): void {
+    const y = terrainHeight(x, z);
+    const logs = new THREE.Group();
+    const logMat = toonMat({ color: 0x5a4030 });
+    for (let i = 0; i < 3; i++) {
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1, 6), logMat);
+      log.rotation.z = Math.PI / 2;
+      log.rotation.y = (i / 3) * Math.PI;
+      log.position.y = 0.12;
+      logs.add(log);
+    }
+    const stones = toonMat({ color: 0x6a7a8a });
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const s = new THREE.Mesh(new THREE.DodecahedronGeometry(0.16, 0), stones);
+      s.position.set(Math.cos(a) * 0.7, 0.1, Math.sin(a) * 0.7);
+      logs.add(s);
+    }
+    logs.position.set(x, y, z);
+    logs.traverse((o) => (o.castShadow = true));
+    this.group.add(logs);
+    const light = new THREE.PointLight(0xff7a1a, 12, 9);
+    light.position.set(x, y + 1.4, z);
+    this.group.add(light);
+    this.barrelFlames.push(new THREE.Vector3(x, y + 0.5, z));
+  }
+
+  // --------------------------------------------------- Chatterjaw Landing
+  private buildChatterjaw(d: DistrictDef): void {
+    const rng = mulberry32(2101);
+    // frozen shacks ring the landing
+    this.shack(-14, 88, 1.1, rng);
+    this.shack(14, 90, -1.2, rng);
+    this.shack(-16, 70, 1.9, rng);
+    // icicles under every roofline read wintry without new geometry systems
+    const iceMat = toonMat({ color: 0xbfe9f5 });
+    for (const [x, z] of [[-14, 88], [14, 90], [-16, 70]] as const) {
+      for (let i = 0; i < 5; i++) {
+        const ice = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.4 + rng() * 0.5, 5), iceMat);
+        ice.position.set(x + (rng() - 0.5) * 4, terrainHeight(x, z) + 3.1, z + (rng() - 0.5) * 3);
+        ice.rotation.x = Math.PI;
+        this.group.add(ice);
+      }
+    }
+    // Zaza's caravan: a rounded wagon with a glowing crystal sign
+    const caravan = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.5, 3.2, 4, 10), toonMat({ color: 0xffffff, map: swatch('#5a2a6a', 80) }));
+    body.rotation.z = Math.PI / 2;
+    body.position.y = 1.9;
+    const wheelMat = toonMat({ color: 0x3a3632 });
+    for (const [wx, wz] of [[-1.4, 1.1], [1.4, 1.1], [-1.4, -1.1], [1.4, -1.1]] as const) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.2, 10), wheelMat);
+      wheel.rotation.x = Math.PI / 2;
+      wheel.position.set(wx, 0.55, wz);
+      caravan.add(wheel);
+    }
+    const chimney = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 1, 6), wheelMat);
+    chimney.position.set(-0.8, 3.4, 0);
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 10), glowMat(0xc06bff, 0.9));
+    orb.position.set(1.6, 3.2, 0);
+    orb.name = 'blinker';
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.2),
+      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['ZAZA\u2019S', 'WINTER', 'WONDERS'], style: 'ad', bg: '#5a2a6a', fg: '#ffd23c', accent: '#ff5a86' }) }));
+    sign.position.set(0, 2.2, 1.55);
+    caravan.add(body, chimney, orb, sign);
+    caravan.position.set(7, terrainHeight(7, 66), 66);
+    caravan.rotation.y = 0.5;
+    caravan.traverse((o) => (o.castShadow = true));
+    this.group.add(caravan);
+    this.staticTargets.push(caravan);
+    this.addCollider(7, 66, 2.6, 1.8);
+
+    this.campfire(-4, 82);
+    this.campfire(9, 92);
+    this.junkPiles(rng, 0, 84, 20, 4);
+    for (let i = 0; i < 8; i++) this.pine(d.cx + (rng() - 0.5) * 50, d.cz + (rng() - 0.5) * 40, 0.8 + rng() * 0.6);
+    this.poster(-13.2, 88, 1.1 + Math.PI / 2, 4);
+    this.graffiti(13, 88.5, -1.2 + Math.PI, 3);
+  }
+
+  // --------------------------------------------------- The Pinebreak
+  private buildPinebreak(d: DistrictDef): void {
+    const rng = mulberry32(3141);
+    // the forest itself
+    for (let i = 0; i < 46; i++) {
+      const a = rng() * Math.PI * 2;
+      const r = 6 + rng() * d.radius * 0.9;
+      this.pine(d.cx + Math.cos(a) * r, d.cz + Math.sin(a) * r, 0.7 + rng() * 1.1);
+    }
+    // frostborn camp: tents (canvas cones) + campfires + totems
+    const tentMat = toonMat({ color: 0x7a8a9a, map: swatch('#6a7a8a', 70) });
+    for (const [x, z] of [[d.cx + 8, d.cz - 6], [d.cx + 13, d.cz + 2], [d.cx + 4, d.cz + 6]] as const) {
+      const tent = new THREE.Mesh(new THREE.ConeGeometry(1.8, 2.6, 6), tentMat);
+      tent.position.set(x, terrainHeight(x, z) + 1.2, z);
+      tent.castShadow = true;
+      this.group.add(tent);
+      this.staticTargets.push(tent);
+      this.addCollider(x, z, 1.5, 1.5);
+    }
+    this.campfire(d.cx + 8, d.cz);
+    this.campfire(d.cx - 16, d.cz + 14);
+    // totem: stacked skull-boxes crowned with antlers
+    const boneMat = toonMat({ color: 0xd8ccb4 });
+    const totem = new THREE.Group();
+    for (let i = 0; i < 3; i++) {
+      const skull = new THREE.Mesh(new THREE.BoxGeometry(0.7 - i * 0.12, 0.6, 0.6), boneMat);
+      skull.position.y = 0.4 + i * 0.62;
+      skull.rotation.y = (rng() - 0.5) * 0.6;
+      totem.add(skull);
+    }
+    const antler = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.05, 5, 8, Math.PI), boneMat);
+    antler.position.y = 2.3;
+    totem.add(antler);
+    totem.position.set(d.cx - 4, terrainHeight(d.cx - 4, d.cz - 12), d.cz - 12);
+    totem.traverse((o) => (o.castShadow = true));
+    this.group.add(totem);
+    this.staticTargets.push(totem);
+    this.explosiveBarrel(d.cx + 18, d.cz - 10);
+    this.explosiveBarrel(d.cx - 10, d.cz + 20);
+    this.poster(d.cx + 12.5, d.cz + 2, Math.PI / 2, 2);
+  }
+
+  // --------------------------------------------------- The Frozen Fathom
+  private buildFathom(d: DistrictDef): void {
+    const rng = mulberry32(2718);
+    const lake = WORLD.terrain.lake;
+    if (lake) {
+      // the ice sheet: pale disc with painted cracks, faint glow beneath
+      const iceTex = groundTexture('#cfe4f0', '#ffffff', '#9fc4d8', 'rgba(70,110,150,0.7)');
+      iceTex.repeat.set(6, 6);
+      const ice = new THREE.Mesh(new THREE.CircleGeometry(lake.r, 36), toonMat({ map: iceTex, rim: 0.4 }));
+      ice.rotation.x = -Math.PI / 2;
+      ice.position.set(lake.x, lake.level + 0.06, lake.z);
+      ice.receiveShadow = true;
+      this.group.add(ice);
+      // something vast, frozen mid-swim beneath the ice
+      const shadow = new THREE.Mesh(new THREE.CapsuleGeometry(3, 14, 4, 8),
+        new THREE.MeshBasicMaterial({ color: 0x2a4a5a, transparent: true, opacity: 0.35 }));
+      shadow.rotation.z = Math.PI / 2;
+      shadow.rotation.y = 0.7;
+      shadow.position.set(lake.x - 4, lake.level - 1.2, lake.z + 3);
+      shadow.layers.set(FX_LAYER);
+      this.group.add(shadow);
+      // frozen-in-place fishing shacks
+      for (const [x, z] of [[lake.x - 10, lake.z - 8], [lake.x + 12, lake.z + 6]] as const) {
+        this.shack(x, z, rng() * Math.PI, rng);
+      }
+      // ice spikes bursting from the sheet
+      const iceMat = toonMat({ color: 0xbfe9f5 });
+      for (let i = 0; i < 9; i++) {
+        const a = rng() * Math.PI * 2;
+        const r = rng() * lake.r * 0.8;
+        const x = lake.x + Math.cos(a) * r, z = lake.z + Math.sin(a) * r;
+        const spike = new THREE.Mesh(new THREE.ConeGeometry(0.4 + rng() * 0.5, 1.5 + rng() * 2.5, 6), iceMat);
+        spike.position.set(x, lake.level + 0.6, z);
+        spike.rotation.z = (rng() - 0.5) * 0.4;
+        spike.castShadow = true;
+        this.group.add(spike);
+        this.staticTargets.push(spike);
+        this.addCollider(x, z, 0.6, 0.6);
+      }
+    }
+    for (let i = 0; i < 10; i++) {
+      const a = rng() * Math.PI * 2;
+      const r = d.radius * (0.85 + rng() * 0.2);
+      this.pine(d.cx + Math.cos(a) * r, d.cz + Math.sin(a) * r, 0.7 + rng() * 0.8);
+    }
+    this.campfire(d.cx - 24, d.cz + 12);
+    this.explosiveBarrel(d.cx + 6, d.cz + 22);
+  }
+
+  // --------------------------------------------------- The Icebox
+  private buildIcebox(d: DistrictDef): void {
+    const rng = mulberry32(1618);
+    const iceMat = toonMat({ color: 0xbfe9f5 });
+    // ring of glacial shards around the Old Man's court
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const r = 20 + rng() * 8;
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      const shard = new THREE.Mesh(new THREE.ConeGeometry(1.6 + rng() * 1.6, 5 + rng() * 6, 5), iceMat);
+      shard.position.set(x, terrainHeight(x, z) + 2, z);
+      shard.rotation.z = (rng() - 0.5) * 0.35;
+      shard.castShadow = true;
+      this.group.add(shard);
+      this.staticTargets.push(shard);
+      this.addCollider(x, z, 1.6, 1.6);
+    }
+    // the Old Man's "bed": a snow mound with hiker gear frozen around it
+    const mound = new THREE.Mesh(new THREE.SphereGeometry(5, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), toonMat({ color: 0xf0f6fa }));
+    mound.position.set(d.cx, terrainHeight(d.cx, d.cz - 6), d.cz - 6);
+    mound.receiveShadow = true;
+    this.group.add(mound);
+    const gearMat = toonMat({ color: 0xb43a2a });
+    for (let i = 0; i < 4; i++) {
+      const pack = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.3), gearMat);
+      const a = rng() * Math.PI * 2;
+      pack.position.set(d.cx + Math.cos(a) * 8, terrainHeight(d.cx, d.cz) + 0.35, d.cz + Math.sin(a) * 8);
+      pack.rotation.set(rng(), rng() * 3, rng());
+      this.group.add(pack);
+    }
+    this.campfire(d.cx + 8, d.cz + 12);
+    for (let i = 0; i < 6; i++) this.pine(d.cx + (rng() - 0.5) * 56, d.cz + 18 + rng() * 10, 0.8 + rng() * 0.7);
+    this.explosiveBarrel(d.cx - 10, d.cz + 4);
+    this.explosiveBarrel(d.cx + 12, d.cz - 2);
+  }
+
+  // --------------------------------------------------- Madame Zaza (NPC)
+  private buildZaza(poi: WorldPoi): void {
+    const y = terrainHeight(poi.x, poi.z);
+    const q = new THREE.Group();
+    const skirt = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.1, 8), toonMat({ color: 0x5a2a6a, map: swatch('#4e2460', 60) }));
+    skirt.position.y = 0.55;
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.6, 0.32), toonMat({ color: 0x8a3a7a }));
+    torso.position.y = 1.35;
+    const shawl = new THREE.Mesh(new THREE.ConeGeometry(0.46, 0.5, 8), toonMat({ color: 0xffd23c }));
+    shawl.position.y = 1.62;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.32, 0.3), toonMat({ color: 0xc89878 }));
+    head.position.y = 1.9;
+    const turban = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), toonMat({ color: 0xc06bff }));
+    turban.position.y = 2.12;
+    const jewel = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), glowMat(0xff5a86, 1));
+    jewel.position.set(0, 2.14, 0.2);
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), glowMat(0xc06bff, 0.85));
+    orb.position.set(0.42, 1.35, 0.24);
+    const marker = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 4), glowMat(0xffd23c, 0.95));
+    marker.position.y = 2.6;
+    marker.rotation.x = Math.PI;
+    marker.name = 'quest_marker';
+    q.add(skirt, torso, shawl, head, turban, jewel, orb, marker);
+    q.position.set(poi.x, y, poi.z);
+    q.rotation.y = poi.rot ?? 0;
+    q.traverse((o) => (o.castShadow = true));
+    q.name = 'zaza';
+    this.group.add(q);
+    this.zaza = q;
+    this.addCollider(poi.x, poi.z, 0.5, 0.5);
+    this.interactables.push({
+      kind: 'npc',
+      pos: new THREE.Vector3(poi.x, y, poi.z),
+      label: 'TALK TO MADAME ZAZA',
+      data: poi.data,
+    });
   }
 
   /** Shared shack builder used by hub + gully. */
@@ -738,7 +1056,7 @@ export class World {
         case 'vendor_med': this.buildVendor(poi, false); break;
         case 'fast_travel': this.buildFastTravel(poi); break;
         case 'wirelog': this.buildWireLog(poi); break;
-        case 'npc': this.buildQuibb(poi); break;
+        case 'npc': if (poi.data === 'zaza') this.buildZaza(poi); else this.buildQuibb(poi); break;
         case 'gate': this.buildGate(poi); break;
         case 'sign': this.buildSign(poi); break;
       }
@@ -937,7 +1255,11 @@ export class World {
       const ear = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.08, 4), toonMat({ color: 0x6a5a48 }));
       ear.position.set(0.06, 0.17, -0.12);
       rat.add(body, tail, ear);
-      const home = i < 3 ? new THREE.Vector3(0, 0, 92) : new THREE.Vector3(0, 0, 5);
+      const hubD = WORLD.districts.find((dd) => dd.dress === 'hub' || dd.dress === 'frosthub');
+      const secondD = WORLD.districts.find((dd) => dd.dress === 'fort' || dd.dress === 'pinebreak');
+      const home = i < 3
+        ? new THREE.Vector3(hubD?.cx ?? 0, 0, hubD?.cz ?? 0)
+        : new THREE.Vector3(secondD?.cx ?? 0, 0, secondD?.cz ?? 0);
       const x = home.x + (Math.random() - 0.5) * 24;
       const z = home.z + (Math.random() - 0.5) * 24;
       rat.position.set(x, terrainHeight(x, z), z);
@@ -953,7 +1275,8 @@ export class World {
       const wr = wl.clone(); wr.position.x = 0.8; wr.rotation.z = -0.25;
       wingMat.side = THREE.DoubleSide;
       bird.add(wl, wr);
-      const over = i < 2 ? { x: -85, z: -20 } : { x: 0, z: -95 };
+      const spots = WORLD.districts.filter((dd) => dd.dress === 'boneyard' || dd.dress === 'throne' || dd.dress === 'icebox' || dd.dress === 'fathom');
+      const over = spots[i % Math.max(1, spots.length)] ? { x: spots[i % spots.length].cx, z: spots[i % spots.length].cz } : { x: 0, z: 0 };
       this.group.add(bird);
       this.vultures.push({
         mesh: bird, angle: Math.random() * Math.PI * 2,
@@ -1074,6 +1397,13 @@ export class World {
       else if (o.name === 'quest_marker') o.position.y = 2.35 + Math.sin(this.blinkT * 2.5) * 0.12;
       else if (o.name === 'ft_ring') o.rotation.z += dt * 0.8;
     });
+    if (this.zaza) {
+      const d = this.zaza.position.distanceTo(playerPos);
+      if (d < 8) {
+        const target = Math.atan2(playerPos.x - this.zaza.position.x, playerPos.z - this.zaza.position.z);
+        this.zaza.rotation.y += (target - this.zaza.rotation.y) * Math.min(1, dt * 5);
+      }
+    }
     // Quibb idles: faces the player when close
     if (this.quibb) {
       const d = this.quibb.position.distanceTo(playerPos);
@@ -1116,12 +1446,25 @@ export class World {
       v.mesh.rotation.y = -v.angle;
       v.mesh.rotation.z = 0.15;
     }
-    // ambient dust motes near the player
-    if (Math.random() < 6 * dt) {
+    // ambient particles: desert dust motes or falling snow
+    if (WORLD.biome.ambientParticle === 'snow') {
+      if (Math.random() < 40 * dt) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * 22;
+        const p = playerPos.clone().add(new THREE.Vector3(Math.cos(a) * r, 6 + Math.random() * 6, Math.sin(a) * r));
+        fx.emit(p, new THREE.Vector3(0.35 + Math.random() * 0.3, -1.1, 0.15), 0xffffff, 0.07, 6, 0.02);
+      }
+    } else if (Math.random() < 6 * dt) {
       const a = Math.random() * Math.PI * 2;
       const r = 4 + Math.random() * 14;
       const p = playerPos.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.5 + Math.random() * 3, Math.sin(a) * r));
       fx.emit(p, new THREE.Vector3(0.4, 0.15, 0.15), 0xd8c8a8, 0.05, 2.5, -0.02);
+    }
+    // aurora shimmer
+    if (WORLD.biome.aurora) {
+      this.group.traverse((o) => {
+        if (o.name === 'aurora') o.position.x += Math.sin(this.blinkT * 0.3 + o.position.z) * dt * 2;
+      });
     }
   }
 }

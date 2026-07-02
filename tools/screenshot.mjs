@@ -86,27 +86,33 @@ await page.waitForTimeout(2500);
 await shot('01-title');
 
 await page.evaluate(() => document.getElementById('t-new')?.click()); // pulse anim makes it "unstable" for page.click
-await page.waitForTimeout(3500);
-await shot('02-hub-gutterlight');
+await page.waitForTimeout(500);
+await shot('02-class-select');
+await page.evaluate(() => document.getElementById('cs-go')?.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+await page.waitForTimeout(2600); // intro cinematic sweeping the hub
+await shot('02b-intro-cutscene');
+await page.evaluate(() => window.__game.skipIntro());
+await page.waitForTimeout(3200);
+await shot('03-hub-gutterlight');
 
 // talk to Quibb, accept quest 1
 await teleport(-3, 77, Math.PI * 0.98);
 await page.keyboard.press('e');
 await page.waitForTimeout(2200);
-await shot('03-quibb-dialogue');
+await shot('04-quibb-dialogue');
 await page.click('#dlg-accept').catch(() => {});
 await page.waitForTimeout(400);
 
 // walk the road south — vista over the gully
 await teleport(0, 58, Math.PI, -0.04);
 await ff(2);
-await shot('04-road-south');
+await shot('05-road-south');
 
 // into the gully: quest 1 completes, enemies populate
 await teleport(0, 20, Math.PI, -0.03);
 await ff(6);
 await aim();
-await shot('05-gully-combat');
+await shot('06-gully-combat');
 
 // fight: kills, loot beams
 for (let i = 0; i < 60; i++) {
@@ -128,7 +134,7 @@ await page.evaluate(() => {
   g.player.pitch = -0.12;
   g.fastForward(0.1);
 });
-await shot('06-loot-beams');
+await shot('07-loot-beams');
 await page.evaluate(() => {
   const g = window.__game;
   const items = g.loot.pickups.filter((p) => p.kind === 'item');
@@ -137,12 +143,12 @@ await page.evaluate(() => {
   g.player.pitch = -0.5;
   g.fastForward(0.1);
 });
-await shot('07-item-card');
+await shot('08-item-card');
 
 // boneyard vista
 await teleport(-58, -12, Math.PI / 2 + 0.3, -0.02);
 await ff(3);
-await shot('08-boneyard');
+await shot('09-boneyard');
 
 // slagflats + helix combat with a volt SMG
 await teleport(62, -18, -Math.PI / 2 - 0.4, -0.02);
@@ -156,13 +162,13 @@ await page.evaluate(() => {
 await ff(6);
 await aim();
 await burst(0.3);
-await shot('09-slagflats-helix');
+await shot('10-slagflats');
 
 // sentry rig + skill points spent
 await page.evaluate(() => { window.__game.state.skillPoints += 5; });
 await page.keyboard.press('f');
 await ff(1);
-await shot('10-sentry-rig');
+await shot('11-sentry-rig');
 
 // boss: force-start Gutterball quest chain
 await page.evaluate(() => {
@@ -175,12 +181,12 @@ await page.evaluate(() => {
 await teleport(0, -78, Math.PI, -0.02);
 await ff(2);
 await aim();
-await shot('11-gutterball-boss');
+await shot('12-gutterball-boss');
 
 // panels
 await page.keyboard.press('j');
 await page.waitForTimeout(1600);
-await shot('12-quest-log');
+await shot('13-quest-log');
 await page.keyboard.press('Escape');
 await page.waitForTimeout(300);
 await page.keyboard.press('k');
@@ -188,21 +194,34 @@ await page.waitForTimeout(600);
 await page.click('[data-skill="hi_racket"]').catch(() => {});
 await page.click('[data-skill="hi_trigger"]').catch(() => {});
 await page.waitForTimeout(300);
-await shot('13-skilltree');
+await shot('14-skilltree');
 await page.keyboard.press('Escape');
 await page.waitForTimeout(300);
 await page.keyboard.press('Tab');
 await page.waitForTimeout(500);
 await page.evaluate(() => document.querySelector('.inv-row')?.click());
 await page.waitForTimeout(300);
-await shot('14-inventory');
+await shot('15-inventory');
 await page.keyboard.press('Escape');
 await page.waitForTimeout(300);
+
+// FROSTHOLLOW — switch map, tour the biome
+await page.evaluate(() => { window.__game.switchMapDebug('frosthollow'); window.__game.fastForward(1); });
+await teleport(0, 100, Math.PI, -0.04);
+await ff(2);
+await shot('16-frosthollow-chatterjaw');
+await teleport(-40, 12, Math.PI * 0.65, -0.03);
+await ff(8);
+await aim();
+await shot('17-pinebreak-combat');
+await teleport(30, -6, -Math.PI / 2 - 0.4, -0.05);
+await ff(3);
+await shot('18-frozen-fathom');
 
 // sandbox
 await page.goto('http://127.0.0.1:4519/sandbox.html');
 await page.waitForTimeout(3000);
-await shot('15-sandbox');
+await shot('19-sandbox');
 
 await browser.close();
 server.close();

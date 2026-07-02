@@ -105,10 +105,65 @@ const gunsmith: ClassDef = {
 // --------------------------------------------------------------------------
 // Data stubs — prove the format; pass 2 wires them up.
 const stormcaller: ClassDef = {
-  id: 'stormcaller', name: 'The Stormcaller', charName: 'Sable Anders',
+  id: 'stormcaller',
+  name: 'The Stormcaller',
+  charName: 'Sable Anders',
   blurb: 'Struck by lightning six times. On a first-name basis with the seventh.',
-  actionSkill: { id: 'tempest_shell', name: 'Tempest Shell', desc: 'Become a walking thunderhead: shots arc Volt, melee discharges novas.', cooldown: 32, duration: 10 },
-  trees: [], playable: false,
+  actionSkill: {
+    id: 'tempest_shell',
+    name: 'Tempest Shell',
+    desc: 'Become a walking thunderhead: your shots turn Volt and chain, and arcs leap from you to anything rude enough to stand close.',
+    cooldown: 30,
+    duration: 9,
+  },
+  trees: [
+    {
+      id: 'static',
+      name: 'Static',
+      blurb: 'The elements owe YOU money.',
+      skills: [
+        { id: 'st_conductor', name: 'Conductor', kind: 'passive', maxPoints: 5, tier: 1, stats: { elemDamage: 0.05 }, desc: (p) => `+${P(5 * p)} elemental damage.` },
+        { id: 'st_charged', name: 'Charged Rounds', kind: 'passive', maxPoints: 5, tier: 1, stats: { elemChance: 0.05 }, desc: (p) => `+${P(5 * p)} elemental proc chance.` },
+        { id: 'st_grounded', name: 'Grounded', kind: 'passive', maxPoints: 5, tier: 2, stats: { shieldCapacity: 0.06 }, desc: (p) => `+${P(6 * p)} shield capacity.` },
+        { id: 'st_aftershock', name: 'Aftershock', kind: 'killskill', maxPoints: 5, tier: 2, stats: { elemDamage: 0.06 }, killskillDuration: 7, desc: (p) => `Kill Skill: +${P(6 * p)} elemental damage for 7s.` },
+        { id: 'st_arcflash', name: 'Arc Flash', kind: 'passive', maxPoints: 5, tier: 3, stats: { fireRate: 0.04 }, desc: (p) => `+${P(4 * p)} fire rate. Lightning is a tempo.` },
+        { id: 'st_stormfront', name: 'Stormfront', kind: 'passive', maxPoints: 5, tier: 4, stats: { skillCooldown: 0.05 }, desc: (p) => `-${P(5 * p)} Tempest Shell cooldown.` },
+        { id: 'st_forked', name: 'Shell: Forked Sky', kind: 'augment', maxPoints: 1, tier: 5, augmentId: 'tempest_fork', desc: () => `Tempest arcs strike TWO targets at once.`, flavor: 'Why choose?' },
+        { id: 'st_capstone', name: 'Live Wire', kind: 'passive', maxPoints: 1, tier: 6, stats: { liveWire: 1 }, desc: () => `CAPSTONE: while Tempest Shell is active, your shots NEVER consume ammo.`, flavor: 'The storm provides.' },
+      ],
+    },
+    {
+      id: 'squall',
+      name: 'Squall',
+      blurb: 'Move like weather. Arrive like news.',
+      skills: [
+        { id: 'sq_tailwind', name: 'Tailwind', kind: 'passive', maxPoints: 5, tier: 1, stats: { moveSpeed: 0.04 }, desc: (p) => `+${P(4 * p)} move speed.` },
+        { id: 'sq_slipstream', name: 'Slipstream', kind: 'passive', maxPoints: 5, tier: 1, stats: { reloadSpeed: 0.05 }, desc: (p) => `+${P(5 * p)} reload speed.` },
+        { id: 'sq_downdraft', name: 'Downdraft', kind: 'killskill', maxPoints: 5, tier: 2, stats: { moveSpeed: 0.05, fireRate: 0.04 }, killskillDuration: 7, desc: (p) => `Kill Skill: +${P(5 * p)} move speed and +${P(4 * p)} fire rate for 7s.` },
+        { id: 'sq_pressure', name: 'Pressure Drop', kind: 'passive', maxPoints: 5, tier: 2, stats: { gunDamage: 0.04 }, desc: (p) => `+${P(4 * p)} gun damage.` },
+        { id: 'sq_updraft', name: 'Updraft', kind: 'passive', maxPoints: 5, tier: 3, stats: { magSize: 0.05 }, desc: (p) => `+${P(5 * p)} magazine size.` },
+        { id: 'sq_stormchaser', name: 'Storm Chaser', kind: 'passive', maxPoints: 5, tier: 4, stats: { turretDuration: 0.08 }, desc: (p) => `+${P(8 * p)} Tempest Shell duration.` },
+        { id: 'sq_squallline', name: 'Shell: Squall Line', kind: 'augment', maxPoints: 1, tier: 5, augmentId: 'tempest_haste', desc: () => `Tempest Shell also grants +25% move speed and reload speed.`, flavor: 'Outrun the thunder. Rude, but possible.' },
+        { id: 'sq_capstone', name: 'Eye of the Storm', kind: 'passive', maxPoints: 1, tier: 6, stats: { eyeStorm: 1 }, desc: () => `CAPSTONE: killing a target while Tempest Shell is active extends the Shell by 2 seconds.`, flavor: 'The weather likes a show.' },
+      ],
+    },
+    {
+      id: 'groundwire',
+      name: 'Groundwire',
+      blurb: 'You can\u2019t shock what\u2019s already shocking.',
+      skills: [
+        { id: 'gw_insulated', name: 'Insulated', kind: 'passive', maxPoints: 5, tier: 1, stats: { maxHealth: 0.05 }, desc: (p) => `+${P(5 * p)} max health.` },
+        { id: 'gw_trickle', name: 'Trickle Charge', kind: 'passive', maxPoints: 5, tier: 1, stats: { shieldRate: 0.06 }, desc: (p) => `+${P(6 * p)} shield recharge rate.` },
+        { id: 'gw_surge', name: 'Surge Protector', kind: 'killskill', maxPoints: 5, tier: 2, stats: { shieldRate: 0.08 }, killskillDuration: 7, desc: (p) => `Kill Skill: +${P(8 * p)} shield recharge for 7s.` },
+        { id: 'gw_breaker', name: 'Breaker Box', kind: 'passive', maxPoints: 5, tier: 2, stats: { splashDamage: 0.05 }, desc: (p) => `+${P(5 * p)} splash damage.` },
+        { id: 'gw_capacitor', name: 'Capacitor', kind: 'passive', maxPoints: 5, tier: 3, stats: { grenadeDamage: 0.07 }, desc: (p) => `+${P(7 * p)} grenade damage.` },
+        { id: 'gw_stubborn', name: 'Rubber Soles', kind: 'passive', maxPoints: 5, tier: 4, stats: { fflTime: 0.1 }, desc: (p) => `+${P(10 * p)} Fight For Your Life duration.` },
+        { id: 'gw_nova', name: 'Shell: Thunderclap', kind: 'augment', maxPoints: 1, tier: 5, augmentId: 'tempest_nova', desc: () => `Tempest Shell detonates a Volt nova when it ends.`, flavor: 'Always leave on a bang.' },
+        { id: 'gw_capstone', name: 'Lightning Rod', kind: 'passive', maxPoints: 1, tier: 6, stats: { lightningRod: 1 }, desc: () => `CAPSTONE: 20% of damage you take while shields are up is dealt back as Volt to your attacker\u2019s side of the field (nearest enemy).`, flavor: 'Return to sender.' },
+      ],
+    },
+  ],
+  playable: true,
 };
 const houndmaster: ClassDef = {
   id: 'houndmaster', name: 'The Houndmaster', charName: 'Kez Okafor',
@@ -124,7 +179,17 @@ const ravager: ClassDef = {
 };
 
 export const CLASSES: ClassDef[] = [gunsmith, stormcaller, houndmaster, ravager];
-export const PLAYER_CLASS = gunsmith;
+
+let playerClass: ClassDef = gunsmith;
+export function getPlayerClass(): ClassDef { return playerClass; }
+export function setPlayerClass(id: string): ClassDef {
+  playerClass = CLASSES.find((c) => c.id === id && c.playable) ?? gunsmith;
+  return playerClass;
+}
+/** Back-compat accessor: always reflects the selected class. */
+export const PLAYER_CLASS = new Proxy({} as ClassDef, {
+  get: (_t, prop) => (playerClass as unknown as Record<string | symbol, unknown>)[prop],
+}) as ClassDef;
 
 export function skillById(id: string): SkillDef | undefined {
   for (const c of CLASSES) for (const t of c.trees) for (const s of t.skills) if (s.id === id) return s;

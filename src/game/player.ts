@@ -20,6 +20,8 @@ import { enemySpawner, type Enemy } from './enemies';
 import { ELEMENTS } from '../data/elements';
 import { clamp, damp, lerp } from '../util/maff';
 import { LEGENDARIES } from '../data/legendaries';
+import { actionSkill } from './actionskill';
+import { difficulty } from './settings';
 import type { StaticHit, ExplosiveBarrel } from './world';
 
 const EYE_HEIGHT = 1.65;
@@ -134,7 +136,7 @@ export class Player implements Damageable {
     const sh = state.shield;
     this.maxShield = sh ? sh.capacity * statsys.mult('shieldCapacity') : 0;
     if (sh?.special?.id === 'fortify') this.maxShield *= 0.5;
-    const hpBase = 90 + state.level * 12;
+    const hpBase = 100 + state.level * 14;
     this.maxFlesh = hpBase * statsys.mult('maxHealth') * (sh?.special?.id === 'fortify' ? 1 + sh.special.power / 200 : 1);
     this.shield = Math.min(this.shield, this.maxShield);
     this.flesh = Math.min(this.flesh, this.maxFlesh);
@@ -167,9 +169,18 @@ export class Player implements Damageable {
   damage(amount: number, element: string, from?: THREE.Vector3): void {
     if (this.downed || !this.alive) return;
     const el = (element in ELEMENTS ? element : 'kinetic') as ElementId;
-    let dmg = amount;
+    let dmg = amount * difficulty().enemyDamage;
     const sh = state.shield;
     if (sh?.special?.id === 'adaptive') dmg *= 0.82;
+    // Lightning Rod capstone: shielded hits arc back at the nearest enemy
+    if (this.shield > 0 && statsys.bonus('lightningRod') > 0 && from) {
+      const near = enemySpawner.enemies.filter((e) => e.alive);
+      near.sort((a, b) => a.position.distanceTo(this.position) - b.position.distanceTo(this.position));
+      if (near[0]) {
+        fx.lightningArc(this.position.clone().add(new THREE.Vector3(0, 1.4, 0)), near[0].position.clone().add(new THREE.Vector3(0, 1.2, 0)));
+        applyDamage(near[0], dmg * 0.2, 'volt', { source: 'player', noChain: true });
+      }
+    }
     this.shieldDelayT = sh?.rechargeDelay ?? 3;
     const hadShield = this.shield > 0;
     applyDamage(this, dmg, el, { noNumbers: true, source: 'enemy', noChain: true });
@@ -430,11 +441,13 @@ export class Player implements Damageable {
 
     const maker = makerById(w.maker);
     const stats = w.stats;
+    const tempest = actionSkill.tempestActive;
     this.canSemiFire = false;
     this.fireTimer = 1 / (stats.fireRate * statsys.mult('fireRate') * (this.slowUntil > combatNow() ? 0.7 : 1));
 
     let ammoCost = maker.gimmick === 'always_elemental' && this.magazine >= 2 ? 2 : 1;
     if (Math.random() < statsys.bonus('freeAmmoChance')) ammoCost = 0;
+    if (tempest && statsys.bonus('liveWire') > 0) ammoCost = 0; // Live Wire capstone
     this.magazine -= ammoCost;
 
     this.camera.updateMatrixWorld(true);
@@ -467,6 +480,11 @@ export class Player implements Damageable {
     const sh = state.shield;
     if (sh?.special?.id === 'amp' && this.shield >= this.maxShield * 0.98) dmg += sh.special.power;
 
+    // Tempest Shell: every shot becomes chaining Volt while active
+    const fireWeapon: WeaponInstance = tempest && w.element !== 'volt'
+      ? { ...w, element: 'volt', stats: { ...w.stats, elemChance: Math.min(1, w.stats.elemChance + 0.35), elemDps: Math.max(w.stats.elemDps, w.stats.damage * 0.35) } }
+      : w;
+
     for (let i = 0; i < stats.pellets; i++) {
       const dir = camDir.clone();
       const s = THREE.MathUtils.degToRad(spreadDeg);
@@ -475,9 +493,9 @@ export class Player implements Damageable {
       dir.z += (Math.random() - 0.5) * s;
       dir.normalize();
       if (stats.projSpeed > 0) {
-        this.fireProjectile(w, muzzle, dir, dmg, leg?.effect.kind === 'meteor');
+        this.fireProjectile(fireWeapon, muzzle, dir, dmg, leg?.effect.kind === 'meteor');
       } else {
-        this.fireHitscan(w, muzzle, dir, dmg, leg);
+        this.fireHitscan(fireWeapon, muzzle, dir, dmg, leg);
       }
     }
 

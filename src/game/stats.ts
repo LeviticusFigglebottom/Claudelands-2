@@ -16,6 +16,8 @@ class StatSystem {
   private now = 0;
   /** Set by shield logic when a ROID shield is depleted. */
   roidBonus = 0;
+  /** Set by the action skill when Squall Line is up (Tempest haste augment). */
+  tempestHaste = false;
 
   constructor() {
     bus.on('kill', () => this.triggerKillSkills());
@@ -56,6 +58,7 @@ class StatSystem {
     if (state.relic) for (const p of state.relic.passives) if (p.stat === stat) total += p.amount;
     total += state.gritBonus(stat);
     if (stat === 'gunDamage' && this.roidBonus > 0) total += this.roidBonus;
+    if (this.tempestHaste && (stat === 'moveSpeed' || stat === 'reloadSpeed')) total += 0.25;
     return total;
   }
 
