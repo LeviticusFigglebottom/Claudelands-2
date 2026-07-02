@@ -156,6 +156,24 @@ export const WIRE_LOGS: WireLog[] = [
     ],
   },
   {
+    id: 'log_veldt1',
+    speaker: 'DR. JUNO CALLA — EXPEDITION SPOOL 14',
+    lines: [
+      'Day 30 on the shelf. The bloom came four months early. The Verdant stopped trading and started CHANTING.',
+      'Day 31: they took Ferris. And Okonkwo. And both interns. The drums have not stopped.',
+      'Day 33: I am fine. The lab is fortified. Send guns, plural. Send a person who IS guns.',
+    ],
+  },
+  {
+    id: 'log_veldt2',
+    speaker: 'VERDANT CHANT — WAX-LEAF SPOOL (DO NOT LICK)',
+    lines: [
+      'Verse of the Early Bloom: the garden woke HUNGRY, and hungry gardens must be FED.',
+      'Verse two: the sky-people bring meat that talks. The garden loves conversation.',
+      'Verse three: plant them gently. Water them loudly. THE FRONDS REMEMBER.',
+    ],
+  },
+  {
     id: 'log_icebox',
     speaker: 'UNKNOWN FROSTBORN — REVERENT WIRE SPOOL',
     lines: [

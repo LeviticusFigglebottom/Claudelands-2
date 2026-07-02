@@ -1,5 +1,39 @@
 # ROADMAP
 
+## Pass 8 status — VELDT MINOR: a second planet, and the ship that gets you there
+
+**THE PAPERWEIGHT flies.** Boarding the scrapship (unlocked once q14's
+salvage is done, pads in Brasshaven and at Mangrove Landing) plays a full
+Going Commando-style travel cinematic in three phases: LAUNCH — the ship
+shakes, flares, and roars off the pad in the live world; SPACE — a starfield
+rig with the home planet falling away behind and the destination swelling
+ahead, cut across three camera angles (side flyby, chase cam, nose-on); and
+LANDING — the map has already switched, and the ship drops onto the
+destination pad in the new world, flaring dust as she settles. Skippable
+after a grace window; the arrival replaces the biome-entry cine.
+
+**VELDT MINOR — the Mangrove Shelf**: the opposite of the Claudelands in
+every register — bright tropical sky, lush green terrain with mossy mesas,
+palms and flowering ferns everywhere (district groves plus a map-wide wild
+scatter), a lagoon, and sandy paths. Same hub anatomy as planet one: a safe
+landing town (MANGROVE LANDING — stilt huts, boardwalk, string lights,
+vendors, the landing pad, and Dr. Juno Calla, the distress signal's sender)
+surrounded by hostile POIs: THE CHATTERFRONDS (tribal camp: totems, bone
+arch, drums, thatch huts), IDOL HOLLOW (a mossy stone god with glowing eyes
+and its offering ring), and THE OVERGROWTH wilds.
+
+**THE VERDANT** — crazed tribals and shamans, six archetypes on the shared
+enemy chassis: Frond Stalkers, blowdart-spitting Dart Lurkers, bile-lobbing
+Grove Shamans, armored Totem Haulers (back weak point), giggling Sporeling
+bombs, and Razorbeak flyers. Quests: q15 "Wheels Up" (board the ship, meet
+Juno) and q16 "The Loudest Garden" (thin the war parties).
+
+**Room to grow, dressed not gated**: three stylized entries for the next
+three maps — a boulder-jawed CAVE MOUTH (the Hollowdeep), a DENSE THICKET
+with a vine lintel (the Tangle), and a shell-lined SANDY PATH (Shipwreck
+Shallows). Each is built in the world now and politely sealed with flavor
+until its map ships.
+
 ## Pass 7 status — the front end, the Crucible, and the boss that lives
 
 **Saint Furnace fixed** (and every boss with him): boss spawns were one-shot

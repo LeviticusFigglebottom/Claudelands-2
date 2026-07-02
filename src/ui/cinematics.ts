@@ -38,6 +38,7 @@ export const NPC_INTROS: Record<string, { name: string; sub: string }> = {
   brann: { name: 'BRANN THE ADJUSTER', sub: 'eleven years of denied claims. one grudge.' },
   mirelle: { name: 'MIRELLE TWO-LINES', sub: 'fished the fathom nine winters. it fished back.' },
   okto: { name: 'BROTHER OKTO', sub: 'bone-priest, lapsed. the bones and he are on a break.' },
+  juno: { name: 'DR. JUNO CALLA', sub: 'xenobotanist. sole survivor. extremely caffeinated.' },
 };
 
 /** Slow orbit around a boss, ending face-to-face. */

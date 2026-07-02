@@ -40,6 +40,7 @@ import { PausePanel } from './ui/pause';
 import { MainMenu, type StartMode } from './ui/mainmenu';
 import { IntroOverlay, INTRO_PATH } from './ui/intro';
 import { endless } from './game/endless';
+import { shipTravel } from './ui/shiptravel';
 import { prefs, onPrefsChanged } from './game/prefs';
 import { CinematicSystem, bossCine, biomeCine, charCine, BOSS_EPITHETS, NPC_INTROS, type CineDef } from './ui/cinematics';
 import { feedPickup, feedText, bark, playWireLog, showInteract, setDownedOverlay, banner } from './ui/misc';
@@ -395,13 +396,63 @@ function zoneTransition(label: string, targetMap: string, tx: number, tz: number
 
 function checkZoneExits(dt: number): void {
   if (zoneCooldown > 0) { zoneCooldown -= dt; return; }
-  if (zoneScreenActive || cinema.active || player.downed) return;
+  if (zoneScreenActive || cinema.active || shipTravel.active || player.downed) return;
   for (const ex of WORLD.exits ?? []) {
     if (Math.hypot(player.position.x - ex.x, player.position.z - ex.z) < 5.5) {
+      if (ex.sealed) {
+        // future map: the doorway is dressed but the way is shut
+        feedText(`<b>${ex.label}</b> — ${ex.sealed}`, '#9adc4a');
+        zoneCooldown = 8;
+        return;
+      }
       zoneTransition(ex.label, ex.targetMap, ex.targetX, ex.targetZ);
       return;
     }
   }
+}
+
+// ---------------------------------------------------------------- the scrapship
+// THE PAPERWEIGHT hops between planet hubs with a full launch/space/landing
+// cinematic. Available once q14 (The Signal) is complete.
+const SHIP_PADS: Record<string, { x: number; z: number; to: string }> = {
+  brasshaven: { x: -26, z: 40, to: 'veldt' },
+  veldt: { x: -16, z: 94, to: 'brasshaven' },
+};
+
+function setPadShipsVisible(v: boolean): void {
+  world.group.traverse((o) => { if (o.name === 'pad_ship') o.visible = v; });
+}
+
+function startShipTravel(): void {
+  const here = SHIP_PADS[activeMap().id];
+  if (!here) return;
+  const destPad = SHIP_PADS[here.to];
+  seenCines.add('map_' + here.to); // the docking shot IS the arrival cinematic
+  player.paused = true;
+  player.viewmodel.visible = false;
+  setPadShipsVisible(false);
+  document.exitPointerLock();
+  shipTravel.start({
+    scene,
+    padPos: () => {
+      const pad = SHIP_PADS[activeMap().id];
+      const src2 = activeMap().id === here.to ? destPad : here;
+      void pad;
+      return new THREE.Vector3(src2.x, world.groundHeight(src2.x, src2.z), src2.z);
+    },
+    setWorldVisible: (v) => { world.group.visible = v; },
+    onSwitch: () => {
+      switchMap(here.to, destPad.x + 6, destPad.z + 6);
+      setPadShipsVisible(false); // the cine ship is still coming down
+    },
+    onDone: () => {
+      setPadShipsVisible(true);
+      player.paused = openPanel !== 'none';
+      player.viewmodel.visible = true;
+      autosave();
+      if (openPanel === 'none') canvas.requestPointerLock();
+    },
+  });
 }
 
 // ---------------------------------------------------------------- quests
@@ -559,6 +610,7 @@ function endCinematic(): void {
 // ---------------------------------------------------------------- input glue
 document.addEventListener('keydown', (e) => {
   if (!started) return;
+  if (shipTravel.active) { shipTravel.skip(); return; } // any key skips the hop
   if (cinema.active) { cinema.skip(); return; } // any key skips a cinematic
   if (cinematicT >= 0) { intro.end(); return; } // any key skips the intro
   if (e.code === 'Tab') { e.preventDefault(); setPanel(openPanel === 'inventory' ? 'none' : 'inventory'); return; }
@@ -632,6 +684,15 @@ function interact(): void {
         return;
       }
       case 'fast_travel': setPanel('fasttravel'); return;
+      case 'ship': {
+        const q14 = questSystem.quests.find((q) => q.def.id === 'q14_signal');
+        if (!q14 || q14.status !== 'complete') {
+          bark('THE PAPERWEIGHT', 'Engine status: aspirational. Finish the Mayor\u2019s salvage job first.');
+          return;
+        }
+        startShipTravel();
+        return;
+      }
       case 'wirelog':
         if (playWireLog(it.data ?? '')) world.removeInteractable(it);
         return;
@@ -772,6 +833,15 @@ function frame(): void {
     world.update(dt, player.position);
     fx.update(dt);
     cinema.update(dt, camera);
+    post.render(dt);
+    return;
+  }
+
+  if (shipTravel.active) {
+    // interplanetary hop: the cinematic owns the camera and the ship
+    world.update(dt, player.position);
+    fx.update(dt);
+    shipTravel.update(dt, camera);
     post.render(dt);
     return;
   }
@@ -969,7 +1039,8 @@ canvas.addEventListener('click', () => {
   setPanelDebug: setPanel,
   switchMapDebug: switchMap,
   skipIntro: () => { if (cinematicT >= 0) intro.end(); },
-  cinema, seenCines,
+  cinema, seenCines, shipTravel,
+  startShipTravelDebug: startShipTravel,
   skipCine: () => { if (cinema.active) cinema.skip(); },
   enemyDefs: ENEMIES,
   applyDamageDebug: applyDamage,

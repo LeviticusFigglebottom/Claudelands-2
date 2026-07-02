@@ -124,6 +124,15 @@ export class FullMapPanel {
         ctx.fillStyle = '#ffd23c';
         ctx.font = '900 28px Impact, sans-serif';
         ctx.fillText('!', x, y + 10);
+      } else if (poi.kind === 'ship') {
+        ctx.fillStyle = '#ffd23c';
+        ctx.font = '900 30px Impact, sans-serif';
+        ctx.fillText('▲', x, y + 10);
+        ctx.font = '700 16px Arial, sans-serif';
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+        ctx.strokeText('THE PAPERWEIGHT', x, y + 28);
+        ctx.fillText('THE PAPERWEIGHT', x, y + 28);
       } else if (poi.kind === 'gate') {
         ctx.fillStyle = '#c8c4ba';
         ctx.fillRect(x - 14, y - 5, 28, 10);

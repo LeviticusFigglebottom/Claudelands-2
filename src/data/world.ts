@@ -7,7 +7,7 @@
 
 import { clamp01, lerp } from '../util/maff';
 
-export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible';
+export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle';
 
 export interface DistrictDef {
   id: string;
@@ -16,7 +16,7 @@ export interface DistrictDef {
   dress: DistrictDress;
   cx: number; cz: number; radius: number;
   baseHeight: number;
-  faction: 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'none';
+  faction: 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'none';
   spawnTable: { enemyId: string; weight: number }[];
   maxAlive: number;
   respawnDelay: number;
@@ -25,7 +25,7 @@ export interface DistrictDef {
 
 export interface WorldPoi {
   id: string;
-  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'gate' | 'sign';
+  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'gate' | 'sign' | 'ship';
   x: number; z: number; rot?: number;
   data?: string;
 }
@@ -35,7 +35,7 @@ export interface BiomeDef {
   rock: string;
   scrub: number;               // scrub tuft color
   ambientParticle: 'dust' | 'snow' | 'ash';
-  trees: 'cactus' | 'pine' | 'burnt';
+  trees: 'cactus' | 'pine' | 'burnt' | 'palm';
   aurora: boolean;
   weeds: boolean;              // tumbleweeds roam
 }
@@ -72,6 +72,10 @@ export interface ZoneExit {
   targetMap: string;
   targetX: number; targetZ: number;
   label: string;               // the zone you're walking INTO
+  /** How the entry is dressed in-world (default: scrap arch). */
+  style?: 'arch' | 'cave' | 'thicket' | 'beach';
+  /** Future map: the entry exists but shows this line instead of travelling. */
+  sealed?: string;
 }
 
 // ===========================================================================
@@ -428,6 +432,7 @@ export const BRASSHAVEN: WorldDef = {
     { id: 'npc_brann', kind: 'npc', x: -14, z: 8, rot: 1.1, data: 'brann' },
     { id: 'npc_mirelle', kind: 'npc', x: 16, z: 10, rot: -1.3, data: 'mirelle' },
     { id: 'npc_okto', kind: 'npc', x: -6, z: 24, rot: 0.4, data: 'okto' },
+    { id: 'ship_brass', kind: 'ship', x: -26, z: 40, rot: 0.6 },
   ],
   spawn: { x: 0, z: 62 },
   exits: [
@@ -476,12 +481,115 @@ export const CRUCIBLE: WorldDef = {
   spawn: { x: 0, z: 30 },
 };
 
+// ===========================================================================
+// PLANET 2 — VELDT MINOR: THE MANGROVE SHELF. Lush, loud, and carnivorous.
+// A safe landing town, wild groves crawling with the Verdant, and three
+// dressed-but-sealed ways deeper (cave, thicket, beach) for future maps.
+export const VELDT: WorldDef = {
+  id: 'veldt',
+  name: 'Veldt Minor',
+  tagline: 'the jungle is louder than the guns. barely.',
+  size: 250,
+  skyTop: 0x2a86c8, skyHorizon: 0xbfe8d0,
+  sun: { color: 0xfff2d0, intensity: 1.35, dirX: 0.4, dirY: 0.85, dirZ: -0.25 },
+  ambient: { sky: 0xa8d8e8, ground: 0x3a6a3a, intensity: 0.78 },
+  fog: { color: 0xa8d8c0, near: 55, far: 230 },
+  biome: {
+    ground: { base: '#5aa348', light: '#8cc86a', dark: '#2f6a30', crack: 'rgba(20,60,30,0.35)' },
+    rock: '#5f7d4b',
+    scrub: 0xff6aa0,
+    ambientParticle: 'dust',
+    trees: 'palm',
+    aurora: false,
+    weeds: false,
+  },
+  terrain: {
+    duneAmp: 2.2,
+    roughAmp: 0.8,
+    roads: [
+      { x0: 0, z0: 92, x1: -60, z1: 6 },      // landing → the Chatterfronds
+      { x0: 0, z0: 92, x1: 62, z1: -12 },     // landing → Idol Hollow
+      { x0: 0, z0: 92, x1: 0, z1: -70 },      // landing → the Overgrowth
+      { x0: 44, z0: 62, x1: 0, z1: 92 },      // lagoon boardwalk path
+    ],
+    lake: { x: 46, z: 58, r: 24, level: 0.35 },
+  },
+  districts: [
+    {
+      id: 'mangrove', name: 'MANGROVE LANDING', subtitle: 'Population: One Botanist, Several Regrets',
+      cx: 0, cz: 88, radius: 34, dress: 'porttown', baseHeight: 0,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 0,
+    },
+    {
+      id: 'chatterfronds', name: 'THE CHATTERFRONDS', subtitle: 'The Drums Are Not Decorative',
+      cx: -60, cz: 4, radius: 42, dress: 'verdantcamp', baseHeight: 1,
+      faction: 'verdant', levelOffset: 11,
+      spawnTable: [
+        { enemyId: 'frond_stalker', weight: 30 },
+        { enemyId: 'dartlurker', weight: 26 },
+        { enemyId: 'shaman', weight: 14 },
+        { enemyId: 'sporeling', weight: 14 },
+        { enemyId: 'totem_bruiser', weight: 8 },
+      ],
+      maxAlive: 8, respawnDelay: 22,
+    },
+    {
+      id: 'idolhollow', name: 'IDOL HOLLOW', subtitle: 'The Statue Was Here First. It Insists.',
+      cx: 62, cz: -14, radius: 38, dress: 'grove', baseHeight: 1.5,
+      faction: 'verdant', levelOffset: 12,
+      spawnTable: [
+        { enemyId: 'shaman', weight: 24 },
+        { enemyId: 'dartlurker', weight: 20 },
+        { enemyId: 'razorbeak', weight: 16 },
+        { enemyId: 'sporeling', weight: 12 },
+      ],
+      maxAlive: 7, respawnDelay: 24,
+    },
+    {
+      id: 'overgrowth', name: 'THE OVERGROWTH', subtitle: 'Where the Path Gives Up',
+      cx: 0, cz: -66, radius: 46, dress: 'jungle', baseHeight: 2,
+      faction: 'verdant', levelOffset: 12,
+      spawnTable: [
+        { enemyId: 'frond_stalker', weight: 28 },
+        { enemyId: 'razorbeak', weight: 18 },
+        { enemyId: 'totem_bruiser', weight: 10 },
+        { enemyId: 'sporeling', weight: 14 },
+      ],
+      maxAlive: 8, respawnDelay: 22,
+    },
+  ],
+  pois: [
+    { id: 'ft_veldt', kind: 'fast_travel', x: 0, z: 96, data: 'Mangrove Landing' },
+    { id: 'ship_veldt', kind: 'ship', x: -16, z: 94, rot: -0.5 },
+    { id: 'vg_v', kind: 'vendor_gun', x: -8, z: 80, rot: Math.PI },
+    { id: 'vm_v', kind: 'vendor_med', x: 10, z: 82, rot: Math.PI },
+    { id: 'npc_juno', kind: 'npc', x: 6, z: 74, rot: 2.6, data: 'juno' },
+    { id: 'chest_v1', kind: 'chest', x: 16, z: 90, rot: -0.8 },
+    { id: 'sign_v1', kind: 'sign', x: 0, z: 68, rot: 0, data: '← CHATTERFRONDS · OVERGROWTH ↑ · IDOL HOLLOW →' },
+    { id: 'log_v1', kind: 'wirelog', x: -12, z: 70, data: 'log_veldt1' },
+    { id: 'chest_v2', kind: 'chest', x: -74, z: -10, rot: 1.1 },
+    { id: 'log_v2', kind: 'wirelog', x: -52, z: 16, data: 'log_veldt2' },
+    { id: 'chest_v3', kind: 'chest', x: 78, z: -28, rot: 2.2 },
+    { id: 'sign_v2', kind: 'sign', x: 60, z: 6, rot: 0.4, data: 'DO NOT FEED THE IDOL. IT REMEMBERS FLAVORS.' },
+  ],
+  spawn: { x: 0, z: 88 },
+  exits: [
+    { x: -104, z: -62, targetMap: 'veldt_caves', targetX: 0, targetZ: 0, label: 'THE HOLLOWDEEP', style: 'cave',
+      sealed: 'A breath of cold air from the dark. Something below is still digging. (A future update opens the Hollowdeep.)' },
+    { x: 6, z: -114, targetMap: 'veldt_tangle', targetX: 0, targetZ: 0, label: 'THE TANGLE', style: 'thicket',
+      sealed: 'The thicket knots itself tighter as you approach. The Verdant sing on the far side. (A future update opens the Tangle.)' },
+    { x: 110, z: 26, targetMap: 'veldt_shallows', targetX: 0, targetZ: 0, label: 'SHIPWRECK SHALLOWS', style: 'beach',
+      sealed: 'Sand, surf, and half a hull on the horizon. The tide is wrong for the crossing. (A future update opens the Shallows.)' },
+  ],
+};
+
 export const MAPS: Record<string, WorldDef> = {
   claudelands: CLAUDELANDS,
   frosthollow: FROSTHOLLOW,
   cinderthroat: CINDERTHROAT,
   brasshaven: BRASSHAVEN,
   crucible: CRUCIBLE,
+  veldt: VELDT,
 };
 
 let active: WorldDef = CLAUDELANDS;

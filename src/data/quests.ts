@@ -3,7 +3,7 @@
 // progression. All dialogue is original and lives here for the writers.
 
 export type ObjectiveKind = 'goto' | 'kill_faction' | 'collect' | 'boss' | 'kill_elites' | 'notoriety';
-export type QuestGiver = 'quibb' | 'zaza' | 'mayor' | 'brann' | 'mirelle' | 'okto';
+export type QuestGiver = 'quibb' | 'zaza' | 'mayor' | 'brann' | 'mirelle' | 'okto' | 'juno';
 
 /** Everyone who hands out work: display name, where they stand, greetings. */
 export const GIVERS: Record<QuestGiver, { name: string; where: string; mapId: string; x: number; z: number; greetings: string[] }> = {
@@ -49,6 +49,13 @@ export const GIVERS: Record<QuestGiver, { name: string; where: string; mapId: st
       'The Boneyard remembers everyone. It has a WAITING LIST.',
     ],
   },
+  juno: {
+    name: 'Dr. Juno Calla', where: 'at Mangrove Landing', mapId: 'veldt', x: 6, z: 80,
+    greetings: [
+      'You got my signal! Wonderful! Everything here is trying to eat me. Even the FLOWERS. ESPECIALLY the flowers.',
+      'Dr. Juno Calla, xenobotany. Field note one: this planet is gorgeous. Field note two: RUN.',
+    ],
+  },
 };
 
 export interface QuestDef {
@@ -63,7 +70,7 @@ export interface QuestDef {
     label: string;
     count: number;
     districtId?: string;
-    faction?: 'rustborn' | 'helix' | 'frostborn' | 'kindled';
+    faction?: 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant';
     bossId?: string;
     markerX?: number; markerZ?: number;
     mapId?: string;                // which map the marker/boss lives on (default claudelands)
@@ -281,6 +288,35 @@ export const QUESTS: QuestDef[] = [
     objective: { kind: 'collect', label: 'Scrapship plates salvaged', count: 5, faction: 'helix', markerX: 85, markerZ: -25, mapId: 'claudelands' },
     rewardCash: 8000, rewardXp: 8000, rewardItem: 'legendary',
     completeLine: 'The scrapship has a hull, a name (THE PAPERWEIGHT), and a heading: Veldt Minor. Wheels up soon, contractor.',
+  },
+  {
+    id: 'q15_wheelsup',
+    name: 'Wheels Up',
+    giver: 'mayor',
+    briefing: [
+      'THE PAPERWEIGHT is fueled, blessed, and only mildly haunted. She\u2019s parked on the west pad.',
+      'The signal\u2019s coming from a jungle shelf on Veldt Minor \u2014 a Dr. Juno Calla, xenobotanist. Expedition of nine. Now an expedition of one, and counting down.',
+      'Board the ship, contractor. Bring her home. Or at least bring back whatever\u2019s left of the paperwork.',
+    ],
+    acceptLine: 'The west pad! Try not to scratch the ship. It\u2019s load-bearing scratches only!',
+    objective: { kind: 'goto', label: 'Reach Mangrove Landing on Veldt Minor', count: 1, markerX: 0, markerZ: 88, mapId: 'veldt' },
+    rewardCash: 3000, rewardXp: 5000,
+    completeLine: 'Boots on Veldt Minor. The air is 90% humidity and 10% screaming birds.',
+    unlocksStation: 'Mangrove Landing',
+  },
+  {
+    id: 'q16_garden',
+    name: 'The Loudest Garden',
+    giver: 'juno',
+    briefing: [
+      'The locals call themselves THE VERDANT. They were fine \u2014 standoffish, big on drums \u2014 until the bloom season came early.',
+      'Now they\u2019re CRAZED. They took my whole expedition to the deep groves. For \u201cplanting.\u201d I did not stay to learn what that means.',
+      'Thin the war parties around the landing \u2014 ten should quiet the drums \u2014 and then we can talk about getting my people back.',
+    ],
+    acceptLine: 'Ten of them! And if a flower asks you ANYTHING, do not answer!',
+    objective: { kind: 'kill_faction', label: 'Verdant war party culled', count: 10, faction: 'verdant', markerX: -60, markerZ: 4, mapId: 'veldt' },
+    rewardCash: 4000, rewardXp: 6000, rewardItem: 'epic',
+    completeLine: 'The drums stopped. The jungle is still louder than a foundry, but now it\u2019s just... jungle.',
   },
 ];
 

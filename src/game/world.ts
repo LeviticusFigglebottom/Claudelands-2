@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { WORLD, terrainHeight, terrainNormal, meshHeight, roadFactor, districtAt, TERRAIN_SEGS, TERRAIN_SPAN_FACTOR, type WorldPoi, type DistrictDef } from '../data/world';
 import { toonMat, glowMat, flatMat } from '../render/toon';
 import { groundTexture, rockTexture, corrugatedTexture, posterTexture, swatch, cloudTexture } from '../render/textures';
+import { buildScrapship } from '../render/scrapship';
 import { POSTERS, GRAFFITI } from '../data/flavor';
 import { LootChest } from './loot';
 import { fx } from './particles';
@@ -20,7 +21,7 @@ import { audio } from '../audio/synth';
 interface AABB { minX: number; maxX: number; minZ: number; maxZ: number }
 
 export interface Interactable {
-  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc';
+  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'ship';
   pos: THREE.Vector3;
   label: string;
   data?: string;
@@ -261,7 +262,7 @@ export class World {
       const x = (rng() - 0.5) * WORLD.size * 0.95;
       const z = (rng() - 0.5) * WORLD.size * 0.95;
       const dd = districtAt(x, z);
-      if (dd && (dd.dress === 'hub' || dd.dress === 'frosthub' || dd.dress === 'throatgate')) continue;
+      if (dd && (dd.dress === 'hub' || dd.dress === 'frosthub' || dd.dress === 'throatgate' || dd.dress === 'porttown')) continue;
       if (!this.clearOfAssets(x, z, 2.2)) continue;
       const s = 0.8 + rng() * 2.6;
       const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
@@ -288,7 +289,7 @@ export class World {
       const x = (rng() - 0.5) * WORLD.size * 1.15;
       const z = (rng() - 0.5) * WORLD.size * 1.15;
       const d = districtAt(x, z);
-      if (d && (d.dress === 'hub' || d.dress === 'frosthub' || d.dress === 'throne' || d.dress === 'throatgate')) continue;
+      if (d && (d.dress === 'hub' || d.dress === 'frosthub' || d.dress === 'throne' || d.dress === 'throatgate' || d.dress === 'porttown')) continue;
       if (!this.clearOfAssets(x, z, 1.2)) continue;
       const sc = 0.6 + rng() * 1.3;
       q.setFromEuler(new THREE.Euler(0.15 * (rng() - 0.5), rng() * Math.PI, 0.15 * (rng() - 0.5)));
@@ -346,6 +347,10 @@ export class World {
         case 'foundrycourt': this.buildFoundryCourt(d); break;
         case 'brassplaza': this.buildBrassPlaza(d); break;
         case 'crucible': this.buildCrucible(d); break;
+        case 'porttown': this.buildPortTown(d); break;
+        case 'verdantcamp': this.buildVerdantCamp(d); break;
+        case 'grove': this.buildIdolGrove(d); break;
+        case 'jungle': this.buildJungle(d); break;
       }
     }
   }
@@ -1426,11 +1431,28 @@ export class World {
           else if (poi.data === 'quibb' || !poi.data) this.buildQuibb(poi);
           else this.buildTownNpc(poi);
           break;
+        case 'ship': this.buildShipPad(poi); break;
         case 'gate': this.buildGate(poi); break;
         case 'sign': this.buildSign(poi); break;
       }
     }
     this.buildZoneExits();
+
+    // palm biomes: the wilds between districts stay jungle, not lawn
+    if (WORLD.biome.trees === 'palm') {
+      const rng = mulberry32(90210);
+      let placed = 0;
+      for (let i = 0; i < 400 && placed < 55; i++) {
+        const x = (rng() - 0.5) * WORLD.size * 1.05;
+        const z = (rng() - 0.5) * WORLD.size * 1.05;
+        const d = districtAt(x, z);
+        if (d && d.dress === 'porttown') continue;
+        if (!this.clearOfAssets(x, z, 2.4) || !this.clearOfExits(x, z)) continue;
+        this.palm(x, z, 0.7 + rng() * 0.9);
+        if (rng() < 0.5) this.fern(x + 1.5, z + 1, 0.6 + rng());
+        placed++;
+      }
+    }
   }
 
   private buildChest(poi: WorldPoi): void {
@@ -1529,6 +1551,7 @@ export class World {
       brann: { coat: 0x2ba8a0, skin: 0xb08868, hat: 0x4a4442, hatKind: 'cap', accent: 0x7dffef, label: 'TALK TO BRANN' },
       mirelle: { coat: 0x4a6a8a, skin: 0xd8b090, hat: 0x8a94a0, hatKind: 'hood', accent: 0x9ad8e8, label: 'TALK TO MIRELLE' },
       okto: { coat: 0xe8e0cc, skin: 0x9a7858, hat: 0xe8e0cc, hatKind: 'hood', accent: 0xffb43c, label: 'TALK TO BROTHER OKTO' },
+      juno: { coat: 0x3a8a5a, skin: 0xc89878, hat: 0xd8c898, hatKind: 'cap', accent: 0x9adc4a, label: 'TALK TO DR. CALLA' },
     };
     const look = looks[poi.data ?? ''] ?? looks.brann;
     const y = terrainHeight(poi.x, poi.z);
@@ -1570,6 +1593,252 @@ export class World {
     this.group.add(g);
     this.addCollider(poi.x, poi.z, 0.5, 0.5);
     this.interactables.push({ kind: 'npc', pos: new THREE.Vector3(poi.x, y, poi.z), label: look.label, data: poi.data });
+  }
+
+  /** Toon palm: curved trunk segments + a burst of leaf blades + coconuts. */
+  private palm(x: number, z: number, scale = 1): void {
+    const y = terrainHeight(x, z);
+    const g = new THREE.Group();
+    const trunkMat = toonMat({ color: 0x9a7a4a, map: swatch('#8a6a3c', 70) });
+    const leafMat = toonMat({ color: 0x3a9a3a, map: swatch('#2f8a34', 40) });
+    const lean = (Math.sin(x * 12.9898 + z * 78.233) % 1) * 0.5;
+    const h = 4.2 * scale;
+    let px = 0;
+    for (let i = 0; i < 3; i++) {
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.14 * scale * (1 - i * 0.15), 0.18 * scale * (1 - i * 0.15), h / 3 + 0.1, 6), trunkMat);
+      px += lean * (i + 0.5) * 0.4;
+      seg.position.set(px, h / 6 + (i * h) / 3, 0);
+      seg.rotation.z = -lean * 0.35;
+      g.add(seg);
+    }
+    const crownX = px + lean * 0.3;
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const leaf = new THREE.Mesh(new THREE.BoxGeometry(2.1 * scale, 0.05, 0.5 * scale), leafMat);
+      leaf.position.set(crownX + Math.cos(a) * 0.9 * scale, h + 0.1, Math.sin(a) * 0.9 * scale);
+      leaf.rotation.y = -a;
+      leaf.rotation.z = 0.45 + Math.sin(a * 3) * 0.1;
+      leaf.castShadow = true;
+      g.add(leaf);
+    }
+    for (let i = 0; i < 3; i++) {
+      const nut = new THREE.Mesh(new THREE.SphereGeometry(0.12 * scale, 6, 6), toonMat({ color: 0x6a4a2a }));
+      nut.position.set(crownX + (i - 1) * 0.18 * scale, h - 0.12, 0.1);
+      g.add(nut);
+    }
+    g.position.set(x, y, z);
+    g.traverse((o) => (o.castShadow = true));
+    this.group.add(g);
+    this.staticTargets.push(g);
+    this.addCollider(x, z, 0.3 * scale, 0.3 * scale);
+  }
+
+  /** Big flowering fern clump — jungle ground cover with color. */
+  private fern(x: number, z: number, scale = 1): void {
+    const y = terrainHeight(x, z);
+    const g = new THREE.Group();
+    const mat = toonMat({ color: 0x2f8a3f });
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + x;
+      const blade = new THREE.Mesh(new THREE.ConeGeometry(0.16 * scale, 1.1 * scale, 4), mat);
+      blade.position.set(Math.cos(a) * 0.3 * scale, 0.5 * scale, Math.sin(a) * 0.3 * scale);
+      blade.rotation.x = Math.sin(a) * 0.5;
+      blade.rotation.z = Math.cos(a) * 0.5;
+      g.add(blade);
+    }
+    const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.14 * scale, 6, 6), glowMat(0xff6aa0, 0.8));
+    bloom.position.y = 0.9 * scale;
+    g.add(bloom);
+    g.position.set(x, y, z);
+    this.group.add(g);
+  }
+
+  // --------------------------------------------------- Veldt: Mangrove Landing
+  private buildPortTown(d: DistrictDef): void {
+    const rng = mulberry32(4242);
+    const woodMat = toonMat({ color: 0x9a7a4a, map: swatch('#8a6a3c', 80) });
+    const thatchMat = toonMat({ color: 0xc8a858, map: swatch('#b8983c', 90) });
+    // stilt huts around the plaza
+    for (const [hx, hz, rot] of [[-16, 78, 0.6], [18, 74, -0.7], [-20, 96, 1.8], [22, 96, -2.0], [8, 104, 2.8]] as const) {
+      const hut = new THREE.Group();
+      for (let i = 0; i < 4; i++) {
+        const stilt = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 1.6, 6), woodMat);
+        stilt.position.set((i % 2 ? 1.6 : -1.6), 0.8, (i < 2 ? 1.4 : -1.4));
+        hut.add(stilt);
+      }
+      const floor = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.24, 3.4), woodMat);
+      floor.position.y = 1.7;
+      const walls = new THREE.Mesh(new THREE.BoxGeometry(3.8, 1.9, 3.0), toonMat({ map: corrugatedTexture() }));
+      walls.position.y = 2.8;
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(3.1, 1.6, 4), thatchMat);
+      roof.position.y = 4.6;
+      roof.rotation.y = Math.PI / 4;
+      hut.add(floor, walls, roof);
+      hut.position.set(hx, terrainHeight(hx, hz), hz);
+      hut.rotation.y = rot;
+      hut.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
+      this.group.add(hut);
+      this.staticTargets.push(hut);
+      this.addCollider(hx, hz, 2.2, 1.9);
+    }
+    // boardwalk toward the lagoon
+    for (let i = 0; i < 7; i++) {
+      const bx = 14 + i * 4.4, bz = 76 - i * 2.4;
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.2, 2.2), woodMat);
+      plank.position.set(bx, terrainHeight(bx, bz) + 0.45, bz);
+      plank.rotation.y = 0.5;
+      plank.receiveShadow = true;
+      this.group.add(plank);
+    }
+    // string lights between huts
+    for (const [x0, z0, x1, z1] of [[-14, 84, 12, 88], [12, 78, 0, 70]] as const) {
+      const from = new THREE.Vector3(x0, terrainHeight(x0, z0) + 4.4, z0);
+      const to = new THREE.Vector3(x1, terrainHeight(x1, z1) + 4.2, z1);
+      for (let i = 0; i <= 8; i++) {
+        const t = i / 8;
+        const bp = from.clone().lerp(to, t);
+        bp.y -= Math.sin(t * Math.PI) * 1.0;
+        const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6),
+          glowMat([0xffd23c, 0xff6aa0, 0x54d4ff][i % 3], 0.95));
+        bulb.position.copy(bp);
+        bulb.layers.set(FX_LAYER);
+        this.group.add(bulb);
+      }
+    }
+    // town palms + flowers
+    for (let i = 0; i < 10; i++) this.palm(d.cx + (rng() - 0.5) * 52, d.cz + (rng() - 0.5) * 40, 0.8 + rng() * 0.5);
+    for (let i = 0; i < 10; i++) this.fern(d.cx + (rng() - 0.5) * 48, d.cz + (rng() - 0.5) * 36, 0.7 + rng() * 0.8);
+    // welcome banner
+    const banner = World.textSign(8, 1.5, { lines: ['MANGROVE LANDING'], style: 'ad', bg: '#2a6a5a', fg: '#ffe8a0', accent: '#ff6aa0' }, { twoSided: true });
+    banner.position.set(0, terrainHeight(0, 70) + 4.4, 70);
+    this.group.add(banner);
+  }
+
+  // --------------------------------------------------- Veldt: tribal camp
+  private buildVerdantCamp(d: DistrictDef): void {
+    const rng = mulberry32(5151);
+    const boneMat = toonMat({ color: 0xe8e0cc, map: swatch('#ddd3b8', 60) });
+    const paintMat = [0xff6aa0, 0x54d4ff, 0xffd23c].map((c) => glowMat(c, 0.6));
+    // totem poles: stacked carved boxes with glowing eyes
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const tx = d.cx + Math.cos(a) * (14 + rng() * 16), tz = d.cz + Math.sin(a) * (12 + rng() * 16);
+      const ty = terrainHeight(tx, tz);
+      const totem = new THREE.Group();
+      const tiers = 2 + Math.floor(rng() * 3);
+      for (let t = 0; t < tiers; t++) {
+        const s = 1.1 - t * 0.16;
+        const block = new THREE.Mesh(new THREE.BoxGeometry(s, 0.9, s), toonMat({ color: 0x8a6a3c, map: swatch('#7a5a30', 80) }));
+        block.position.y = 0.45 + t * 0.9;
+        totem.add(block);
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), paintMat[t % 3]);
+        eye.position.set(0.2, 0.55 + t * 0.9, s / 2 + 0.02);
+        const eye2 = eye.clone(); eye2.position.x = -0.2;
+        totem.add(eye, eye2);
+      }
+      totem.position.set(tx, ty, tz);
+      totem.rotation.y = rng() * Math.PI * 2;
+      totem.traverse((o) => (o.castShadow = true));
+      this.group.add(totem);
+      this.staticTargets.push(totem);
+      this.addCollider(tx, tz, 0.7, 0.7);
+    }
+    // bone arch at the camp mouth
+    const archL = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 5.6, 6), boneMat);
+    archL.position.set(d.cx + 10, terrainHeight(d.cx + 10, d.cz + 20) + 2.6, d.cz + 20);
+    archL.rotation.z = -0.5;
+    const archR = archL.clone();
+    archR.position.x = d.cx + 16;
+    archR.rotation.z = 0.5;
+    this.group.add(archL, archR);
+    // thatch huts + fire pits + drums
+    for (let i = 0; i < 4; i++) {
+      const hx = d.cx + (rng() - 0.5) * 30, hz = d.cz + (rng() - 0.5) * 26;
+      const hut = new THREE.Mesh(new THREE.ConeGeometry(2.6, 3.2, 7), toonMat({ color: 0xb8983c, map: swatch('#a8882c', 90) }));
+      hut.position.set(hx, terrainHeight(hx, hz) + 1.5, hz);
+      hut.castShadow = true;
+      this.group.add(hut);
+      this.staticTargets.push(hut);
+      this.addCollider(hx, hz, 1.8, 1.8);
+    }
+    this.campfire(d.cx, d.cz);
+    this.campfire(d.cx - 14, d.cz + 10);
+    for (let i = 0; i < 3; i++) {
+      const dx = d.cx + (rng() - 0.5) * 20, dz = d.cz + 6 + (rng() - 0.5) * 16;
+      const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.8, 1.0, 8), toonMat({ color: 0x8a3a3a, map: swatch('#7a3030', 70) }));
+      drum.position.set(dx, terrainHeight(dx, dz) + 0.5, dz);
+      drum.castShadow = true;
+      this.group.add(drum);
+      this.addCollider(dx, dz, 0.7, 0.7);
+    }
+    for (let i = 0; i < 14; i++) this.palm(d.cx + (rng() - 0.5) * 70, d.cz + (rng() - 0.5) * 60, 0.7 + rng() * 0.7);
+    for (let i = 0; i < 12; i++) this.fern(d.cx + (rng() - 0.5) * 60, d.cz + (rng() - 0.5) * 54, 0.6 + rng());
+  }
+
+  // --------------------------------------------------- Veldt: Idol Hollow
+  private buildIdolGrove(d: DistrictDef): void {
+    const rng = mulberry32(6262);
+    const mossStone = toonMat({ color: 0x6a8a5a, map: swatch('#5a7a4c', 70) });
+    // the idol: stacked stone, glowing gaze
+    const idol = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 4.2, 2.2, 8), mossStone);
+    base.position.y = 1.1;
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(4.2, 3.6, 3.2), mossStone);
+    torso.position.y = 4;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.4, 2.6), mossStone);
+    head.position.y = 7;
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.5, 2.7), toonMat({ color: 0x4a6a44 }));
+    brow.position.y = 7.9;
+    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), glowMat(0x9adc4a, 1));
+    eyeL.position.set(0.7, 7.2, 1.35);
+    const eyeR = eyeL.clone(); eyeR.position.x = -0.7;
+    idol.add(base, torso, head, brow, eyeL, eyeR);
+    idol.position.set(d.cx, terrainHeight(d.cx, d.cz), d.cz);
+    idol.rotation.y = 0.6;
+    idol.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
+    this.group.add(idol);
+    this.staticTargets.push(idol);
+    this.addCollider(d.cx, d.cz, 3, 2.6);
+    // offering stones ring
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const sx = d.cx + Math.cos(a) * 9, sz = d.cz + Math.sin(a) * 9;
+      const stone = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.4 + rng() * 0.8, 0.9), mossStone);
+      stone.position.set(sx, terrainHeight(sx, sz) + 0.7, sz);
+      stone.rotation.y = a;
+      stone.castShadow = true;
+      this.group.add(stone);
+      this.staticTargets.push(stone);
+      this.addCollider(sx, sz, 0.7, 0.7);
+    }
+    for (let i = 0; i < 16; i++) this.palm(d.cx + (rng() - 0.5) * 64, d.cz + (rng() - 0.5) * 58, 0.8 + rng() * 0.7);
+    for (let i = 0; i < 14; i++) this.fern(d.cx + (rng() - 0.5) * 56, d.cz + (rng() - 0.5) * 50, 0.7 + rng());
+  }
+
+  // --------------------------------------------------- Veldt: the Overgrowth
+  private buildJungle(d: DistrictDef): void {
+    const rng = mulberry32(7373);
+    for (let i = 0; i < 26; i++) {
+      const x = d.cx + (rng() - 0.5) * d.radius * 1.9;
+      const z = d.cz + (rng() - 0.5) * d.radius * 1.7;
+      if (!this.clearOfAssets(x, z, 1.8) || !this.clearOfExits(x, z)) continue;
+      this.palm(x, z, 0.8 + rng() * 0.9);
+    }
+    for (let i = 0; i < 20; i++) {
+      const x = d.cx + (rng() - 0.5) * d.radius * 1.8;
+      const z = d.cz + (rng() - 0.5) * d.radius * 1.6;
+      if (!this.clearOfExits(x, z)) continue;
+      this.fern(x, z, 0.7 + rng() * 1.1);
+    }
+    // fallen mossy log
+    const log = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, 9, 8), toonMat({ color: 0x6a8a5a, map: swatch('#5a7a4c', 70) }));
+    log.rotation.z = Math.PI / 2;
+    log.rotation.y = 0.7;
+    log.position.set(d.cx + 8, terrainHeight(d.cx + 8, d.cz + 4) + 0.7, d.cz + 4);
+    log.castShadow = true;
+    this.group.add(log);
+    this.staticTargets.push(log);
+    this.addCollider(d.cx + 8, d.cz + 4, 4, 1);
   }
 
   /** THE CRUCIBLE — endless-mode fighting pit: scrap bleachers, floodlights,
@@ -1628,29 +1897,116 @@ export class World {
     for (let i = 0; i < 4; i++) this.junkPiles(rng, d.cx, d.cz, 30, 2);
   }
 
-  /** Zone-exit arch: two posts, a lintel, and the destination on a board. */
+  /** Launch pad + THE PAPERWEIGHT — the scrapship between planets. */
+  private buildShipPad(poi: WorldPoi): void {
+    const y = terrainHeight(poi.x, poi.z);
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 7, 0.5, 12), toonMat({ color: 0x5a5248, map: swatch('#4a4440', 70) }));
+    pad.position.set(poi.x, y + 0.25, poi.z);
+    pad.receiveShadow = true;
+    const stripe = new THREE.Mesh(new THREE.RingGeometry(5.4, 6.1, 12), toonMat({ color: 0xd8a828 }));
+    stripe.rotation.x = -Math.PI / 2;
+    stripe.position.set(poi.x, y + 0.52, poi.z);
+    this.group.add(pad, stripe);
+    const ship = buildScrapship();
+    ship.name = 'pad_ship';
+    ship.position.set(poi.x, y + 0.5, poi.z);
+    ship.rotation.y = poi.rot ?? 0;
+    this.group.add(ship);
+    this.staticTargets.push(ship);
+    this.addCollider(poi.x, poi.z, 2.4, 3.2);
+    this.interactables.push({
+      kind: 'ship',
+      pos: new THREE.Vector3(poi.x + 3, y, poi.z + 3),
+      label: 'BOARD THE PAPERWEIGHT',
+      data: WORLD.id,
+    });
+  }
+
+  /** Zone exits, dressed by style: scrap arch, cave mouth, dense thicket,
+   *  or a sandy shell-lined path — each with the destination on a board. */
   private buildZoneExits(): void {
     for (const ex of WORLD.exits ?? []) {
       const y = terrainHeight(ex.x, ex.z);
       const g = new THREE.Group();
-      const postMat = toonMat({ color: 0x5a5248, map: swatch('#4a4440', 70) });
-      const postL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 6.4, 0.5), postMat);
-      postL.position.set(-4, 3.2, 0);
-      const postR = postL.clone(); postR.position.x = 4;
-      const lintel = new THREE.Mesh(new THREE.BoxGeometry(9.4, 0.8, 0.7), postMat);
-      lintel.position.y = 6;
+      const style = ex.style ?? 'arch';
       const board = World.textSign(7.5, 1.5, { lines: ['→ ' + ex.label + ' →'], style: 'graffiti', bg: '#3a3226', fg: '#f2e4c4', accent: '#241a10' }, { twoSided: true });
-      board.position.y = 4.9;
-      const lampL = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), glowMat(0x54d4ff, 0.95));
-      lampL.position.set(-4, 6.6, 0);
-      const lampR = lampL.clone(); lampR.position.x = 4;
-      g.add(postL, postR, lintel, board, lampL, lampR);
-      // face the map centre so the arch reads on approach
+
+      if (style === 'cave') {
+        const rockMat = toonMat({ color: 0x4a4a44, map: swatch('#3f3f3a', 70) });
+        // jawbone of boulders around a dark mouth
+        for (let i = 0; i < 7; i++) {
+          const a = Math.PI * (0.12 + (i / 6) * 0.76);
+          const s = 2.2 + Math.sin(i * 2.4) * 0.8;
+          const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
+          rock.position.set(Math.cos(a) * 5.2, Math.sin(a) * 4.6, 0);
+          rock.rotation.set(i, i * 2, i * 0.7);
+          g.add(rock);
+        }
+        const maw = new THREE.Mesh(new THREE.CircleGeometry(3.1, 12), new THREE.MeshBasicMaterial({ color: 0x050505 }));
+        maw.position.set(0, 2.2, 0.4);
+        const drip = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 6), glowMat(0x54d4ff, 0.8));
+        drip.position.set(1.1, 4.2, 0.6);
+        board.position.set(0, 5.9, 0.8);
+        g.add(maw, drip, board);
+      } else if (style === 'thicket') {
+        const leafMat = toonMat({ color: 0x2f7a34, map: swatch('#286c2e', 50) });
+        const trunkMat = toonMat({ color: 0x6a4a2a });
+        for (const side of [-1, 1]) {
+          for (let i = 0; i < 3; i++) {
+            const blob = new THREE.Mesh(new THREE.IcosahedronGeometry(2.4 - i * 0.4, 0), leafMat);
+            blob.position.set(side * (4 - i * 0.8), 1.6 + i * 1.7, (i % 2) * 0.8);
+            g.add(blob);
+          }
+          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 4, 6), trunkMat);
+          trunk.position.set(side * 4, 2, 0);
+          g.add(trunk);
+        }
+        const vine = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 8.4, 6), trunkMat);
+        vine.rotation.z = Math.PI / 2;
+        vine.position.y = 5.6;
+        const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.2, 6, 6), glowMat(0xff6aa0, 0.9));
+        bloom.position.set(1.4, 5.3, 0.3);
+        board.position.set(0, 4.6, 0.6);
+        g.add(vine, bloom, board);
+      } else if (style === 'beach') {
+        const sandMat = toonMat({ color: 0xe8d8a8, map: swatch('#ddcc94', 60) });
+        const sand = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 7.5, 0.3, 10), sandMat);
+        sand.position.y = 0.1;
+        g.add(sand);
+        for (let i = 0; i < 5; i++) {
+          const shell = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.3, 5), toonMat({ color: 0xffe8e0 }));
+          shell.position.set(Math.sin(i * 2.2) * 4, 0.3, Math.cos(i * 1.7) * 3);
+          g.add(shell);
+        }
+        const drift = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 5.4, 6), toonMat({ color: 0xb8a888 }));
+        drift.rotation.z = 1.2;
+        drift.position.set(-3, 0.7, 1);
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 3.6, 6), toonMat({ color: 0xb8a888 }));
+        post.position.set(2.4, 1.8, 0);
+        board.position.set(2.4, 3.3, 0.2);
+        const buoyGlow = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), glowMat(0xffd23c, 0.9));
+        buoyGlow.position.set(2.4, 3.9, 0);
+        g.add(drift, post, board, buoyGlow);
+      } else {
+        const postMat = toonMat({ color: 0x5a5248, map: swatch('#4a4440', 70) });
+        const postL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 6.4, 0.5), postMat);
+        postL.position.set(-4, 3.2, 0);
+        const postR = postL.clone(); postR.position.x = 4;
+        const lintel = new THREE.Mesh(new THREE.BoxGeometry(9.4, 0.8, 0.7), postMat);
+        lintel.position.y = 6;
+        board.position.y = 4.9;
+        const lampL = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), glowMat(0x54d4ff, 0.95));
+        lampL.position.set(-4, 6.6, 0);
+        const lampR = lampL.clone(); lampR.position.x = 4;
+        g.add(postL, postR, lintel, board, lampL, lampR);
+      }
+
+      // face the map centre so the entry reads on approach
       g.rotation.y = Math.atan2(ex.x, ex.z) + Math.PI / 2 + (Math.abs(ex.x) > Math.abs(ex.z) ? 0 : Math.PI / 2);
       g.position.set(ex.x, y, ex.z);
       g.traverse((o) => (o.castShadow = true));
       this.group.add(g);
-      this.staticTargets.push(postL, postR);
+      this.staticTargets.push(g);
     }
   }
 

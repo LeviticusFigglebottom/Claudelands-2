@@ -7,7 +7,7 @@
 import type { ElementId } from '../game/types';
 
 export type EnemyBehavior = 'rusher' | 'gunner' | 'lobber' | 'brute' | 'flyer' | 'suicide';
-export type Faction = 'rustborn' | 'helix' | 'frostborn' | 'kindled';
+export type Faction = 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant';
 
 export interface EnemyDef {
   id: string;
@@ -253,6 +253,67 @@ export const BOSS_FURNACE: EnemyDef = {
   scale: 3.0, tint: 0x4a3a34, dropTier: 3, xp: 1200,
   barks: ['THE FURNACE ACCEPTS ALL DONATIONS.', 'YOU ARRIVE PRE-SEASONED. THOUGHTFUL.', 'MY CONGREGATION BURNS FOR YOU. LITERALLY.', 'ASH TO ASH. YOU FIRST.'],
   weight: 0,
+};
+
+// ------------------------------------------------------------- VERDANT
+// Veldt Minor's crazed tribals: masked stalkers, blowdart lurkers, chanting
+// shamans, totem-hauling bruisers, spore bombs, and razor-billed birds.
+ENEMIES.frond_stalker = {
+  id: 'frond_stalker', name: 'Frond Stalker', badassName: 'Big Damn Stalker',
+  faction: 'verdant', behavior: 'rusher',
+  flesh: 1, shield: 0, armor: 0,
+  hpMult: 0.9, damageMult: 1.0, speed: 6.2, attackRange: 2.0, attackRate: 1.1, aggroRange: 26,
+  scale: 0.95, tint: 0x3a7a3a, dropTier: 0, xp: 14,
+  barks: ['The canopy HUNGERS!', 'Skin for the garden!', '*enthusiastic leaf noises*', 'You smell DELICIOUS and WRONG!'],
+  weight: 30,
+};
+ENEMIES.dartlurker = {
+  id: 'dartlurker', name: 'Dart Lurker', badassName: 'Big Damn Lurker',
+  faction: 'verdant', behavior: 'gunner',
+  flesh: 1, shield: 0, armor: 0,
+  hpMult: 1.0, damageMult: 1.0, speed: 3.4, attackRange: 17, attackRate: 0.85, aggroRange: 27,
+  scale: 1.0, tint: 0x4a8a4a, dropTier: 0, xp: 15,
+  barks: ['Pfft. Pfft. PFFT!', 'The frog told me your NAME!', 'Hold still, the dart is SHY!', 'Green takes you!'],
+  projectile: { speed: 26, element: 'bile' },
+  weight: 28,
+};
+ENEMIES.shaman = {
+  id: 'shaman', name: 'Grove Shaman', badassName: 'High Shaman',
+  faction: 'verdant', behavior: 'lobber',
+  flesh: 1, shield: 0.6, armor: 0,
+  hpMult: 1.2, damageMult: 1.15, speed: 3.0, attackRange: 20, attackRate: 0.6, aggroRange: 28,
+  scale: 1.05, tint: 0x5a9a3a, dropTier: 1, xp: 22,
+  barks: ['The bloom demands MULCH!', 'Chant with me or BE the chant!', 'Your bones will make EXCELLENT trellis!', 'GROW! GROW! GROW!'],
+  projectile: { speed: 18, element: 'bile', arc: true },
+  weight: 16,
+};
+ENEMIES.totem_bruiser = {
+  id: 'totem_bruiser', name: 'Totem Hauler', badassName: 'Idol-Bearer',
+  faction: 'verdant', behavior: 'brute',
+  flesh: 1, shield: 0, armor: 0.8,
+  hpMult: 2.6, damageMult: 1.5, speed: 2.6, attackRange: 2.6, attackRate: 0.55, aggroRange: 24,
+  scale: 1.5, tint: 0x6a8a4a, dropTier: 1, xp: 34,
+  barks: ['THE TOTEM SPEAKS THROUGH ME!', 'HEAVY IS THE FAITH!', '*wooden creaking, but angry*'],
+  weight: 12,
+};
+ENEMIES.sporeling = {
+  id: 'sporeling', name: 'Sporeling', badassName: 'Bloom Bomb',
+  faction: 'verdant', behavior: 'suicide',
+  flesh: 1, shield: 0, armor: 0,
+  hpMult: 0.5, damageMult: 1.6, speed: 7.2, attackRange: 1.6, attackRate: 1, aggroRange: 30,
+  scale: 0.6, tint: 0x9adc4a, dropTier: 0, xp: 10,
+  barks: ['*giggling puffball sounds*', '*the smell of mushrooms, weaponized*'],
+  weight: 16,
+};
+ENEMIES.razorbeak = {
+  id: 'razorbeak', name: 'Razorbeak', badassName: 'Big Damn Bird',
+  faction: 'verdant', behavior: 'flyer',
+  flesh: 1, shield: 0, armor: 0,
+  hpMult: 0.8, damageMult: 0.9, speed: 7.6, attackRange: 12, attackRate: 0.8, aggroRange: 30,
+  scale: 0.9, tint: 0xff6a4a, dropTier: 0, xp: 16,
+  barks: ['*a parrot repeating your last scream*', 'PRETTY BIRD! PRETTY VIOLENT BIRD!'],
+  projectile: { speed: 24, element: 'kinetic' },
+  weight: 14,
 };
 
 export const ENEMY_LIST = Object.values(ENEMIES);

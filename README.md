@@ -3,9 +3,11 @@
 *A rust-bitten, cel-shaded looter-shooter — now an open wasteland.* You are
 a contractor hired by Foreman Quibb to de-throne Grand Duke Gutterball,
 trash-king of the Claudelands — and to deal with whatever Helix Combine
-buried in the Slagflat crater. Four worlds — the sun-blasted Claudelands,
-the frozen Frosthollow, the volcanic Cinder Throat gauntlet, and BRASSHAVEN,
-the sanctuary city in a beached mega-hauler — FOUR playable Vault-Rats,
+buried in the Slagflat crater. TWO PLANETS and five worlds — the sun-blasted
+Claudelands, the frozen Frosthollow, the volcanic Cinder Throat gauntlet,
+BRASSHAVEN the sanctuary city, and the lush Mangrove Shelf of VELDT MINOR
+(reached by scrapship, with a full launch-and-landing cinematic) — FOUR
+playable Vault-Rats,
 fourteen main quests plus Brasshaven side jobs with quest-only unique
 legendaries, four bosses, in-game cinematics, BL2-style zone-edge
 transitions, bazillions of guns — plus ENDLESS MODE in the Crucible
