@@ -435,3 +435,60 @@ body { font-family: var(--ui-font); user-select: none; }
 #crosshair .arm { background: rgba(255, 235, 200, 0.95); box-shadow: 0 0 3px rgba(0,0,0,0.9); }
 #crosshair .h { height: 2.5px; width: 11px; }
 #crosshair .v { width: 2.5px; height: 11px; }
+
+/* ================================================================ ECHO-NET
+   The device-screen theme for every panel: dark teal glass, scanlines,
+   cyan glow chrome, amber data text. */
+.panel {
+  background:
+    radial-gradient(ellipse at 30% 0%, rgba(40,160,190,0.10), transparent 55%),
+    linear-gradient(172deg, #071a20, #04100f 55%, #062024);
+  border: 2px solid rgba(64, 224, 240, 0.5);
+  clip-path: polygon(0 0, calc(100% - 26px) 0, 100% 26px, 100% 100%, 26px 100%, 0 calc(100% - 26px));
+  box-shadow: 0 0 34px rgba(40,200,230,0.14), inset 0 0 80px rgba(16,90,110,0.12);
+  color: #cfe8ee;
+}
+.panel::before {
+  content: 'ECHO-NET // FIELD TERMINAL v2.08 — PROPERTY OF HELIX COMBINE (DISPUTED)';
+  display: block;
+  font-size: 10px; letter-spacing: 0.28em; color: rgba(80, 224, 240, 0.8);
+  border-bottom: 1px solid rgba(64, 224, 240, 0.3);
+  padding-bottom: 6px; margin-bottom: 10px;
+}
+.panel::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(4,14,16,0.22) 0 2px, transparent 2px 5px);
+  animation: echo-flicker 6s linear infinite;
+}
+@keyframes echo-flicker { 0%, 100% { opacity: 0.9; } 48% { opacity: 0.9; } 50% { opacity: 0.65; } 52% { opacity: 0.9; } 73% { opacity: 0.8; } }
+.panel { position: relative; }
+.panel h1 { color: var(--hud-edge); text-shadow: 0 0 14px rgba(216,176,40,0.45); }
+.panel .p-sub { color: rgba(160, 210, 220, 0.8); }
+.panel .p-hint { color: rgba(80, 224, 240, 0.65); letter-spacing: 0.12em; }
+.panel button {
+  background: rgba(14, 52, 60, 0.75); color: #cfe8ee;
+  border: 1px solid rgba(64, 224, 240, 0.7);
+  box-shadow: 0 0 10px rgba(40,200,230,0.12);
+}
+.panel button:hover { background: #3ce0f0; color: #04262c; }
+.panel button:disabled { opacity: 0.3; }
+.inv-row { background: rgba(30, 80, 92, 0.12); }
+.inv-row:hover, .inv-row.sel { background: rgba(64, 224, 240, 0.14); }
+.equip-slot { background: rgba(6, 26, 30, 0.6); border-color: rgba(64,224,240,0.3); }
+.tree-col { background: rgba(6, 24, 28, 0.55); border-color: rgba(64,224,240,0.25); }
+.skill-node { background: rgba(30, 80, 92, 0.1); }
+.skill-node:hover { border-color: #3ce0f0; }
+.dialogue-box { background: rgba(6, 24, 28, 0.6); border-left-color: #3ce0f0; }
+.quest-row { background: rgba(30, 80, 92, 0.1); }
+.vendor-tabs button.tab-on { background: #3ce0f0; color: #04262c; border-color: #3ce0f0; }
+.diff-btn.tab-on { background: #3ce0f0; color: #04262c; border-color: #3ce0f0; }
+#cine-root { position: absolute; inset: 0; pointer-events: none; z-index: 8; display: none; }
+#cine-root .cine-bar { position: absolute; left: 0; right: 0; height: 11vh; background: #000; }
+#cine-root .cine-bar.top { top: 0; } #cine-root .cine-bar.bottom { bottom: 0; }
+#cine-cards2 { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: flex-start; padding: 14vh 6vw; }
+.cine-card.cine-boss .cine-title { color: #ff8438; }
+.cine-card.cine-char .cine-title { color: var(--hud-edge); }
+#cine-root .cine-skip { position: absolute; right: 24px; bottom: 12.5vh; color: #998a6a; font-size: 12px; letter-spacing: 0.15em; }
+
+/* during an in-game cinematic, everything but the letterbox layer fades out */
+#ui-root.cine-on > :not(#cine-root) { opacity: 0; transition: opacity 0.3s; }

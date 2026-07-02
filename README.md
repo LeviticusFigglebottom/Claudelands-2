@@ -1,10 +1,12 @@
 # CLAUDELANDS 2
 
 *A rust-bitten, cel-shaded looter-shooter — now an open wasteland.* You are
-**Harlan Vex, the Gunsmith**, contracted by Foreman Quibb to de-throne Grand
-Duke Gutterball, trash-king of the Claudelands — and to deal with whatever
-Helix Combine buried in the Slagflat crater. Two worlds — the sun-blasted Claudelands and the frozen Frosthollow — two
-playable Vault-Rats, eight quests, three bosses, bazillions of guns.
+a contractor hired by Foreman Quibb to de-throne Grand Duke Gutterball,
+trash-king of the Claudelands — and to deal with whatever Helix Combine
+buried in the Slagflat crater. Four worlds — the sun-blasted Claudelands,
+the frozen Frosthollow, the volcanic Cinder Throat gauntlet, and BRASSHAVEN,
+the sanctuary city in a beached mega-hauler — two playable Vault-Rats,
+twelve quests, four bosses, in-game cinematics, bazillions of guns.
 
 Everything is procedural — meshes, textures, sound, *music* — and everything
 that is content (guns, parts, manufacturers, elements, skills, enemies,
@@ -18,6 +20,8 @@ districts, quests, jokes) is data. See `DECISIONS.md` for the why and
 | ![Gutterlight hub](docs/screenshots/hub.png) | ![The Boneyard](docs/screenshots/boneyard.png) |
 | ![Boss: Gutterball](docs/screenshots/boss.png) | ![Quibb dialogue](docs/screenshots/dialogue.png) |
 | ![The Frosthollow](docs/screenshots/frosthollow.png) | ![Pinebreak combat](docs/screenshots/pinebreak.png) |
+| ![Brasshaven](docs/screenshots/brasshaven.png) | ![Boss pre-fight cinematic](docs/screenshots/boss-cine.png) |
+| ![ECHO map](docs/screenshots/echo-map.png) | ![ECHO backpack](docs/screenshots/echo-backpack.png) |
 | ![Skill trees](docs/screenshots/skill-tree.png) | ![Art sandbox](docs/screenshots/art-sandbox.png) |
 
 ## Run it
@@ -50,6 +54,7 @@ saves live in the player's browser (localStorage).
 | F | Action skill — deploy the Sentry Rig |
 | G | Grenade (delivery + element from equipped mod; it blinks and beeps) |
 | E | Interact — loot, chests, vendors, wire spools, Quibb, fast travel |
+| T | Remote Re-Constructor uplink — fast travel from anywhere, outside combat |
 | 1–4 | Weapon slots |
 | TAB / K / J | Backpack / skill trees / quest log |
 | ESC | Pause (volume, controls, abandon run) |

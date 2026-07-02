@@ -3,8 +3,67 @@
 // player arrow. Drawn from map data, parchment-styled.
 
 import * as THREE from 'three';
-import { WORLD, activeMap } from '../data/world';
+import { WORLD, activeMap, meshHeight, roadFactor } from '../data/world';
 import { enemySpawner } from '../game/enemies';
+
+// ---------------------------------------------------------------------------
+// Painted terrain backdrop — a real top-down colored render of the height-
+// field with hillshading, biome palette, roads, lakes, and ridge walls.
+// Cached per map (one ~90k-sample paint on first open).
+const terrainCache = new Map<string, HTMLCanvasElement>();
+
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace('#', '');
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+function paintTerrain(): HTMLCanvasElement {
+  const cached = terrainCache.get(WORLD.id);
+  if (cached) return cached;
+  const RES = 320;
+  const c = document.createElement('canvas');
+  c.width = c.height = RES;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(RES, RES);
+  const half = WORLD.size / 2 + 24;
+  const g = WORLD.biome.ground;
+  const dark = hexToRgb(g.dark), base = hexToRgb(g.base), light = hexToRgb(g.light);
+  const rock = hexToRgb(WORLD.biome.rock);
+  const lake = WORLD.terrain.lake;
+  const mix = (a: [number, number, number], b: [number, number, number], t: number): [number, number, number] =>
+    [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
+  for (let py = 0; py < RES; py++) {
+    const wz = (py / RES) * half * 2 - half;
+    for (let px = 0; px < RES; px++) {
+      const wx = (px / RES) * half * 2 - half;
+      const h = meshHeight(wx, wz);
+      let col: [number, number, number];
+      if (h > 11) {
+        // ridge walls / high ground read as rock
+        col = mix(rock, [rock[0] * 0.5, rock[1] * 0.5, rock[2] * 0.5], Math.min(1, (h - 11) / 10));
+      } else {
+        const t = Math.max(0, Math.min(1, h / 6));
+        col = t < 0.5 ? mix(dark, base, t * 2) : mix(base, light, (t - 0.5) * 2);
+      }
+      if (lake && Math.hypot(wx - lake.x, wz - lake.z) < lake.r) {
+        col = mix([207, 228, 240], col, 0.15);
+      }
+      const road = roadFactor(wx, wz);
+      if (road > 0.12) col = mix(col, [col[0] * 0.55, col[1] * 0.5, col[2] * 0.45], road);
+      // hillshade from west-east slope
+      const shade = Math.max(0.55, Math.min(1.25, 1 + (meshHeight(wx - 1.2, wz) - meshHeight(wx + 1.2, wz)) * 0.22));
+      const i = (py * RES + px) * 4;
+      img.data[i] = Math.min(255, col[0] * shade);
+      img.data[i + 1] = Math.min(255, col[1] * shade);
+      img.data[i + 2] = Math.min(255, col[2] * shade);
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  terrainCache.set(WORLD.id, c);
+  return c;
+}
 
 export interface FullmapExtras {
   quest: { x: number; z: number } | null;
@@ -15,7 +74,7 @@ export class FullMapPanel {
   render(root: HTMLElement, playerPos: THREE.Vector3, yaw: number, extras: FullmapExtras): void {
     root.innerHTML = `
       <h1>${WORLD.name}</h1>
-      <div class="p-sub">Cartography by Quibb. Accuracy by vibes.</div>
+      <div class="p-sub">ORBITAL SURVEY COMPOSITE · cartography by Quibb · accuracy by vibes</div>
       <div class="p-body" style="align-items:center; justify-content:center;">
         <canvas id="fullmap-canvas" width="1200" height="1200" style="width:min(62vh,90%); height:auto; border:2px solid rgba(216,176,40,0.5);"></canvas>
       </div>
@@ -30,62 +89,46 @@ export class FullMapPanel {
       (wz + half) / (half * 2) * S,
     ];
 
-    // parchment ground
-    ctx.fillStyle = '#171210';
+    // painted terrain backdrop
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(paintTerrain(), 0, 0, S, S);
+    // soft vignette so the chart reads as a device screen
+    const vg = ctx.createRadialGradient(S / 2, S / 2, S * 0.35, S / 2, S / 2, S * 0.72);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,10,14,0.55)');
+    ctx.fillStyle = vg;
     ctx.fillRect(0, 0, S, S);
-    ctx.strokeStyle = 'rgba(216,176,40,0.06)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < S; i += 60) {
-      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, S); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(S, i); ctx.stroke();
-    }
 
-    // roads / corridor
-    ctx.strokeStyle = 'rgba(200,160,90,0.4)';
-    ctx.lineWidth = 10;
-    ctx.lineCap = 'round';
-    for (const r of WORLD.terrain.roads) {
-      const [x0, y0] = toMap(r.x0, r.z0);
-      const [x1, y1] = toMap(r.x1, r.z1);
-      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-    }
-    const corridor = WORLD.terrain.corridor;
-    if (corridor) {
-      ctx.lineWidth = (corridor.width * 2) / (half * 2) * S;
-      ctx.strokeStyle = 'rgba(200,140,80,0.22)';
-      ctx.beginPath();
-      corridor.pts.forEach((p, i) => {
-        const [x, y] = toMap(p.x, p.z);
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-      ctx.lineWidth = 10;
-    }
-
-    // districts
-    const factionColor: Record<string, string> = {
-      none: 'rgba(216,176,40,0.14)',
-      rustborn: 'rgba(200,90,50,0.14)',
-      helix: 'rgba(80,200,190,0.13)',
-      frostborn: 'rgba(120,180,230,0.14)',
-      kindled: 'rgba(255,110,40,0.16)',
+    // district rings + labels (tinted by faction)
+    const factionStroke: Record<string, string> = {
+      none: 'rgba(216,176,40,0.55)',
+      rustborn: 'rgba(255,120,70,0.6)',
+      helix: 'rgba(80,220,210,0.6)',
+      frostborn: 'rgba(140,200,255,0.6)',
+      kindled: 'rgba(255,140,50,0.65)',
     };
     ctx.textAlign = 'center';
     for (const d of WORLD.districts) {
       const [x, y] = toMap(d.cx, d.cz);
       const r = d.radius / (half * 2) * S;
-      ctx.fillStyle = factionColor[d.faction] ?? factionColor.none;
+      ctx.strokeStyle = factionStroke[d.faction] ?? factionStroke.none;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([12, 10]);
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(216,176,40,0.35)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([10, 8]);
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = '#e8d8b0';
       ctx.font = '900 30px Impact, sans-serif';
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+      ctx.strokeText(d.name, x, y - r - 10);
+      ctx.fillStyle = '#ffe8b0';
       ctx.fillText(d.name, x, y - r - 10);
+      ctx.font = '400 19px Arial, sans-serif';
+      ctx.lineWidth = 4;
+      ctx.strokeText(d.subtitle, x, y - r + 16);
+      ctx.fillStyle = 'rgba(232,216,176,0.85)';
+      ctx.fillText(d.subtitle, x, y - r + 16);
     }
 
     // POIs

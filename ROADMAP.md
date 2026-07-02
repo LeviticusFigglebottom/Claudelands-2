@@ -1,5 +1,40 @@
 # ROADMAP
 
+## Pass 5 status — cinematics, ECHO UI, painted maps, crits, Brasshaven
+
+**In-game cinematic system** (`ui/cinematics.ts`): triggered, gameplay-pausing,
+any-key-skippable letterboxed scenes with timed title cards, HUD faded out
+while they run. Three kinds, each plays once (seen-set persisted in the save):
+*biome entry* (high sweep down to the player on first arrival at a map, name +
+tagline card), *character introduction* (dolly toward Quibb/Zaza on first E,
+then the dialogue opens), and *boss pre-fight* (slow orbit + epithet card when
+you first close with a living boss — the arena is frozen until it ends).
+
+**ECHO-NET menu reskin**: every panel (backpack, skill trees, quest log,
+vendors, dialogue, fast travel, map, pause) is now a dark-teal glass terminal —
+"ECHO-NET // FIELD TERMINAL" header strip, animated scanlines + flicker, cyan
+borders and teal-tinted rows/buttons/tabs — while the in-world HUD keeps its
+amber BL look.
+
+**Painted full map**: the M map now renders a real top-down colored terrain
+composite per biome (height-shaded palette bands, rock above the treeline,
+lake tint, darkened roads, west-east hillshade, vignette), cached per map,
+under labeled district rings colored by controlling faction.
+
+**Criticals actually work**: crit zones are assigned explicitly per archetype
+(heads for humanoids, the eye for flyers, the fuse housing for bombers — now
+protruding above the body sphere so it's physically hittable) instead of
+falling back to "last body part pushed" (guns/armor plates were stealing the
+slot). Armored brutes get a logical weak point: a glowing boiler valve on the
+BACK — flank them. Verified through the real hitscan path headlessly.
+
+**BRASSHAVEN**, the sanctuary city: fourth map, built in the hull of a beached
+mega-hauler — lit name sign, multi-floor buildings with glowing windows and
+neon ads, market stalls, string lights, seven ambling citizens, both vendors,
+no combat. Unlocked by q12 "Key to the City" after the Cinder Throat boss
+falls (the quest auto-discovers the Brasshaven Gate Re-Constructor node), then
+fast-travelable from anywhere at any time outside combat.
+
 ## Pass 4 status — the Cinder Throat, maps & radar, UI polish
 
 **Third main area, THE CINDER THROAT**: a large linear gauntlet (320m map) —

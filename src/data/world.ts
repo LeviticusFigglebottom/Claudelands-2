@@ -7,7 +7,7 @@
 
 import { clamp01, lerp } from '../util/maff';
 
-export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt';
+export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza';
 
 export interface DistrictDef {
   id: string;
@@ -43,6 +43,7 @@ export interface BiomeDef {
 export interface WorldDef {
   id: string;
   name: string;
+  tagline: string;             // biome-entry title card subtext
   size: number;
   skyTop: number; skyHorizon: number;
   sun: { color: number; intensity: number; dirX: number; dirY: number; dirZ: number };
@@ -69,6 +70,7 @@ export interface WorldDef {
 export const CLAUDELANDS: WorldDef = {
   id: 'claudelands',
   name: 'THE CLAUDELANDS',
+  tagline: 'rust never sleeps. neither do the guns.',
   size: 260,
   skyTop: 0x3f7ac8,
   skyHorizon: 0xd8b070,
@@ -168,6 +170,7 @@ export const CLAUDELANDS: WorldDef = {
 export const FROSTHOLLOW: WorldDef = {
   id: 'frosthollow',
   name: 'THE FROSTHOLLOW',
+  tagline: 'winter moved in and never paid rent.',
   size: 230,
   skyTop: 0x24427c,
   skyHorizon: 0xd8e6f0,
@@ -265,6 +268,7 @@ const THROAT_PATH = [
 export const CINDERTHROAT: WorldDef = {
   id: 'cinderthroat',
   name: 'THE CINDER THROAT',
+  tagline: 'one way down. the kindled insist.',
   size: 320,
   skyTop: 0x5a3234,
   skyHorizon: 0xe89a4c,
@@ -354,10 +358,61 @@ export const CINDERTHROAT: WorldDef = {
   spawn: { x: 0, z: 130 },
 };
 
+// ===========================================================================
+// MAP 4 — BRASSHAVEN (the central city: a scrap metropolis built in and
+// around the hull of a beached mega-hauler. No combat. Everything's for
+// sale, including several things that were yours a minute ago.)
+export const BRASSHAVEN: WorldDef = {
+  id: 'brasshaven',
+  name: 'BRASSHAVEN',
+  tagline: 'the last city. population: haggling.',
+  size: 170,
+  skyTop: 0x35659a,
+  skyHorizon: 0xe0a868,
+  sun: { color: 0xffe0b0, intensity: 2.3, dirX: -0.4, dirY: 0.72, dirZ: 0.45 },
+  ambient: { sky: 0x9ab4d8, ground: 0x8a7a5c, intensity: 1.25 },
+  fog: { color: 0xb89878, near: 70, far: 280 },
+  biome: {
+    ground: { base: '#6e6458', light: '#8d8272', dark: '#4a423a', crack: 'rgba(20,16,12,0.5)' },
+    rock: '#6d6058',
+    scrub: 0x6a7a4a,
+    ambientParticle: 'dust',
+    trees: 'cactus',
+    aurora: false,
+    weeds: false,
+  },
+  terrain: {
+    duneAmp: 0.25,
+    roughAmp: 0.3,
+    roads: [
+      { x0: 0, z0: 80, x1: 0, z1: -60 },
+      { x0: -55, z0: 0, x1: 55, z1: 0 },
+    ],
+  },
+  districts: [
+    {
+      id: 'brassplaza', name: 'BRASSHAVEN', subtitle: 'The Last City. Mind Your Wallet.', dress: 'brassplaza',
+      cx: 0, cz: 0, radius: 70, baseHeight: 0,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 0,
+    },
+  ],
+  pois: [
+    { id: 'ft_brass', kind: 'fast_travel', x: 0, z: 66, data: 'Brasshaven Gate' },
+    { id: 'vg_b', kind: 'vendor_gun', x: -10, z: 12, rot: 1.2 },
+    { id: 'vm_b', kind: 'vendor_med', x: 12, z: 10, rot: -1.4 },
+    { id: 'chest_brass', kind: 'chest', x: -26, z: -30, rot: 0.7 },
+    { id: 'log_b1', kind: 'wirelog', x: 20, z: -22, data: 'log_brasshaven' },
+    { id: 'sign_b1', kind: 'sign', x: 0, z: 52, rot: 0, data: 'BRASSHAVEN: NO SPITTING. NO REGICIDE. NO REFUNDS.' },
+    { id: 'sign_b2', kind: 'sign', x: -4, z: -14, rot: 0.4, data: 'MARKET ROW → · HULLTOWN ↑ · GATE ←' },
+  ],
+  spawn: { x: 0, z: 62 },
+};
+
 export const MAPS: Record<string, WorldDef> = {
   claudelands: CLAUDELANDS,
   frosthollow: FROSTHOLLOW,
   cinderthroat: CINDERTHROAT,
+  brasshaven: BRASSHAVEN,
 };
 
 let active: WorldDef = CLAUDELANDS;

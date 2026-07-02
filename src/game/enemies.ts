@@ -83,7 +83,8 @@ export class Enemy implements Damageable {
     this.lastTotalHp = this.totalHp();
 
     this.buildBody();
-    this.critZone = this.bodyParts[this.bodyParts.length - 1];
+    // buildBody assigns critZone explicitly; fall back to last part if not
+    if (!this.critZone) this.critZone = this.bodyParts[this.bodyParts.length - 1];
 
     const c = document.createElement('canvas'); c.width = 128; c.height = 20;
     this.healthCtx = c.getContext('2d')!;
@@ -136,6 +137,7 @@ export class Enemy implements Damageable {
         glow.layers.set(1);
         this.group.add(hull, ring, fins, eye, glow);
         this.bodyParts.push(hull, ring, fins, eye);
+        this.critZone = eye;
         break;
       }
       case 'suicide': {
@@ -152,13 +154,15 @@ export class Enemy implements Damageable {
           this.addLimb(leg, 1.4);
         }
         const fuse = new THREE.Mesh(new THREE.SphereGeometry(0.1 * scale, 6, 6), glowMat(0xff3030, 1));
-        fuse.position.y = 0.72 * scale;
+        fuse.position.y = 0.94 * scale;
         fuse.name = 'fuse';
         fuse.layers.set(1);
-        const head = new THREE.Mesh(new THREE.BoxGeometry(0.2 * scale, 0.14 * scale, 0.2 * scale), critMat);
-        head.position.y = 0.62 * scale;
+        // the fuse housing pokes ABOVE the body sphere so it's actually shootable
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.22 * scale, 0.2 * scale, 0.22 * scale), critMat);
+        head.position.y = 0.74 * scale;
         this.group.add(body, fuse, head);
         this.bodyParts.push(body, head);
+        this.critZone = head;
         break;
       }
       default: {
@@ -177,6 +181,7 @@ export class Enemy implements Damageable {
           jaw.position.set(0, 0.5 * scale, -0.68 * scale);
           this.group.add(torso, jaw, head);
           this.bodyParts.push(torso, jaw, head);
+          this.critZone = head;
         } else if (helix) {
           // helix stinger/warden: angular white chassis, teal joints
           const legs = new THREE.Mesh(new THREE.BoxGeometry(0.36 * scale, 0.66 * scale, 0.3 * scale), darkMat);
@@ -203,6 +208,7 @@ export class Enemy implements Damageable {
           head.position.y = 1.5 * scale;
           this.group.add(legs, torso, chestLight, armL, armR, antenna, head);
           this.bodyParts.push(legs, torso, armL, armR, antenna, head);
+          this.critZone = head;
           this.addLimb(armL, 1); this.addLimb(armR, -1); this.addLimb(legs, 0);
           if (this.def.armor > 0) {
             const plate = new THREE.Mesh(new THREE.BoxGeometry(0.8 * scale, 0.7 * scale, 0.12 * scale), this.mat(0xc8c4ba, '#b8b4aa'));
@@ -225,7 +231,19 @@ export class Enemy implements Damageable {
           head.position.y = 1.62 * scale;
           this.group.add(legs, torso, armL, armR, pauldron, head);
           this.bodyParts.push(legs, torso, armL, armR, pauldron, head);
+          this.critZone = head;
           this.addLimb(armL, 1); this.addLimb(armR, -1);
+          // armored brutes: the head hides behind plate — their weak point is
+          // the glowing boiler valve on the BACK. Flank them.
+          if (this.def.behavior === 'brute' && this.def.armor > 0) {
+            const valve = new THREE.Mesh(new THREE.SphereGeometry(0.16 * scale, 8, 8), glowMat(0xffb43c, 0.95));
+            valve.position.set(0, 1.15 * scale, 0.28 * scale);
+            const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * scale, 0.05 * scale, 0.3 * scale, 6), darkMat);
+            pipe.position.set(0, 1.35 * scale, 0.26 * scale);
+            this.group.add(valve, pipe);
+            this.bodyParts.push(valve);
+            this.critZone = valve;
+          }
           if (this.def.behavior === 'gunner' || this.def.behavior === 'lobber') {
             const gun = new THREE.Mesh(new THREE.BoxGeometry(0.1 * scale, 0.12 * scale, 0.5 * scale), darkMat);
             gun.position.set(0.42 * scale, 1.0 * scale, -0.3 * scale);

@@ -189,6 +189,21 @@ export const QUESTS: QuestDef[] = [
     rewardCash: 4000, rewardXp: 5000, rewardItem: 'legendary',
     completeLine: 'The Saint is slag. The Kindled are unemployed. The Throat still smokes, but it\u2019s just smoke now.',
   },
+  {
+    id: 'q12_city',
+    name: 'Key to the City',
+    giver: 'quibb',
+    briefing: [
+      'Contractor... you de-throned a garbage king, decommissioned a company god, iced the weather, and raked out a saint.',
+      'Word travels. BRASSHAVEN — the last real city, built in the hull of a beached mega-hauler — has opened its gate to you.',
+      'Their Re-Constructor node is yours now. Go see the big lights. Buy something ridiculous. You\u2019ve earned it.',
+    ],
+    acceptLine: 'Brasshaven! The node\u2019s in your network! Try not to get charged for breathing!',
+    objective: { kind: 'goto', label: 'Enter Brasshaven', count: 1, markerX: 0, markerZ: 0, mapId: 'brasshaven' },
+    rewardCash: 5000, rewardXp: 4000,
+    completeLine: 'Welcome to Brasshaven, contractor. The city already knows your name. It\u2019s on a poster.',
+    unlocksStation: 'Brasshaven Gate',
+  },
 ];
 
 export const QUEST_DONE_IDLE = [

@@ -81,6 +81,7 @@ export class World {
   private sunOffset = new THREE.Vector3();
   private gate: { group: THREE.Group; collider: AABB; open: boolean; openT: number; id: string } | null = null;
   private rats: { mesh: THREE.Group; vel: THREE.Vector3; wanderT: number; home: THREE.Vector3 }[] = [];
+  private citizens: { mesh: THREE.Group; vel: THREE.Vector3; wanderT: number; home: THREE.Vector3 }[] = [];
   private vultures: { mesh: THREE.Group; angle: number; r: number; cx: number; cz: number; h: number; speed: number }[] = [];
   private quibb: THREE.Group | null = null;
   private zaza: THREE.Group | null = null;
@@ -334,6 +335,7 @@ export class World {
         case 'ashflats': this.buildAshFlats(d); break;
         case 'kilnyard': this.buildKilnYard(d); break;
         case 'foundrycourt': this.buildFoundryCourt(d); break;
+        case 'brassplaza': this.buildBrassPlaza(d); break;
       }
     }
   }
@@ -538,6 +540,154 @@ export class World {
     this.campfire(d.cx + 6, d.cz + 14);
     this.junkPiles(rng, d.cx, d.cz + 6, 14, 4);
     for (let i = 0; i < 4; i++) this.burntTree(d.cx + (rng() - 0.5) * 40, d.cz + 16 + rng() * 8, 0.9 + rng() * 0.5);
+  }
+
+  // --------------------------------------------------- Brasshaven (the city)
+  private cityBuilding(x: number, z: number, rng: Rng): void {
+    const y = terrainHeight(x, z);
+    const b = new THREE.Group();
+    const palettes = ['#6a5a48', '#5a626a', '#6a4a52', '#52604a', '#5c5462'];
+    const floors = 2 + Math.floor(rng() * 3);
+    let hgt = 0;
+    let w = 6 + rng() * 4, d = 5 + rng() * 3;
+    for (let f = 0; f < floors; f++) {
+      const fh = 3 + rng() * 1.4;
+      const box = new THREE.Mesh(new THREE.BoxGeometry(w, fh, d),
+        toonMat({ color: 0xffffff, map: swatch(palettes[Math.floor(rng() * palettes.length)], 80) }));
+      box.position.y = hgt + fh / 2;
+      b.add(box);
+      // window strips: warm glow slits
+      for (let side = 0; side < 2; side++) {
+        const strip = new THREE.Mesh(new THREE.BoxGeometry(w * 0.7, 0.28, 0.06), glowMat(rng() > 0.3 ? 0xffd23c : 0x54d4ff, 0.85));
+        strip.position.set(0, hgt + fh * 0.6, (side ? 1 : -1) * (d / 2 + 0.03));
+        b.add(strip);
+      }
+      hgt += fh;
+      w *= 0.82 + rng() * 0.1; d *= 0.85 + rng() * 0.1;
+    }
+    // rooftop dressing + occasional neon board
+    const vent = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 1, 8), toonMat({ color: 0x3a3632 }));
+    vent.position.set(1, hgt + 0.5, 0);
+    b.add(vent);
+    if (rng() > 0.5) {
+      const ads = [
+        { lines: ['HOT', 'SLAG'], bg: '#5a2a6a', fg: '#ffd23c' },
+        { lines: ['ROOMS', 'SOME CLEAN'], bg: '#2a4a6a', fg: '#8ff4ff' },
+        { lines: ['TEETH', 'BOUGHT'], bg: '#6a2a2a', fg: '#ffe8b0' },
+        { lines: ['NOODLE', 'CHURCH'], bg: '#2a6a5a', fg: '#eafff4' },
+      ];
+      const ad = ads[Math.floor(rng() * ads.length)];
+      const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 2.2),
+        new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ad.lines, style: 'ad', bg: ad.bg, fg: ad.fg, accent: '#ff5a86' }), side: THREE.DoubleSide }));
+      sign.position.set(0, hgt + 1.6, 0);
+      sign.rotation.y = rng() * Math.PI;
+      b.add(sign);
+      const neon = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 6), glowMat(0xff5a86, 1));
+      neon.position.set(1.8, hgt + 1.6, 0);
+      neon.name = 'blinker';
+      b.add(neon);
+    }
+    b.position.set(x, y, z);
+    b.rotation.y = rng() * Math.PI * 2;
+    b.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
+    this.group.add(b);
+    this.staticTargets.push(b);
+    this.addCollider(x, z, 4.2, 3.6);
+  }
+
+  private buildBrassPlaza(d: DistrictDef): void {
+    const rng = mulberry32(7777);
+    // the beached mega-hauler looming over the north edge — the city's roof
+    const hullMat = toonMat({ color: 0xffffff, map: swatch('#7a6a58', 90) });
+    const teal = toonMat({ color: 0x2ba8a0 });
+    const hull = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(16, 20, 90, 10), hullMat);
+    body.rotation.z = Math.PI / 2;
+    body.position.y = 8;
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(10, 16, 1.4), teal);
+    fin.position.set(34, 20, 0);
+    fin.rotation.z = 0.3;
+    const name = new THREE.Mesh(new THREE.PlaneGeometry(24, 7),
+      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['BRASSHAVEN'], style: 'propaganda', bg: '#4a4442', fg: '#ffd23c', accent: 'rgba(255,220,120,0.2)' }) }));
+    name.position.set(0, 12, 19.2);
+    hull.add(body, fin, name);
+    hull.position.set(0, terrainHeight(0, -52), -52);
+    hull.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
+    this.group.add(hull);
+    this.staticTargets.push(hull);
+    this.addCollider(0, -52, 46, 18);
+
+    // city blocks around the plaza
+    const spots: [number, number][] = [
+      [-24, 20], [24, 22], [-32, -4], [34, -2], [-22, -26], [26, -24], [-8, 34], [12, 36], [-38, 24],
+    ];
+    for (const [x, z] of spots) this.cityBuilding(x, z, rng);
+
+    // market row: striped awning stalls
+    for (const [x, z, a] of [[-6, -8, 0.4], [4, -10, -0.3], [-14, 2, 1.2], [14, 0, -1.1]] as const) {
+      const y = terrainHeight(x, z);
+      const stall = new THREE.Group();
+      const counter = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1, 1), toonMat({ color: 0x8a6a42, map: swatch('#7a5a36', 80) }));
+      counter.position.y = 0.5;
+      const awning = new THREE.Mesh(new THREE.ConeGeometry(1.9, 1, 4), toonMat({ color: [0xb43a5a, 0x3a6ab4, 0xb4952a][Math.floor(rng() * 3)] }));
+      awning.position.y = 2.4;
+      awning.rotation.y = Math.PI / 4;
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2, 6), toonMat({ color: 0x4a4440 }));
+      pole.position.y = 1;
+      const goods = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.6), toonMat({ color: 0x7d8a4a }));
+      goods.position.set(0.5, 1.2, 0);
+      stall.add(counter, pole, awning, goods);
+      stall.position.set(x, y, z);
+      stall.rotation.y = a;
+      stall.traverse((o) => (o.castShadow = true));
+      this.group.add(stall);
+      this.staticTargets.push(stall);
+      this.addCollider(x, z, 1.4, 0.8);
+    }
+
+    // plaza string lights, barrels, junk
+    for (let s = 0; s < 4; s++) {
+      const from = new THREE.Vector3(-20 + s * 8, 5.2, -14 + s * 9);
+      const to = new THREE.Vector3(18 - s * 6, 4.8, -8 + s * 10);
+      for (let i = 0; i <= 10; i++) {
+        const t = i / 10;
+        const p = from.clone().lerp(to, t);
+        p.y -= Math.sin(t * Math.PI) * 1.2;
+        const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6),
+          glowMat([0xffd23c, 0xff5a86, 0x54d4ff, 0x7dff2a][i % 4], 0.95));
+        bulb.position.copy(p);
+        bulb.layers.set(FX_LAYER);
+        this.group.add(bulb);
+      }
+    }
+    this.fireBarrel(-4, 22);
+    this.fireBarrel(18, -16);
+    this.junkPiles(rng, 0, 10, 30, 5);
+    this.poster(-23.2, 21, Math.PI / 2, 3);
+    this.poster(25.2, 21, -Math.PI / 2, 4);
+    this.graffiti(-31, -2.5, 0.3, 2);
+    this.graffiti(27, -22.6, 0.2, 0);
+
+    // citizens: Brasshaven has people. They walk. They judge.
+    const skins = ['#c89878', '#a87858', '#8a6848'];
+    const fits = [0x5a4a6a, 0x4a6a5a, 0x6a5a3a, 0x3a5a6a, 0x6a3a4a, 0x8a7a3a];
+    for (let i = 0; i < 7; i++) {
+      const c = new THREE.Group();
+      const legs = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.68, 0.24), toonMat({ color: 0x33302c }));
+      legs.position.y = 0.34;
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.7, 0.3), toonMat({ color: fits[i % fits.length] }));
+      torso.position.y = 1.0;
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.3, 0.28), toonMat({ color: skins[i % skins.length] as unknown as number, map: swatch(skins[i % skins.length], 30) }));
+      head.position.y = 1.55;
+      const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.14, 8), toonMat({ color: fits[(i + 3) % fits.length] }));
+      hat.position.y = 1.76;
+      c.add(legs, torso, head, hat);
+      const x = (rng() - 0.5) * 44, z = (rng() - 0.5) * 44;
+      c.position.set(x, terrainHeight(x, z), z);
+      c.traverse((o) => (o.castShadow = true));
+      this.group.add(c);
+      this.citizens.push({ mesh: c, vel: new THREE.Vector3(), wanderT: rng() * 2, home: new THREE.Vector3(0, 0, 4) });
+    }
   }
 
   private campfire(x: number, z: number): void {
@@ -1635,6 +1785,27 @@ export class World {
         r.mesh.position.addScaledVector(r.vel, dt);
         r.mesh.position.y = terrainHeight(r.mesh.position.x, r.mesh.position.z) + Math.abs(Math.sin(this.blinkT * 18)) * 0.03;
         r.mesh.rotation.y = Math.atan2(r.vel.x, r.vel.z) + Math.PI;
+      }
+    }
+    // citizens amble around the plaza
+    for (const cz of this.citizens) {
+      cz.wanderT -= dt;
+      if (cz.wanderT <= 0) {
+        cz.wanderT = 2 + Math.random() * 4;
+        if (Math.random() < 0.45) cz.vel.set(0, 0, 0);
+        else {
+          const a = Math.random() * Math.PI * 2;
+          cz.vel.set(Math.cos(a), 0, Math.sin(a)).multiplyScalar(1.1);
+          if (cz.mesh.position.distanceTo(cz.home) > 30) {
+            cz.vel.copy(cz.home.clone().sub(cz.mesh.position).setY(0).normalize().multiplyScalar(1.2));
+          }
+        }
+      }
+      if (cz.vel.lengthSq() > 0.01) {
+        const nx = cz.mesh.position.x + cz.vel.x * dt, nz = cz.mesh.position.z + cz.vel.z * dt;
+        if (this.collideSphere(new THREE.Vector3(nx, 0, nz), 0.5)) { cz.wanderT = 0; continue; }
+        cz.mesh.position.set(nx, terrainHeight(nx, nz) + Math.abs(Math.sin(this.blinkT * 8)) * 0.03, nz);
+        cz.mesh.rotation.y = Math.atan2(cz.vel.x, cz.vel.z);
       }
     }
     // vultures circle

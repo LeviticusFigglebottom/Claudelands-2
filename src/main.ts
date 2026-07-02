@@ -15,6 +15,8 @@ import { debris } from './game/debris';
 import { loot } from './game/loot';
 import { projectiles } from './game/projectiles';
 import { enemySpawner, setEnemyHooks, type Enemy } from './game/enemies';
+import { ENEMIES } from './data/enemies';
+import { spawnBoss, type BossId } from './game/boss';
 import { actionSkill } from './game/actionskill';
 import { setNumberSpawner, setTargetProvider, setPlayerDamageRouter, tickCombatClock, type Damageable } from './game/combat';
 import { questSystem, type QuestStatus } from './game/quests';
@@ -36,6 +38,7 @@ import { QuestTracker, QuestLogPanel, DialoguePanel } from './ui/quests';
 import { PausePanel } from './ui/pause';
 import { showClassSelect } from './ui/classselect';
 import { IntroOverlay, INTRO_PATH } from './ui/intro';
+import { CinematicSystem, bossCine, biomeCine, charCine, BOSS_EPITHETS, NPC_INTROS, type CineDef } from './ui/cinematics';
 import { feedPickup, feedText, bark, playWireLog, showInteract, setDownedOverlay, banner, buildTitleScreen } from './ui/misc';
 import { itemCardHTML } from './ui/itemcard';
 import { pick } from './util/rng';
@@ -162,6 +165,7 @@ function switchMap(mapId: string, toX?: number, toZ?: number): void {
   world.followSun(player.position);
   mapFadeT = 1; // fade-in from the reconstruction flash
   fx.burst(player.position.clone().add(new THREE.Vector3(0, 1, 0)), 0x54d4ff, 40, 6, 0.14, 1, 4);
+  playCine('map_' + WORLD.id, () => biomeCine(player.position.clone(), WORLD.name.toUpperCase(), WORLD.tagline));
   autosave();
 }
 
@@ -173,6 +177,39 @@ const fullMapPanel = new FullMapPanel();
 const questTracker = new QuestTracker();
 const intro = new IntroOverlay();
 player.onHurtFrom = (rel) => hud.hurtFrom(rel);
+
+// ------------------------------------------------------------- cinematics
+// Triggered, gameplay-pausing, any-key-skippable scenes: first entry to a
+// biome, first meeting an NPC, and boss pre-fight intros. Each plays once;
+// the seen-set rides along in the save.
+const cinema = new CinematicSystem();
+const seenCines = new Set<string>();
+
+/** Play a one-shot cinematic. `make` is lazy so callers don't build defs for already-seen keys. */
+function playCine(key: string, make: () => CineDef, after?: () => void): boolean {
+  if (seenCines.has(key) || cinematicT >= 0 || cinema.active || player.downed) return false;
+  seenCines.add(key);
+  player.viewmodel.visible = false;
+  cinema.start(make(), () => {
+    player.viewmodel.visible = true;
+    player.paused = openPanel !== 'none';
+    autosave();
+    after?.();
+  });
+  if (openPanel !== 'none') setPanel('none');
+  player.paused = true;
+  return true;
+}
+
+/** Pre-fight boss scene: fires once when the player first closes with a living boss. */
+function maybeBossCine(): void {
+  const boss = enemySpawner.boss;
+  if (!boss?.alive) return;
+  const key = 'boss_' + boss.def.id;
+  if (seenCines.has(key) || boss.position.distanceTo(player.position) > 42) return;
+  const epithet = BOSS_EPITHETS[boss.def.id] ?? 'unpleasant by appointment';
+  playCine(key, () => bossCine(boss.position.clone(), boss.def.scale, boss.displayName.toUpperCase(), epithet));
+}
 
 const panelRoot = document.getElementById('panel-root')!;
 const inventoryPanel = new InventoryPanel({
@@ -199,11 +236,11 @@ let dialogueGiver: QuestGiver = 'quibb';
 function setPanel(kind: PanelKind): void {
   dialoguePanel.stop();
   openPanel = kind;
-  player.paused = kind !== 'none' || cinematicT >= 0;
+  player.paused = kind !== 'none' || cinematicT >= 0 || cinema.active;
   panelRoot.classList.toggle('show', kind !== 'none');
   if (kind === 'none') {
     panelRoot.innerHTML = '';
-    if (cinematicT < 0) canvas.requestPointerLock();
+    if (cinematicT < 0 && !cinema.active) canvas.requestPointerLock();
     return;
   }
   document.exitPointerLock();
@@ -250,7 +287,7 @@ function renderFastTravel(panel: HTMLElement): void {
     <h1>RE-CONSTRUCTOR NETWORK</h1>
     <div class="p-sub">Matter is a suggestion. Cross-world transit voids most warranties and one or two laws of physics.</div>
     <div class="p-body"><div style="flex:1; display:flex; flex-direction:column; gap:8px; max-width:480px;">${groups}</div></div>
-    <div class="p-hint">E / ESC to close · undiscovered nodes must be visited on foot (or unlocked by story)</div>`;
+    <div class="p-hint">T / E / ESC to close · undiscovered nodes must be visited on foot (or unlocked by story) · uplink refuses mid-combat</div>`;
   panel.querySelectorAll<HTMLButtonElement>('.ft-row').forEach((btn) => {
     btn.addEventListener('click', () => {
       const name = btn.dataset.station!;
@@ -317,6 +354,7 @@ function autosave(): void {
     mapId: activeMap().id,
     classId: getPlayerClass().id,
     difficultyId: difficulty().id,
+    cines: [...seenCines],
   });
 }
 setInterval(autosave, 25000);
@@ -335,6 +373,9 @@ function restoreSave(): boolean {
     (id) => world.openGate(id),
     (name) => discoveredStations.add(name),
   );
+  const cines = data.cines as string[] | undefined;
+  if (cines) cines.forEach((c) => seenCines.add(c));
+  else ['map_claudelands', 'npc_quibb', 'map_' + ((data.mapId as string) ?? 'claudelands')].forEach((c) => seenCines.add(c)); // legacy saves predate cinematics
   const mapId = (data.mapId as string) ?? 'claudelands';
   if (mapId !== activeMap().id) switchMap(mapId);
   player.recomputeVitals();
@@ -401,6 +442,7 @@ function endCinematic(): void {
 // ---------------------------------------------------------------- input glue
 document.addEventListener('keydown', (e) => {
   if (!started) return;
+  if (cinema.active) { cinema.skip(); return; } // any key skips a cinematic
   if (cinematicT >= 0) { intro.end(); return; } // any key skips the intro
   if (e.code === 'Tab') { e.preventDefault(); setPanel(openPanel === 'inventory' ? 'none' : 'inventory'); return; }
   if (e.code === 'KeyK') { setPanel(openPanel === 'skills' ? 'none' : 'skills'); return; }
@@ -413,6 +455,13 @@ document.addEventListener('keydown', (e) => {
   }
   if (openPanel !== 'none') return;
 
+  if (e.code === 'KeyT') {
+    // remote Re-Constructor uplink — anywhere, as long as nothing is shooting at you
+    if (player.downed) return;
+    if (enemySpawner.aggroCount() > 0) { feedText('RE-CONSTRUCTOR UPLINK REFUSED — finish the argument first', '#ff5a5a'); audio.dryFire(); return; }
+    setPanel('fasttravel');
+    return;
+  }
   if (e.code === 'KeyR') player.startReload();
   if (e.code === 'KeyF') actionSkill.deploy(player.position, player.forward);
   if (e.code === 'KeyG') player.throwGrenade();
@@ -451,10 +500,15 @@ function interact(): void {
         return;
       case 'vendor_gun': setPanel('vendor_gun'); return;
       case 'vendor_med': setPanel('vendor_med'); return;
-      case 'npc':
-        dialogueGiver = it.data === 'zaza' ? 'zaza' : 'quibb';
+      case 'npc': {
+        const giver: QuestGiver = it.data === 'zaza' ? 'zaza' : 'quibb';
+        dialogueGiver = giver;
+        const npcInfo = NPC_INTROS[giver];
+        // first meeting: character-intro splash, then the dialogue opens
+        if (npcInfo && playCine('npc_' + giver, () => charCine(player.position, it.pos, npcInfo.name, npcInfo.sub), () => setPanel('dialogue'))) return;
         setPanel('dialogue');
         return;
+      }
       case 'fast_travel': setPanel('fasttravel'); return;
       case 'wirelog':
         if (playWireLog(it.data ?? '')) world.removeInteractable(it);
@@ -589,7 +643,17 @@ function frame(): void {
     return;
   }
 
+  if (cinema.active) {
+    // in-game cinematic: gameplay holds its breath, camera is scripted
+    world.update(dt, player.position);
+    fx.update(dt);
+    cinema.update(dt, camera);
+    post.render(dt);
+    return;
+  }
+
   stepSim(dt);
+  maybeBossCine();
   world.followSun(player.position);
 
   const bossActive = enemySpawner.boss?.alive && enemySpawner.boss.position.distanceTo(player.position) < 70;
@@ -634,6 +698,7 @@ buildTitleScreen(hasSave(), (continueRun) => {
     cinematicT = 0;
     player.paused = true;
     player.viewmodel.visible = false;
+    seenCines.add('map_claudelands'); // the full intro already covers the first biome
     intro.start();
     autosave();
   });
@@ -656,6 +721,10 @@ canvas.addEventListener('click', () => {
   setPanelDebug: setPanel,
   switchMapDebug: switchMap,
   skipIntro: () => { if (cinematicT >= 0) intro.end(); },
+  cinema, seenCines,
+  skipCine: () => { if (cinema.active) cinema.skip(); },
+  enemyDefs: ENEMIES,
+  spawnBossDebug: (id: string, x: number, z: number) => spawnBoss(id as BossId, new THREE.Vector3(x, 0, z)),
   setClassDebug: (id: string) => { setPlayerClass(id); hud.setCharacter(); },
   fastForward: (seconds: number) => {
     if (!started) return;

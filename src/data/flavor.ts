@@ -147,6 +147,15 @@ export const WIRE_LOGS: WireLog[] = [
     ],
   },
   {
+    id: 'log_brasshaven',
+    speaker: 'BRASSHAVEN CIVIC ANNOUNCEMENT — LOOPING SPOOL',
+    lines: [
+      'Welcome to Brasshaven! Built from one (1) mega-hauler and several thousand poor decisions.',
+      'Curfew is whenever the lights die. The lights have never died. We checked.',
+      'Today\u2019s exchange rate: one bullet equals one bullet. The market is stable.',
+    ],
+  },
+  {
     id: 'log_icebox',
     speaker: 'UNKNOWN FROSTBORN — REVERENT WIRE SPOOL',
     lines: [
