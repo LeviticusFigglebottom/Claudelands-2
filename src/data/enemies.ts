@@ -316,6 +316,36 @@ ENEMIES.razorbeak = {
   weight: 14,
 };
 
+ENEMIES.strangler = {
+  id: 'strangler', name: 'Vine Strangler', badassName: 'Old Growth',
+  faction: 'verdant', behavior: 'rusher',
+  flesh: 1, shield: 0, armor: 0.4,
+  hpMult: 1.8, damageMult: 1.3, speed: 5.2, attackRange: 2.4, attackRate: 0.8, aggroRange: 26,
+  scale: 1.3, tint: 0x2f6a30, dropTier: 1, xp: 26,
+  barks: ['*creaking, closing in*', 'The Tangle wants a HUG.', 'Rooted? No. YOU will be.'],
+  weight: 18,
+};
+ENEMIES.thorn_hurler = {
+  id: 'thorn_hurler', name: 'Thorn Hurler', badassName: 'Pincushion Prime',
+  faction: 'verdant', behavior: 'lobber',
+  flesh: 1, shield: 0, armor: 0,
+  hpMult: 1.1, damageMult: 1.2, speed: 3.2, attackRange: 21, attackRate: 0.65, aggroRange: 28,
+  scale: 1.05, tint: 0x6a9a2a, dropTier: 1, xp: 24,
+  barks: ['Catch! With your FACE!', 'The garden shares its POINTIER blessings!', '*the sound of a hedge losing its temper*'],
+  projectile: { speed: 19, element: 'bile', arc: true },
+  weight: 14,
+};
+
+export const BOSS_BLOOM: EnemyDef = {
+  id: 'bloom_mother', name: 'The Bloom Mother', badassName: 'The Bloom Mother',
+  faction: 'verdant', behavior: 'brute',
+  flesh: 1, shield: 0, armor: 0.6,
+  hpMult: 26, damageMult: 1.9, speed: 2.5, attackRange: 3.2, attackRate: 0.5, aggroRange: 60,
+  scale: 3.1, tint: 0x3f8a3f, dropTier: 3, xp: 660,
+  barks: ['MY GARDEN. MY GUESTS. MY MULCH.', 'BLOOM FOR ME.', 'the petals part. the petals JUDGE.'],
+  weight: 0,
+};
+
 export const ENEMY_LIST = Object.values(ENEMIES);
 
 export const BADASS_CHANCE = 0.06;

@@ -174,6 +174,15 @@ export const WIRE_LOGS: WireLog[] = [
     ],
   },
   {
+    id: 'log_tangle',
+    speaker: 'FERRIS OKONKWO-DEALE, EXPEDITION SECOND — SCRATCHED TAG',
+    lines: [
+      'If anyone finds this: we\u2019re alive. Staked in the deep court like tomatoes, but alive.',
+      'The big flower sings to us at night. Kalim sings BACK, which I feel is escalating things.',
+      'Tell Dr. Calla the samples were worth it. Tell her to also please hurry.',
+    ],
+  },
+  {
     id: 'log_icebox',
     speaker: 'UNKNOWN FROSTBORN — REVERENT WIRE SPOOL',
     lines: [

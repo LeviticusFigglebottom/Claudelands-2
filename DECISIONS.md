@@ -42,6 +42,13 @@ function (bisection refine), which is cheaper and can never disagree with
 `groundHeight`. Roads are terrain *vertex tint*, not geometry — a draped-mesh
 attempt z-fought immediately; vertex colors can't.
 
+**Corridor terrain (pass 9)**: linear maps (the Tangle) set `terrain.corridor`
+— a serpentine path polyline + width + arena circles + wall height. The same
+analytic heightfield raises impassable ridge walls everywhere the point is far
+from both the path and every arena, so "mostly linear, opens into arenas"
+costs one distance function and zero new collision code. Districts still sit
+on the arenas, so population/quests/dressing all work unchanged.
+
 ## Population, not waves (pass 2)
 
 Districts self-repopulate on a cadence (only when the player is near-ish, never

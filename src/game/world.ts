@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { WORLD, terrainHeight, terrainNormal, meshHeight, roadFactor, districtAt, TERRAIN_SEGS, TERRAIN_SPAN_FACTOR, type WorldPoi, type DistrictDef } from '../data/world';
 import { toonMat, glowMat, flatMat } from '../render/toon';
-import { groundTexture, rockTexture, corrugatedTexture, posterTexture, swatch, cloudTexture } from '../render/textures';
+import { groundTexture, rockTexture, corrugatedTexture, posterTexture, swatch, cloudTexture, waterTexture, fallTexture } from '../render/textures';
 import { buildScrapship } from '../render/scrapship';
 import { POSTERS, GRAFFITI } from '../data/flavor';
 import { LootChest } from './loot';
@@ -73,6 +73,8 @@ export class ExplosiveBarrel implements Damageable {
 export class World {
   group = new THREE.Group();
   colliders: AABB[] = [];
+  /** Textures that scroll every frame (waterfall sheets, pool glints). */
+  private scrollTex: { tex: THREE.Texture; vy: number }[] = [];
   staticTargets: THREE.Object3D[] = [];
   interactables: Interactable[] = [];
   chests: LootChest[] = [];
@@ -1438,6 +1440,12 @@ export class World {
     }
     this.buildZoneExits();
 
+    // non-frozen lakes render as real water (frost keeps its ice sheet)
+    if (WORLD.terrain.lake && WORLD.biome.ambientParticle !== 'snow') {
+      const lake = WORLD.terrain.lake;
+      this.water(lake.x, lake.z, lake.r, { lilies: WORLD.biome.trees === 'palm', level: lake.level + 0.2 });
+    }
+
     // palm biomes: the wilds between districts stay jungle, not lawn
     if (WORLD.biome.trees === 'palm') {
       const rng = mulberry32(90210);
@@ -1595,6 +1603,104 @@ export class World {
     this.interactables.push({ kind: 'npc', pos: new THREE.Vector3(poi.x, y, poi.z), label: look.label, data: poi.data });
   }
 
+  /** Still water: toon disc + drifting glint texture; ponds get lilies + reeds. */
+  private water(x: number, z: number, r: number, opts: { lilies?: boolean; level?: number } = {}): void {
+    const level = opts.level ?? terrainHeight(x, z) + 0.18;
+    const tex = waterTexture();
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(r, 28),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.88 }));
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.set(x, level, z);
+    this.group.add(pool);
+    this.scrollTex.push({ tex, vy: 0.02 });
+    const rim = new THREE.Mesh(new THREE.RingGeometry(r * 0.97, r * 1.04, 28),
+      new THREE.MeshBasicMaterial({ color: 0xcfeaf5, transparent: true, opacity: 0.5 }));
+    rim.rotation.x = -Math.PI / 2;
+    rim.position.set(x, level + 0.02, z);
+    this.group.add(rim);
+    if (opts.lilies) {
+      const lilyMat = toonMat({ color: 0x3a9a3a });
+      for (let i = 0; i < Math.min(6, r); i++) {
+        const a = i * 2.4, rr = (0.3 + (i % 3) * 0.22) * r;
+        const lily = new THREE.Mesh(new THREE.CircleGeometry(0.4, 7), lilyMat);
+        lily.rotation.x = -Math.PI / 2;
+        lily.position.set(x + Math.cos(a) * rr, level + 0.03, z + Math.sin(a) * rr);
+        this.group.add(lily);
+        if (i % 2 === 0) {
+          const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 6), glowMat(0xff6aa0, 0.85));
+          bloom.position.set(lily.position.x, level + 0.14, lily.position.z);
+          this.group.add(bloom);
+        }
+      }
+      const reedMat = toonMat({ color: 0x2f7a34 });
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + 0.3;
+        const reed = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.2 + (i % 3) * 0.4, 4), reedMat);
+        reed.position.set(x + Math.cos(a) * r * 1.02, level + 0.6, z + Math.sin(a) * r * 1.02);
+        reed.rotation.z = (i % 2 ? 1 : -1) * 0.08;
+        this.group.add(reed);
+      }
+    }
+  }
+
+  /** Waterfall: mossy rock shelf, a scrolling water sheet, splash pool + foam. */
+  private waterfall(x: number, z: number, faceRot: number, height = 8, width = 5): void {
+    const y = terrainHeight(x, z);
+    const g = new THREE.Group();
+    const rockMat = toonMat({ color: 0x5f7d4b, map: rockTexture('#5f7d4b') });
+    // the shelf the water pours over
+    const cliff = new THREE.Mesh(new THREE.BoxGeometry(width + 5, height, 3.4), rockMat);
+    cliff.position.set(0, height / 2, -1.8);
+    const capL = new THREE.Mesh(new THREE.DodecahedronGeometry(2.0, 0), rockMat);
+    capL.position.set(-(width / 2 + 1.8), height * 0.85, -0.6);
+    const capR = capL.clone();
+    capR.position.x = width / 2 + 1.8;
+    g.add(cliff, capL, capR);
+    // pile boulders down the back so the shelf reads as an outcrop, not a slab
+    for (let i = 0; i < 5; i++) {
+      const t = i / 4;
+      const r = 1.6 + (1 - t) * 1.8;
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), rockMat);
+      rock.position.set(
+        (t - 0.5) * (width + 4),
+        height * (0.25 + 0.5 * Math.abs(Math.sin(i * 2.4))) - r * 0.3,
+        -3.2 - (i % 2) * 1.6,
+      );
+      rock.rotation.set(i * 0.7, i * 1.3, i * 0.5);
+      g.add(rock);
+    }
+    // the falling sheet — texture scrolls downward
+    const sheetTex = fallTexture();
+    sheetTex.repeat.set(2, 2);
+    const sheet = new THREE.Mesh(new THREE.PlaneGeometry(width, height),
+      new THREE.MeshBasicMaterial({ map: sheetTex, transparent: true, opacity: 0.82, side: THREE.DoubleSide }));
+    sheet.position.set(0, height / 2 + 0.2, 0.06);
+    g.add(sheet);
+    this.scrollTex.push({ tex: sheetTex, vy: -1.6 });
+    // splash pool + foam
+    const poolTex = waterTexture();
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(width * 0.85, 22),
+      new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, opacity: 0.88 }));
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.set(0, 0.16, 2.2);
+    this.scrollTex.push({ tex: poolTex, vy: 0.05 });
+    const foam = new THREE.Mesh(new THREE.RingGeometry(width * 0.28, width * 0.5, 18),
+      new THREE.MeshBasicMaterial({ color: 0xeafaff, transparent: true, opacity: 0.65 }));
+    foam.rotation.x = -Math.PI / 2;
+    foam.position.set(0, 0.2, 1.2);
+    const mistA = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), glowMat(0xcfeaf5, 0.25));
+    mistA.position.set(-width * 0.25, 0.9, 0.9);
+    const mistB = mistA.clone();
+    mistB.position.set(width * 0.25, 1.2, 1.1);
+    g.add(pool, foam, mistA, mistB);
+    g.position.set(x, y, z);
+    g.rotation.y = faceRot;
+    g.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
+    this.group.add(g);
+    this.staticTargets.push(cliff);
+    this.addCollider(x, z, (width + 5) / 2, 2.4);
+  }
+
   /** Toon palm: curved trunk segments + a burst of leaf blades + coconuts. */
   private palm(x: number, z: number, scale = 1): void {
     const y = terrainHeight(x, z);
@@ -1712,6 +1818,9 @@ export class World {
     const banner = World.textSign(8, 1.5, { lines: ['MANGROVE LANDING'], style: 'ad', bg: '#2a6a5a', fg: '#ffe8a0', accent: '#ff6aa0' }, { twoSided: true });
     banner.position.set(0, terrainHeight(0, 70) + 4.4, 70);
     this.group.add(banner);
+    // the lagoon falls: a mossy shelf on the south rim pouring north into the water,
+    // fall sheet facing the town and the boardwalk
+    this.waterfall(46, 34, 0, 9, 6);
   }
 
   // --------------------------------------------------- Veldt: tribal camp
@@ -1813,6 +1922,8 @@ export class World {
     }
     for (let i = 0; i < 16; i++) this.palm(d.cx + (rng() - 0.5) * 64, d.cz + (rng() - 0.5) * 58, 0.8 + rng() * 0.7);
     for (let i = 0; i < 14; i++) this.fern(d.cx + (rng() - 0.5) * 56, d.cz + (rng() - 0.5) * 50, 0.7 + rng());
+    // the idol's reflecting pond
+    this.water(d.cx - 14, d.cz + 12, 5, { lilies: true });
   }
 
   // --------------------------------------------------- Veldt: the Overgrowth
@@ -1830,6 +1941,8 @@ export class World {
       if (!this.clearOfExits(x, z)) continue;
       this.fern(x, z, 0.7 + rng() * 1.1);
     }
+    // a spring-fed pond hiding in the growth
+    this.water(d.cx + 16, d.cz - 10, 4, { lilies: true });
     // fallen mossy log
     const log = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, 9, 8), toonMat({ color: 0x6a8a5a, map: swatch('#5a7a4c', 70) }));
     log.rotation.z = Math.PI / 2;
@@ -2225,6 +2338,7 @@ export class World {
   private blinkT = 0;
   update(dt: number, playerPos: THREE.Vector3): void {
     for (const c of this.chests) c.update(dt);
+    for (const s of this.scrollTex) s.tex.offset.y += s.vy * dt;
     for (const b of this.barrelFlames) {
       if (b.distanceTo(playerPos) < 60 && Math.random() < 20 * dt) fx.fireColumn(b);
     }

@@ -138,6 +138,48 @@ export function swatch(base: string, speckle = 60): THREE.CanvasTexture {
 }
 
 // ---------------------------------------------------------------------------
+// Water: pool surface (sparkle flecks) and falling-water streaks. The fall
+// texture is designed to scroll vertically.
+
+export function waterTexture(base = '#2f86b8', light = '#bfe8ff'): THREE.CanvasTexture {
+  const [c, ctx] = canvas(128, 128);
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, 128, 128);
+  ctx.strokeStyle = light;
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 26; i++) {
+    const y = Math.random() * 128;
+    const x = Math.random() * 128;
+    ctx.globalAlpha = 0.2 + Math.random() * 0.35;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo(x + 8, y - 2, x + 14 + Math.random() * 10, y);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  const t = tex(c, 4);
+  return t;
+}
+
+export function fallTexture(): THREE.CanvasTexture {
+  const [c, ctx] = canvas(64, 128);
+  ctx.fillStyle = 'rgba(160, 216, 240, 0.85)';
+  ctx.fillRect(0, 0, 64, 128);
+  for (let i = 0; i < 18; i++) {
+    const x = Math.random() * 64;
+    ctx.strokeStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.7)' : 'rgba(90,150,190,0.5)';
+    ctx.lineWidth = 1.5 + Math.random() * 2.5;
+    ctx.beginPath();
+    ctx.moveTo(x, -8);
+    ctx.lineTo(x + (Math.random() - 0.5) * 6, 136);
+    ctx.stroke();
+  }
+  const t = tex(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+// ---------------------------------------------------------------------------
 // Signage / graffiti / posters — original world flavor, drawn at runtime.
 
 export interface PosterSpec {

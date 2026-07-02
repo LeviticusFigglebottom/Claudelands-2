@@ -3,17 +3,17 @@
 *A rust-bitten, cel-shaded looter-shooter — now an open wasteland.* You are
 a contractor hired by Foreman Quibb to de-throne Grand Duke Gutterball,
 trash-king of the Claudelands — and to deal with whatever Helix Combine
-buried in the Slagflat crater. TWO PLANETS and five worlds — the sun-blasted
+buried in the Slagflat crater. TWO PLANETS and six worlds — the sun-blasted
 Claudelands, the frozen Frosthollow, the volcanic Cinder Throat gauntlet,
-BRASSHAVEN the sanctuary city, and the lush Mangrove Shelf of VELDT MINOR
-(reached by scrapship, with a full launch-and-landing cinematic) — FOUR
-playable Vault-Rats,
-fourteen main quests plus Brasshaven side jobs with quest-only unique
-legendaries, four bosses, in-game cinematics, BL2-style zone-edge
+BRASSHAVEN the sanctuary city, the lush Mangrove Shelf of VELDT MINOR
+(reached by scrapship, with a planet-aware launch-and-landing cinematic),
+and THE TANGLE, a ridge-walled deep-jungle gauntlet with waterfalls, ponds,
+and a garden god at the end of it — FOUR playable Vault-Rats,
+nineteen main quests plus Brasshaven side jobs with quest-only unique
+legendaries, five bosses, in-game cinematics, BL2-style zone-edge
 transitions, bazillions of guns — plus ENDLESS MODE in the Crucible
-fighting pit, a cinematic attract-mode main menu with graphics settings and
-a Veteran Start, and a scrapship being built for the distress signal from
-VELDT MINOR.
+fighting pit, and a cinematic attract-mode main menu with graphics settings
+and a Veteran Start.
 
 Everything is procedural — meshes, textures, sound, *music* — and everything
 that is content (guns, parts, manufacturers, elements, skills, enemies,
@@ -28,6 +28,8 @@ districts, quests, jokes) is data. See `DECISIONS.md` for the why and
 | ![Boss: Gutterball](docs/screenshots/boss.png) | ![Quibb dialogue](docs/screenshots/dialogue.png) |
 | ![The Frosthollow](docs/screenshots/frosthollow.png) | ![Pinebreak combat](docs/screenshots/pinebreak.png) |
 | ![Brasshaven](docs/screenshots/brasshaven.png) | ![Boss pre-fight cinematic](docs/screenshots/boss-cine.png) |
+| ![The Tangle](docs/screenshots/tangle.png) | ![Lagoon waterfall](docs/screenshots/waterfall.png) |
+| ![Interplanetary travel](docs/screenshots/ship-space.png) | ![The Bloom Mother](docs/screenshots/bloom-mother.png) |
 | ![ECHO map](docs/screenshots/echo-map.png) | ![ECHO backpack](docs/screenshots/echo-backpack.png) |
 | ![Skill trees](docs/screenshots/skill-tree.png) | ![Art sandbox](docs/screenshots/art-sandbox.png) |
 

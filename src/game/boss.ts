@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { Enemy, enemySpawner, enemyHooks } from './enemies';
-import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, type EnemyDef } from '../data/enemies';
+import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, BOSS_BLOOM, type EnemyDef } from '../data/enemies';
 import { toonMat, glowMat } from '../render/toon';
 import { fx } from './particles';
 import { audio } from '../audio/synth';
@@ -382,15 +382,106 @@ export class SaintFurnace extends Boss {
 }
 
 // ---------------------------------------------------------------------------
-export type BossId = 'gutterball' | 'warden_prime' | 'old_man_avalanche' | 'saint_furnace';
+// THE BLOOM MOTHER — the Verdant's early-woken garden god. A walking flower
+// the size of a shed: petal crown, vine arms, and a glowing seed-heart (crit).
+export class BloomMother extends Boss {
+  private heart: THREE.Mesh;
+  private petals: THREE.Mesh[] = [];
+
+  constructor(level: number, pos: THREE.Vector3) {
+    super(BOSS_BLOOM, level, pos);
+    const scale = this.def.scale;
+    const petalMat = toonMat({ color: 0xff6aa0 });
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const petal = new THREE.Mesh(new THREE.ConeGeometry(0.34 * scale, 1.1 * scale, 5), petalMat);
+      petal.position.set(Math.cos(a) * 0.62 * scale, 2.05 * scale, Math.sin(a) * 0.62 * scale);
+      petal.rotation.z = Math.cos(a) * 1.15;
+      petal.rotation.x = -Math.sin(a) * 1.15;
+      this.group.add(petal);
+      this.bodyParts.push(petal);
+      this.petals.push(petal);
+    }
+    // vine arms
+    const vineMat = toonMat({ color: 0x2f6a30 });
+    for (const side of [-1, 1]) {
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.1 * scale, 0.16 * scale, 1.6 * scale, 6), vineMat);
+      arm.position.set(side * 0.85 * scale, 1.2 * scale, 0.2 * scale);
+      arm.rotation.z = side * 0.7;
+      this.group.add(arm);
+      this.bodyParts.push(arm);
+    }
+    this.heart = new THREE.Mesh(new THREE.SphereGeometry(0.3 * scale, 10, 10), glowMat(0x9adc4a, 0.95));
+    this.heart.position.set(0, 2.05 * scale, 0);
+    this.group.add(this.heart);
+    this.bodyParts.push(this.heart);
+    this.critZone = this.heart;
+    audio.bossRoar(true);
+  }
+
+  protected onPhase(phase: number): void {
+    if (phase === 1) {
+      enemyHooks().bark(this.displayName, 'CHILDREN. THE GUEST NEEDS PLANTING.');
+      for (const s of [new THREE.Vector3(5, 0, 4), new THREE.Vector3(-5, 0, 4), new THREE.Vector3(0, 0, -6), new THREE.Vector3(4, 0, -4)]) {
+        enemySpawner.spawnOne(ENEMIES.sporeling, this.position.clone().add(s), false, 4);
+      }
+    } else {
+      enemyHooks().bark(this.displayName, 'FULL. BLOOM.');
+      audio.bossRoar(true);
+      this.def = { ...this.def, speed: this.def.speed * 1.5, attackRate: this.def.attackRate * 1.3 };
+      for (const p of this.petals) ((p.material as THREE.MeshToonMaterial).color ?? { setHex: () => 0 }).setHex(0xff2a6a);
+    }
+  }
+
+  protected specialCooldown(): number { return this.phase >= 2 ? 4.2 : 6.8; }
+
+  protected special(): void {
+    const playerPos = enemyHooks().playerPos();
+    if (Math.random() < 0.5) {
+      // SEED RAIN: lobbed pods bracket the player
+      enemyHooks().bark(this.displayName, 'SOW.');
+      for (let i = 0; i < 4; i++) {
+        const target = playerPos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 8));
+        const muzzle = this.position.clone().add(new THREE.Vector3(0, 2.4 * this.def.scale, 0));
+        const aim = target.clone().sub(muzzle);
+        const dist = aim.length();
+        aim.normalize().multiplyScalar(15);
+        aim.y += dist * 0.6;
+        projectiles.spawn({
+          pos: muzzle, vel: aim, damage: 9 * levelScale(this.level), element: 'bile',
+          splash: 3.2, gravity: 13, fuse: -1, source: 'enemy',
+        });
+      }
+      audio.explosion(false);
+    } else {
+      // SPORE NOVA
+      fx.explosion(this.position.clone(), 6, 0x9adc4a);
+      audio.explosion(true);
+      audio.elemental('bile');
+      splashDamage(this.position.clone(), 8.5, 9 * levelScale(this.level), 'bile', { source: 'enemy', elemChance: 0.85 });
+    }
+  }
+
+  override update(dt: number): void {
+    super.update(dt);
+    if (!this.alive) return;
+    if (Math.random() < 8 * dt) fx.statusFlames(this.position, 'bile');
+    const m = this.heart.material as THREE.MeshBasicMaterial;
+    m.opacity = 0.75 + Math.sin(this.wobble * 2) * 0.2;
+  }
+}
+
+// ---------------------------------------------------------------------------
+export type BossId = 'gutterball' | 'warden_prime' | 'old_man_avalanche' | 'saint_furnace' | 'bloom_mother';
 
 export function spawnBoss(id: BossId, pos: THREE.Vector3, levelOverride?: number): Enemy {
   const level = levelOverride ?? state.level + 2;
   const boss = id === 'gutterball' ? new Gutterball(level, pos)
     : id === 'warden_prime' ? new WardenPrime(level, pos)
     : id === 'old_man_avalanche' ? new OldManAvalanche(level, pos)
+    : id === 'bloom_mother' ? new BloomMother(level, pos)
     : new SaintFurnace(level, pos);
   enemySpawner.registerBoss(boss);
-  fx.explosion(pos.clone().add(new THREE.Vector3(0, 1, 0)), 4, id === 'gutterball' ? 0xff8438 : id === 'warden_prime' ? 0x54d4ff : id === 'old_man_avalanche' ? 0x9ad8e8 : 0xff7a1a);
+  fx.explosion(pos.clone().add(new THREE.Vector3(0, 1, 0)), 4, id === 'gutterball' ? 0xff8438 : id === 'warden_prime' ? 0x54d4ff : id === 'old_man_avalanche' ? 0x9ad8e8 : id === 'bloom_mother' ? 0x9adc4a : 0xff7a1a);
   return boss;
 }

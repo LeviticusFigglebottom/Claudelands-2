@@ -16,8 +16,25 @@ const LAUNCH_END = 4.0;
 const SPACE_END = 11.0;
 const TOTAL = 15.5;
 
+/** How a planet reads from orbit: body color + two glow shells. */
+export interface PlanetLook {
+  body: number;
+  shellA: { color: number; opacity: number };
+  shellB?: { color: number; opacity: number };
+}
+
+export const PLANET_LOOKS: Record<string, PlanetLook> = {
+  // Claude Prime: rust, dust, and a thin gold smog band
+  claudeprime: { body: 0xa3703f, shellA: { color: 0xd8a828, opacity: 0.12 } },
+  // Veldt Minor: jungle green wrapped in sea-glint and pollen haze
+  veldtminor: { body: 0x4a9a58, shellA: { color: 0x54d4ff, opacity: 0.16 }, shellB: { color: 0x9adc4a, opacity: 0.08 } },
+};
+
 export interface ShipTravelHooks {
   scene: THREE.Scene;
+  /** Which planet is falling away behind, and which is dead ahead. */
+  fromPlanet: PlanetLook;
+  toPlanet: PlanetLook;
   /** Called once at the space→landing boundary; must switch the map. */
   onSwitch: () => void;
   /** Called when the cinematic finishes (or is skipped). */
@@ -85,21 +102,22 @@ export class ShipTravelCinematic {
     const fill = new THREE.AmbientLight(0x8090a8, 0.5);
     rig.add(key, fill);
 
-    // origin world: rust-brown marble falling behind
-    const home = new THREE.Mesh(new THREE.SphereGeometry(26, 24, 18), toonMat({ color: 0xa3703f }));
-    home.position.set(-30, -12, 130);
-    const homeBand = new THREE.Mesh(new THREE.SphereGeometry(26.6, 24, 18), glowMat(0xd8a828, 0.12));
-    homeBand.position.copy(home.position);
-    rig.add(home, homeBand);
-
-    // destination: lush green-blue, dead ahead
-    const dest = new THREE.Mesh(new THREE.SphereGeometry(34, 28, 22), toonMat({ color: 0x4a9a58 }));
-    dest.position.set(8, 4, -260);
-    const destSea = new THREE.Mesh(new THREE.SphereGeometry(34.4, 28, 22), glowMat(0x54d4ff, 0.16));
-    destSea.position.copy(dest.position);
-    const destGlow = new THREE.Mesh(new THREE.SphereGeometry(36.5, 24, 18), glowMat(0x9adc4a, 0.08));
-    destGlow.position.copy(dest.position);
-    rig.add(dest, destSea, destGlow);
+    // the world you left, falling behind — and the one ahead, swelling
+    const addPlanet = (look: PlanetLook, r: number, pos: THREE.Vector3): void => {
+      const body = new THREE.Mesh(new THREE.SphereGeometry(r, 26, 20), toonMat({ color: look.body }));
+      body.position.copy(pos);
+      rig.add(body);
+      const a = new THREE.Mesh(new THREE.SphereGeometry(r * 1.015, 26, 20), glowMat(look.shellA.color, look.shellA.opacity));
+      a.position.copy(pos);
+      rig.add(a);
+      if (look.shellB) {
+        const b = new THREE.Mesh(new THREE.SphereGeometry(r * 1.07, 22, 16), glowMat(look.shellB.color, look.shellB.opacity));
+        b.position.copy(pos);
+        rig.add(b);
+      }
+    };
+    addPlanet(this.hooks!.fromPlanet, 26, new THREE.Vector3(-30, -12, 130));
+    addPlanet(this.hooks!.toPlanet, 34, new THREE.Vector3(8, 4, -260));
 
     this.rig = rig;
     this.hooks!.scene.add(rig);

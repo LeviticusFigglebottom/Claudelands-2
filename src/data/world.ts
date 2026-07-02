@@ -229,7 +229,7 @@ export const FROSTHOLLOW: WorldDef = {
         { enemyId: 'icicle_lobber', weight: 12 }, { enemyId: 'frost_shrike', weight: 12 },
         { enemyId: 'avalanche_bruiser', weight: 7 },
       ],
-      maxAlive: 7, respawnDelay: 16, levelOffset: 4,
+      maxAlive: 7, respawnDelay: 16, levelOffset: 3,
     },
     {
       id: 'fathom', name: 'THE FROZEN FATHOM', subtitle: 'Thick Ice. Thin Promises.', dress: 'fathom',
@@ -239,12 +239,12 @@ export const FROSTHOLLOW: WorldDef = {
         { enemyId: 'frost_shrike', weight: 22 }, { enemyId: 'snowmad', weight: 16 },
         { enemyId: 'frostmutt', weight: 14 }, { enemyId: 'icicle_lobber', weight: 10 },
       ],
-      maxAlive: 6, respawnDelay: 18, levelOffset: 5,
+      maxAlive: 6, respawnDelay: 18, levelOffset: 4,
     },
     {
       id: 'icebox', name: 'THE ICEBOX', subtitle: 'Where Winter Keeps Its Leftovers.', dress: 'icebox',
       cx: 0, cz: -82, radius: 32, baseHeight: 3.4,
-      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 6,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 4,
     },
   ],
   pois: [
@@ -336,7 +336,7 @@ export const CINDERTHROAT: WorldDef = {
         { enemyId: 'ashwalker', weight: 26 }, { enemyId: 'fusebug', weight: 14 },
         { enemyId: 'ash_shrike', weight: 14 }, { enemyId: 'cinderhulk', weight: 7 },
       ],
-      maxAlive: 7, respawnDelay: 15, levelOffset: 7,
+      maxAlive: 7, respawnDelay: 15, levelOffset: 3,
     },
     {
       id: 'ashflats', name: 'THE ASH FLATS', subtitle: 'Openly Hostile. Also Just Open.', dress: 'ashflats',
@@ -346,7 +346,7 @@ export const CINDERTHROAT: WorldDef = {
         { enemyId: 'ashwalker', weight: 22 }, { enemyId: 'ash_shrike', weight: 18 },
         { enemyId: 'cinderhulk', weight: 10 }, { enemyId: 'fusebug', weight: 12 },
       ],
-      maxAlive: 8, respawnDelay: 14, levelOffset: 8,
+      maxAlive: 8, respawnDelay: 14, levelOffset: 4,
     },
     {
       id: 'kilnyard', name: 'THE KILN YARD', subtitle: 'Where the Kindled Fire Their Best Work (You)', dress: 'kilnyard',
@@ -356,12 +356,12 @@ export const CINDERTHROAT: WorldDef = {
         { enemyId: 'ashwalker', weight: 20 }, { enemyId: 'cinderhulk', weight: 14 },
         { enemyId: 'ash_shrike', weight: 12 },
       ],
-      maxAlive: 7, respawnDelay: 14, levelOffset: 9,
+      maxAlive: 7, respawnDelay: 14, levelOffset: 5,
     },
     {
       id: 'foundrycourt', name: 'THE FOUNDRY COURT', subtitle: 'The Saint Is In.', dress: 'foundrycourt',
       cx: 0, cz: -118, radius: 30, baseHeight: 1.2,
-      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 10,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 5,
     },
   ],
   pois: [
@@ -523,7 +523,7 @@ export const VELDT: WorldDef = {
     {
       id: 'chatterfronds', name: 'THE CHATTERFRONDS', subtitle: 'The Drums Are Not Decorative',
       cx: -60, cz: 4, radius: 42, dress: 'verdantcamp', baseHeight: 1,
-      faction: 'verdant', levelOffset: 11,
+      faction: 'verdant', levelOffset: 4,
       spawnTable: [
         { enemyId: 'frond_stalker', weight: 30 },
         { enemyId: 'dartlurker', weight: 26 },
@@ -536,7 +536,7 @@ export const VELDT: WorldDef = {
     {
       id: 'idolhollow', name: 'IDOL HOLLOW', subtitle: 'The Statue Was Here First. It Insists.',
       cx: 62, cz: -14, radius: 38, dress: 'grove', baseHeight: 1.5,
-      faction: 'verdant', levelOffset: 12,
+      faction: 'verdant', levelOffset: 5,
       spawnTable: [
         { enemyId: 'shaman', weight: 24 },
         { enemyId: 'dartlurker', weight: 20 },
@@ -548,7 +548,7 @@ export const VELDT: WorldDef = {
     {
       id: 'overgrowth', name: 'THE OVERGROWTH', subtitle: 'Where the Path Gives Up',
       cx: 0, cz: -66, radius: 46, dress: 'jungle', baseHeight: 2,
-      faction: 'verdant', levelOffset: 12,
+      faction: 'verdant', levelOffset: 5,
       spawnTable: [
         { enemyId: 'frond_stalker', weight: 28 },
         { enemyId: 'razorbeak', weight: 18 },
@@ -576,10 +576,109 @@ export const VELDT: WorldDef = {
   exits: [
     { x: -104, z: -62, targetMap: 'veldt_caves', targetX: 0, targetZ: 0, label: 'THE HOLLOWDEEP', style: 'cave',
       sealed: 'A breath of cold air from the dark. Something below is still digging. (A future update opens the Hollowdeep.)' },
-    { x: 6, z: -114, targetMap: 'veldt_tangle', targetX: 0, targetZ: 0, label: 'THE TANGLE', style: 'thicket',
-      sealed: 'The thicket knots itself tighter as you approach. The Verdant sing on the far side. (A future update opens the Tangle.)' },
+    { x: 6, z: -114, targetMap: 'veldt_tangle', targetX: 0, targetZ: 116, label: 'THE TANGLE', style: 'thicket' },
     { x: 110, z: 26, targetMap: 'veldt_shallows', targetX: 0, targetZ: 0, label: 'SHIPWRECK SHALLOWS', style: 'beach',
       sealed: 'Sand, surf, and half a hull on the horizon. The tide is wrong for the crossing. (A future update opens the Shallows.)' },
+  ],
+};
+
+// ===========================================================================
+// PLANET 2, MAP 2 — THE TANGLE. The deep jungle behind the thicket: a
+// mostly-linear gauntlet of strangler groves and drum camps winding down to
+// the Bloom Court, where the Verdant's early-woken garden god holds "choir".
+const TANGLE_PATH = [
+  { x: 0, z: 118 },     // Tangle Mouth (entry)
+  { x: -14, z: 76 },
+  { x: -44, z: 48 },    // Drum Hollow arena
+  { x: -52, z: -2 },
+  { x: -18, z: -28 },
+  { x: 34, z: -18 },    // the Rootworks arena
+  { x: 58, z: -58 },
+  { x: 22, z: -88 },    // approach
+  { x: 0, z: -110 },    // Bloom Court (boss)
+];
+
+export const VELDT_TANGLE: WorldDef = {
+  id: 'veldt_tangle',
+  name: 'THE TANGLE',
+  tagline: 'the jungle, concentrated. shake well before entering.',
+  size: 300,
+  skyTop: 0x1f5a3a, skyHorizon: 0x9adc9a,
+  sun: { color: 0xd8ffb0, intensity: 1.25, dirX: 0.3, dirY: 0.8, dirZ: -0.3 },
+  ambient: { sky: 0x6aa87a, ground: 0x1f3a24, intensity: 0.9 },
+  fog: { color: 0x3f6a48, near: 34, far: 170 },
+  biome: {
+    ground: { base: '#3f7a36', light: '#5f9a4c', dark: '#24512a', crack: 'rgba(15,45,25,0.4)' },
+    rock: '#4f6a44',
+    scrub: 0xffb43c,
+    ambientParticle: 'dust',
+    trees: 'palm',
+    aurora: false,
+    weeds: false,
+  },
+  terrain: {
+    duneAmp: 0.9,
+    roughAmp: 1.0,
+    roads: [],
+    corridor: {
+      pts: TANGLE_PATH,
+      width: 12,
+      arenas: [
+        { x: 0, z: 118, r: 20 },
+        { x: -44, z: 48, r: 26 },
+        { x: 34, z: -18, r: 28 },
+        { x: 0, z: -110, r: 32 },
+      ],
+      wallHeight: 18,
+    },
+  },
+  districts: [
+    {
+      id: 'tanglemouth', name: 'THE TANGLE MOUTH', subtitle: 'Last Light for a While', dress: 'jungle',
+      cx: 0, cz: 118, radius: 20, baseHeight: 0,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 0,
+    },
+    {
+      id: 'drumhollow', name: 'DRUM HOLLOW', subtitle: 'You Hear It Before You See It', dress: 'verdantcamp',
+      cx: -44, cz: 48, radius: 26, baseHeight: 1,
+      faction: 'verdant', levelOffset: 5,
+      spawnTable: [
+        { enemyId: 'frond_stalker', weight: 26 },
+        { enemyId: 'dartlurker', weight: 20 },
+        { enemyId: 'thorn_hurler', weight: 16 },
+        { enemyId: 'sporeling', weight: 14 },
+      ],
+      maxAlive: 8, respawnDelay: 18,
+    },
+    {
+      id: 'rootworks', name: 'THE ROOTWORKS', subtitle: 'The Trees Have Plans', dress: 'jungle',
+      cx: 34, cz: -18, radius: 28, baseHeight: 1.5,
+      faction: 'verdant', levelOffset: 6,
+      spawnTable: [
+        { enemyId: 'strangler', weight: 22 },
+        { enemyId: 'thorn_hurler', weight: 18 },
+        { enemyId: 'shaman', weight: 16 },
+        { enemyId: 'razorbeak', weight: 12 },
+      ],
+      maxAlive: 8, respawnDelay: 18,
+    },
+    {
+      id: 'bloomcourt', name: 'THE BLOOM COURT', subtitle: 'Choir Practice Is Mandatory', dress: 'jungle',
+      cx: 0, cz: -110, radius: 32, baseHeight: 2,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 7,
+    },
+  ],
+  pois: [
+    { id: 'ft_tangle', kind: 'fast_travel', x: 6, z: 116, data: 'Tangle Mouth' },
+    { id: 'sign_t1', kind: 'sign', x: 0, z: 106, rot: 0, data: 'THE TANGLE: KEEP YOUR ARMS. ALL OF THEM.' },
+    { id: 'chest_t1', kind: 'chest', x: -50, z: 42, rot: 0.8 },
+    { id: 'log_t1', kind: 'wirelog', x: -40, z: 54, data: 'log_tangle' },
+    { id: 'chest_t2', kind: 'chest', x: 42, z: -24, rot: -1.4 },
+    { id: 'sign_t2', kind: 'sign', x: 26, z: -80, rot: 0.3, data: 'THE CHOIR SINGS AHEAD. BRING EARPLUGS AND A WILL.' },
+  ],
+  spawn: { x: 0, z: 118 },
+  exits: [
+    { x: 0, z: 134, targetMap: 'veldt', targetX: 0, targetZ: -100, label: 'VELDT MINOR', style: 'thicket' },
   ],
 };
 
@@ -590,6 +689,7 @@ export const MAPS: Record<string, WorldDef> = {
   brasshaven: BRASSHAVEN,
   crucible: CRUCIBLE,
   veldt: VELDT,
+  veldt_tangle: VELDT_TANGLE,
 };
 
 let active: WorldDef = CLAUDELANDS;

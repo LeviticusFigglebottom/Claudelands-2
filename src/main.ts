@@ -40,7 +40,7 @@ import { PausePanel } from './ui/pause';
 import { MainMenu, type StartMode } from './ui/mainmenu';
 import { IntroOverlay, INTRO_PATH } from './ui/intro';
 import { endless } from './game/endless';
-import { shipTravel } from './ui/shiptravel';
+import { shipTravel, PLANET_LOOKS } from './ui/shiptravel';
 import { prefs, onPrefsChanged } from './game/prefs';
 import { CinematicSystem, bossCine, biomeCine, charCine, BOSS_EPITHETS, NPC_INTROS, type CineDef } from './ui/cinematics';
 import { feedPickup, feedText, bark, playWireLog, showInteract, setDownedOverlay, banner } from './ui/misc';
@@ -414,9 +414,9 @@ function checkZoneExits(dt: number): void {
 // ---------------------------------------------------------------- the scrapship
 // THE PAPERWEIGHT hops between planet hubs with a full launch/space/landing
 // cinematic. Available once q14 (The Signal) is complete.
-const SHIP_PADS: Record<string, { x: number; z: number; to: string }> = {
-  brasshaven: { x: -26, z: 40, to: 'veldt' },
-  veldt: { x: -16, z: 94, to: 'brasshaven' },
+const SHIP_PADS: Record<string, { x: number; z: number; to: string; planet: string }> = {
+  brasshaven: { x: -26, z: 40, to: 'veldt', planet: 'claudeprime' },
+  veldt: { x: -16, z: 94, to: 'brasshaven', planet: 'veldtminor' },
 };
 
 function setPadShipsVisible(v: boolean): void {
@@ -434,6 +434,8 @@ function startShipTravel(): void {
   document.exitPointerLock();
   shipTravel.start({
     scene,
+    fromPlanet: PLANET_LOOKS[here.planet],
+    toPlanet: PLANET_LOOKS[destPad.planet],
     padPos: () => {
       const pad = SHIP_PADS[activeMap().id];
       const src2 = activeMap().id === here.to ? destPad : here;
@@ -1037,6 +1039,8 @@ canvas.addEventListener('click', () => {
     player.equipWeapon(w, true);
   },
   setPanelDebug: setPanel,
+  openDialogueDebug: (giver: QuestGiver) => { dialogueGiver = giver; setPanel('dialogue'); },
+  get mapId() { return activeMap().id; },
   switchMapDebug: switchMap,
   skipIntro: () => { if (cinematicT >= 0) intro.end(); },
   cinema, seenCines, shipTravel,

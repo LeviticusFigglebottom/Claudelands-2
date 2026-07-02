@@ -29,6 +29,7 @@ export const BOSS_EPITHETS: Record<string, string> = {
   warden_prime: 'helix site custodian of the year, 12 years running',
   old_man_avalanche: 'the weather, personally',
   saint_furnace: 'patron saint of arson',
+  bloom_mother: 'the garden god who woke up hungry',
 };
 
 export const NPC_INTROS: Record<string, { name: string; sub: string }> = {

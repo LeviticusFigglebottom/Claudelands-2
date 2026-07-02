@@ -1,5 +1,43 @@
 # ROADMAP
 
+## Pass 9 status — THE TANGLE, running water, and three overdue fixes
+
+**THE TANGLE — the first corridor map**: behind the Veldt's thicket (now
+unsealed) lies the deep jungle: a serpentine, ridge-walled gauntlet under a
+green canopy sky, mostly linear but widening into four arenas — THE TANGLE
+MOUTH (safe entry), DRUM HOLLOW (a Verdant war-camp), THE ROOTWORKS, and
+THE BLOOM COURT at the end of the line. Corridor terrain is a new terrain
+mode (`terrain.corridor`: path points + width + arenas + wall height) the
+next linear map gets for free. Two new Verdant archetypes stalk it —
+armored VINE STRANGLERS that sprint, and THORN HURLERS lobbing arcing bile
+pods — and the questline extends there: q17 "Follow the Drums", q18 "The
+Names of Plants" (collect expedition tags), and q19 "Deadhead the Garden",
+which ends at **BLOOM MOTHER**, a petal-crowned garden god with a glowing
+seed-heart crit zone, sporeling summons, SEED RAIN, and a SPORE NOVA.
+
+**Water that moves**: a `water()` builder (toon pool disc, drifting glint
+layer, reed-and-lily dressing) and a `waterfall()` builder (mossy cliff
+shelf, scrolling fall sheet, splash pool, foam ring, mist) — the Mangrove
+lagoon now reads as water, a fall feeds it by the boardwalk, and ponds sit
+in Idol Hollow and the Overgrowth.
+
+**Planet-aware flight**: the scrapship's space phase now renders the actual
+origin planet shrinking behind and the actual destination swelling ahead
+(`PLANET_LOOKS` per planet: body color + atmosphere shells), so the
+Brasshaven→Veldt hop shows rust-and-smog falling away and jungle-and-sea
+ahead — and the return trip shows the reverse.
+
+**Dialogue is giver-aware** (bugfix): while carrying a quest, every OTHER
+NPC used to parrot the quest-giver's nag line verbatim. Now only the
+quest's own giver nags; everyone else points you at whoever actually holds
+your work ("Not my department — the Mayor is holding work for you"), offers
+their own queued job, or makes small talk when the ledger is clean.
+
+**Difficulty dampened** (bugfix): district `levelOffset` is relative to
+player level, and the late maps stacked it too high — the Cinder Throat ran
++7..+10 and Veldt +11..+12 over the player. Both are pulled down to +3..+5
+(Tangle runs +5..+7 as the current endgame).
+
 ## Pass 8 status — VELDT MINOR: a second planet, and the ship that gets you there
 
 **THE PAPERWEIGHT flies.** Boarding the scrapship (unlocked once q14's

@@ -318,6 +318,49 @@ export const QUESTS: QuestDef[] = [
     rewardCash: 4000, rewardXp: 6000, rewardItem: 'epic',
     completeLine: 'The drums stopped. The jungle is still louder than a foundry, but now it\u2019s just... jungle.',
   },
+  {
+    id: 'q17_drums',
+    name: 'Where the Drums Go',
+    giver: 'juno',
+    briefing: [
+      'I triangulated the war parties\u2019 routes. They all funnel through the deep thicket south of the Overgrowth \u2014 into a place the old maps call THE TANGLE.',
+      'That\u2019s where they took my people. That\u2019s where the drumming goes at night.',
+      'The thicket parts if you\u2019re rude enough. Be rude. I\u2019ll patch your suit\u2019s canopy filters from here.',
+    ],
+    acceptLine: 'South, past the Overgrowth! If the leaves start harmonizing, KEEP WALKING!',
+    objective: { kind: 'goto', label: 'Push through into the Tangle', count: 1, markerX: 0, markerZ: 116, mapId: 'veldt_tangle' },
+    rewardCash: 4500, rewardXp: 6500,
+    completeLine: 'You\u2019re inside. The light is green, the air chews, and something enormous is humming downhill.',
+    unlocksStation: 'Tangle Mouth',
+  },
+  {
+    id: 'q18_names',
+    name: 'Nine Names',
+    giver: 'juno',
+    briefing: [
+      'My expedition wore Helix dog tags \u2014 nine names, nine tags. The Verdant took them as TROPHIES.',
+      'The war parties in the Tangle wear them strung on cord. It\u2019s ghoulish and, frankly, unhygienic.',
+      'Bring me four tags. I\u2019m not asking for miracles. I\u2019m asking for POSTAGE.',
+    ],
+    acceptLine: 'Four tags! Check the loud ones \u2014 rank follows volume out here!',
+    objective: { kind: 'collect', label: 'Expedition tags recovered', count: 4, faction: 'verdant', markerX: -44, markerZ: 48, mapId: 'veldt_tangle' },
+    rewardCash: 5500, rewardXp: 7500, rewardItem: 'epic',
+    completeLine: 'Four tags. Four names. Juno reads each one out loud, twice, and pockets them gently.',
+  },
+  {
+    id: 'q19_bloom',
+    name: 'The Early Bloom',
+    giver: 'juno',
+    briefing: [
+      'It\u2019s not a chief driving them. It\u2019s a GOD \u2014 a garden god the Verdant call THE BLOOM MOTHER, and she woke four months early. Angry. Hungry. In CHARGE.',
+      'My people are staked around her court as... fertilizer-in-waiting. They\u2019re alive. She likes her offerings fresh.',
+      'Rake that flower down to the roots, contractor. The seed-heart in the crown \u2014 that\u2019s a TIP.',
+    ],
+    acceptLine: 'The Bloom Court! Bottom of the Tangle! Aim for the glow and DO NOT smell anything she offers you!',
+    objective: { kind: 'boss', label: 'The Bloom Mother pruned', count: 1, bossId: 'bloom_mother', markerX: 0, markerZ: -110, mapId: 'veldt_tangle' },
+    rewardCash: 9000, rewardXp: 10000, rewardItem: 'legendary',
+    completeLine: 'The Bloom Mother is compost. Juno\u2019s people are cut loose \u2014 shaky, sunburnt, alive. Eight of nine. She\u2019ll take it.',
+  },
 ];
 
 // ---------------------------------------------------------------- side jobs

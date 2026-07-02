@@ -97,16 +97,30 @@ export class DialoguePanel {
     const available: QuestRuntime | null = questSystem.availableFrom(giver);
     const info = GIVERS[giver];
     const greeting = pick(Math.random as never, info.greetings);
-    const pendingElsewhere = questSystem.available && !available ? GIVERS[questSystem.available.def.giver] : null;
-    const busySide = questSystem.activeSide && !available && !questSystem.active
-      ? [`Finish the job you took first: ${questSystem.activeSide.def.objective.label}.`]
-      : null;
-    const lines = available
-      ? available.def.briefing
-      : questSystem.active
-        ? [`Job’s not done, contractor: ${questSystem.active.def.objective.label}.`, 'Off you go. Gravity helps.']
-        : busySide
-          ?? (pendingElsewhere ? [`Not my department. ${pendingElsewhere.name} is holding work for you ${pendingElsewhere.where}.`] : [pick(Math.random as never, QUEST_DONE_IDLE)]);
+    const active = questSystem.active;
+    const activeSide = questSystem.activeSide;
+    // Idle lines are giver-aware: only the quest's OWN giver nags about it;
+    // everyone else points you at whoever actually holds your work, or offers
+    // their own queued job for later.
+    let lines: string[];
+    if (available) {
+      lines = available.def.briefing;
+    } else if (active && active.def.giver === giver) {
+      lines = [`Job’s not done, contractor: ${active.def.objective.label}.`, 'Off you go. Gravity helps.'];
+    } else if (activeSide && activeSide.def.giver === giver) {
+      lines = [`You’re already on my job: ${activeSide.def.objective.label}.`, 'I believe in you. Statistically.'];
+    } else if (activeSide && questSystem.sides.some((s) => s.status === 'available' && s.def.giver === giver)) {
+      const busyWith = GIVERS[activeSide.def.giver];
+      lines = [`I’ve got work for you — but you’re still carrying ${busyWith.name}’s job.`, 'Finish that first. I’ll keep the grudge warm.'];
+    } else if (active) {
+      const owner = GIVERS[active.def.giver];
+      lines = [`You look busy. ${owner.name} is waiting on you: ${active.def.objective.label}.`, 'Don’t let me keep you.'];
+    } else if (questSystem.available) {
+      const pendingElsewhere = GIVERS[questSystem.available.def.giver];
+      lines = [`Not my department. ${pendingElsewhere.name} is holding work for you ${pendingElsewhere.where}.`];
+    } else {
+      lines = [pick(Math.random as never, QUEST_DONE_IDLE)];
+    }
 
     root.innerHTML = `
       <h1>${info.name.toUpperCase()}</h1>
