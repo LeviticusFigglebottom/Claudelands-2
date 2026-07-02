@@ -1,0 +1,27 @@
+{
+  "name": "claudelands-2",
+  "version": "0.1.0",
+  "description": "A cel-shaded looter-shooter vertical slice. Welcome to the Claudelands.",
+  "private": true,
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "http://local_proxy@127.0.0.1:41729/git/LeviticusFigglebottom/Claudelands-2"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "screenshot": "node tools/screenshot.mjs"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "three": "^0.166.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.166.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.3"
+  }
+}
