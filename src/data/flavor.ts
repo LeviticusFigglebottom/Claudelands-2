@@ -191,6 +191,24 @@ export const WIRE_LOGS: WireLog[] = [
       'Verse three: if the ground rumbles, congratulations. You’re a verse now.',
     ],
   },
+  {
+    id: 'log_gulch1',
+    speaker: 'REDLINE RITA — COURIER LOG, FINAL ENTRY (ARCHIVED, LOUD)',
+    lines: [
+      'Last delivery: one (1) heart medication, Gutterlight to the Gulch, eleven minutes forty flat. Record stands.',
+      'The client survived. The medication survived. My license did not — turns out the shortcut through the Slagflats is “a war crime.”',
+      'So I retired here and built a track instead. The gulch was already shaped like a dare.',
+    ],
+  },
+  {
+    id: 'log_gulch2',
+    speaker: 'SHIPBREAK SALVAGE CO. — FOREMAN’S MANIFEST, WATER-DAMAGED',
+    lines: [
+      'Day 1: nine haulers came down in the gulch. Company says strip them all by spring.',
+      'Day 40: the scavvers unionized. Their dues are teeth.',
+      'Day 41: company says the wrecks are “self-managing” now. So am I. Gone fishing.',
+    ],
+  },
 ];
 
 export const ZAZA_GREETINGS = [

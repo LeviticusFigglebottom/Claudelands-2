@@ -282,12 +282,14 @@ export const QUESTS: QuestDef[] = [
     briefing: [
       'Three nights ago my relay caught a distress signal. Not from this planet, contractor. From VELDT MINOR.',
       'Somebody up there is still broadcasting, and whatever\u2019s making them broadcast is still chewing.',
-      'I can get you there \u2014 IF we build a scrapship. Helix drive plating, out in the Slagflats. Salvage me five plates.',
+      'I can get you there \u2014 IF we build a scrapship. East past the Slagflats there\u2019s a canyon where the old haulers came down: THE RUST GULCH. Whole hulls, rusting in the wind.',
+      'Strip me FIVE drive plates off the wrecks out there. Mind the scavvers. And if something in that gulch has wheels \u2014 it\u2019s faster than you are.',
     ],
-    acceptLine: 'Five hull plates! The Slagflats! Try not to dent the good ones!',
-    objective: { kind: 'collect', label: 'Scrapship plates salvaged', count: 5, faction: 'helix', markerX: 85, markerZ: -25, mapId: 'claudelands' },
+    acceptLine: 'East of the Slagflats! Through the gulch gate! Five plates, and DRIVE, don\u2019t walk!',
+    objective: { kind: 'collect', label: 'Hull plates salvaged from the wrecks', count: 5, markerX: 125, markerZ: 175, mapId: 'rustgulch' },
     rewardCash: 8000, rewardXp: 8000, rewardItem: 'legendary',
     completeLine: 'The scrapship has a hull, a name (THE PAPERWEIGHT), and a heading: Veldt Minor. Wheels up soon, contractor.',
+    unlocksStation: 'Gulch Gate',
   },
   {
     id: 'q15_wheelsup',

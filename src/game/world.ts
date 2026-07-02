@@ -21,11 +21,13 @@ import { audio } from '../audio/synth';
 interface AABB { minX: number; maxX: number; minZ: number; maxZ: number }
 
 export interface Interactable {
-  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'ship';
+  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'ship' | 'wreck' | 'racer' | 'pit';
   pos: THREE.Vector3;
   label: string;
   data?: string;
   chest?: LootChest;
+  /** Interact reach override — big props (wrecks) push the player out past the default 3.4. */
+  range?: number;
 }
 
 export interface StaticHit {
@@ -353,6 +355,8 @@ export class World {
         case 'verdantcamp': this.buildVerdantCamp(d); break;
         case 'grove': this.buildIdolGrove(d); break;
         case 'jungle': this.buildJungle(d); break;
+        case 'gulchgate': this.buildGulchGate(d); break;
+        case 'shipbreak': this.buildShipbreak(d); break;
       }
     }
   }
@@ -1436,6 +1440,10 @@ export class World {
         case 'ship': this.buildShipPad(poi); break;
         case 'gate': this.buildGate(poi); break;
         case 'sign': this.buildSign(poi); break;
+        case 'wreck': this.buildWreck(poi); break;
+        case 'racer': this.buildRacerNpc(poi); break;
+        case 'buggy': this.buildBuggyPad(poi); break;
+        case 'pit': this.buildPitDoor(poi); break;
       }
     }
     this.buildZoneExits();
@@ -1601,6 +1609,314 @@ export class World {
     this.group.add(g);
     this.addCollider(poi.x, poi.z, 0.5, 0.5);
     this.interactables.push({ kind: 'npc', pos: new THREE.Vector3(poi.x, y, poi.z), label: look.label, data: poi.data });
+  }
+
+  /** REDLINE RITA — leathers, goggles, and a stopwatch she doesn't need. */
+  private buildRacerNpc(poi: WorldPoi): void {
+    const y = terrainHeight(poi.x, poi.z);
+    const g = new THREE.Group();
+    const legs = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.7, 0.3), toonMat({ color: 0x3a3632 }));
+    legs.position.y = 0.35;
+    const jacket = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.66, 0.36), toonMat({ color: 0xb43a2a, map: swatch('#9e3226', 70) }));
+    jacket.position.y = 1.06;
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.1, 0.38), toonMat({ color: 0xf0e8d8 }));
+    stripe.position.y = 1.12;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.32, 0.3), toonMat({ color: 0xc09070 }));
+    head.position.y = 1.6;
+    // grey bun + goggles pushed up
+    const bun = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), toonMat({ color: 0xd8d8d0 }));
+    bun.position.set(0, 1.82, 0.08);
+    const goggleBand = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.08, 10), toonMat({ color: 0x2a2622 }));
+    goggleBand.position.y = 1.74;
+    for (const side of [-1, 1]) {
+      const lens = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), glowMat(0x54d4ff, 0.85));
+      lens.position.set(side * 0.08, 1.76, -0.14);
+      g.add(lens);
+    }
+    // stopwatch hand
+    const watch = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), glowMat(0xffd23c, 0.9));
+    watch.position.set(0.32, 1.15, -0.2);
+    const marker = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 4), glowMat(0xff8c2a, 0.95));
+    marker.position.y = 2.35;
+    marker.rotation.x = Math.PI;
+    marker.name = 'quest_marker';
+    g.add(legs, jacket, stripe, head, bun, goggleBand, watch, marker);
+    g.position.set(poi.x, y, poi.z);
+    g.rotation.y = poi.rot ?? 0;
+    g.traverse((o) => (o.castShadow = true));
+    this.group.add(g);
+    this.addCollider(poi.x, poi.z, 0.5, 0.5);
+    this.interactables.push({ kind: 'racer', pos: new THREE.Vector3(poi.x, y, poi.z), label: 'TALK RACING WITH REDLINE RITA', data: poi.data });
+  }
+
+  /** Pit-row pad where the Junkstallion parks. The buggy itself is owned by
+   *  the vehicle system; the world just dresses the spot. */
+  private buildBuggyPad(poi: WorldPoi): void {
+    const y = terrainHeight(poi.x, poi.z);
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.6, 0.18, 16), toonMat({ color: 0x4a4a52, map: swatch('#3f3f47', 50) }));
+    pad.position.set(poi.x, y + 0.09, poi.z);
+    pad.receiveShadow = true;
+    this.group.add(pad);
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + 0.4;
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.9, 0.16), toonMat({ color: 0xd88428 }));
+      post.position.set(poi.x + Math.cos(a) * 3.2, y + 0.45, poi.z + Math.sin(a) * 3.2);
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), glowMat(0xffd23c, 0.9));
+      lamp.position.set(post.position.x, y + 0.98, post.position.z);
+      this.group.add(post, lamp);
+    }
+  }
+
+  /** A downed hauler chunk: tilted hull plate, ribs, and a salvage point. */
+  private buildWreck(poi: WorldPoi): void {
+    const y = terrainHeight(poi.x, poi.z);
+    const g = new THREE.Group();
+    const hullMat = toonMat({ color: 0x7a5a44, map: corrugatedTexture('#6a4a36') });
+    const ribMat = toonMat({ color: 0x5a4a42, map: swatch('#4e4038', 60) });
+    // main hull slab, nose-down in the dirt
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(7, 0.8, 4.6), hullMat);
+    slab.position.set(0, 2.2, 0);
+    slab.rotation.set(0.5, 0.2, 0.65);
+    g.add(slab);
+    // ribs poking out
+    for (let i = 0; i < 3; i++) {
+      const rib = new THREE.Mesh(new THREE.TorusGeometry(2.2 - i * 0.3, 0.16, 6, 12, Math.PI * 0.85), ribMat);
+      rib.position.set(-1.5 + i * 1.6, 0.4, 1.2 - i * 0.8);
+      rib.rotation.set(0, i * 0.5, 0.35);
+      g.add(rib);
+    }
+    // an engine drum spilled beside it
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.05, 2.2, 12), ribMat);
+    drum.position.set(2.6, 1.05, -1.6);
+    drum.rotation.z = Math.PI / 2 - 0.2;
+    g.add(drum);
+    // salvage glow: the plate you're here for
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8), glowMat(0xffd23c, 1));
+    glow.position.set(0.4, 1.6, 0.6);
+    glow.name = 'blinker';
+    g.add(glow);
+    g.position.set(poi.x, y, poi.z);
+    g.rotation.y = poi.rot ?? 0;
+    g.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
+    this.group.add(g);
+    this.staticTargets.push(g);
+    this.addCollider(poi.x, poi.z, 3.6, 2.8);
+    this.interactables.push({ kind: 'wreck', pos: new THREE.Vector3(poi.x, y, poi.z), label: 'SALVAGE THE WRECK', data: poi.id, range: 6.2 });
+  }
+
+  /** The Crucible's street entrance (Brasshaven) / exit tunnel (pit side):
+   *  a scrap arch, caged bulbs, and a house Re-Constructor for the losers. */
+  private buildPitDoor(poi: WorldPoi): void {
+    const y = terrainHeight(poi.x, poi.z);
+    const g = new THREE.Group();
+    const isExit = poi.data === 'exit';
+    const frameMat = toonMat({ color: 0x5a4a44, map: rockTexture('#54453f') });
+    for (const side of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.9, 5.2, 0.9), frameMat);
+      post.position.set(side * 2.6, 2.6, 0);
+      g.add(post);
+    }
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(6.6, 1.0, 1.1), frameMat);
+    lintel.position.y = 5.4;
+    g.add(lintel);
+    const boardTex = posterTexture(
+      isExit
+        ? { lines: ['DAYLIGHT', '→'], style: 'warning', bg: '#2a1a2e', fg: '#ffd23c', accent: '#ff5a86' }
+        : { lines: ['THE', 'CRUCIBLE'], style: 'ad', bg: '#2a1a2e', fg: '#ff5a86', accent: '#ffd23c' },
+      6.0 / 1.4,
+    );
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(6.0, 1.4), new THREE.MeshBasicMaterial({ map: boardTex }));
+    board.position.set(0, 5.42, 0.58);
+    g.add(board);
+    // the doorway glow: hot pit light bleeding out
+    const maw = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 4.6), glowMat(isExit ? 0xffd8a0 : 0xc86a3a, 0.3));
+    maw.position.set(0, 2.35, -0.1);
+    g.add(maw);
+    for (const side of [-1, 1]) {
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), glowMat(0xff5a86, 0.95));
+      bulb.position.set(side * 2.6, 5.05, 0.5);
+      bulb.name = 'blinker';
+      g.add(bulb);
+    }
+    // house Re-Constructor beside the door — where the pit spits you out
+    if (!isExit) {
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.8, 0.5), toonMat({ color: 0x5a646e }));
+      pillar.position.set(4.2, 1.4, 0.4);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.05, 8, 22), glowMat(0x54d4ff, 0.9));
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(4.2, 0.3, 1.6);
+      ring.name = 'ft_ring';
+      g.add(pillar, ring);
+    }
+    g.position.set(poi.x, y, poi.z);
+    g.rotation.y = poi.rot ?? 0;
+    g.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
+    this.group.add(g);
+    this.staticTargets.push(g);
+    // posts collide; the doorway stays walkable
+    const rot = poi.rot ?? 0;
+    for (const side of [-1, 1]) {
+      const px = poi.x + Math.cos(rot) * side * 2.6;
+      const pz = poi.z - Math.sin(rot) * side * 2.6;
+      this.addCollider(px, pz, 0.7, 0.7);
+    }
+    this.interactables.push({
+      kind: 'pit',
+      pos: new THREE.Vector3(poi.x, y, poi.z),
+      label: isExit ? 'WALK BACK OUT TO BRASSHAVEN' : 'ENTER THE CRUCIBLE — WAVES FOR CASH',
+      data: poi.data,
+    });
+  }
+
+  // ------------------------------------------------------------ rust gulch
+  /** Pit row: Rita's garage, the start/finish arch, bleachers, tire walls. */
+  private buildGulchGate(d: DistrictDef): void {
+    const rng = mulberry32(4242);
+    // start/finish arch over the west straight
+    const archX = -150, archZ = 8;
+    const gy = terrainHeight(archX, archZ);
+    const poleMat = toonMat({ color: 0xd88428, map: swatch('#c1731f', 70) });
+    for (const side of [-1, 1]) {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 9, 10), poleMat);
+      pole.position.set(archX + side * 11, gy + 4.5, archZ);
+      this.group.add(pole);
+      this.addCollider(archX + side * 11, archZ, 0.8, 0.8);
+    }
+    const bannerTex = posterTexture({ lines: ['REDLINE’S', 'RUN'], style: 'ad', bg: '#2a2622', fg: '#ffd23c', accent: '#ff5a86' }, 20 / 2.6);
+    for (const flip of [0, Math.PI]) { // readable from both directions
+      const banner = new THREE.Mesh(new THREE.PlaneGeometry(20, 2.6), new THREE.MeshBasicMaterial({ map: bannerTex }));
+      banner.position.set(archX, gy + 8.6, archZ + (flip === 0 ? 0.05 : -0.05));
+      banner.rotation.y = flip;
+      this.group.add(banner);
+    }
+    // checkered start line painted on the road
+    const lineTex = posterTexture({ lines: ['▚▚▚▚▚▚▚▚'], style: 'warning', bg: '#f0e8d8', fg: '#181818', accent: '#181818' }, 9);
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(18, 2), new THREE.MeshBasicMaterial({ map: lineTex, transparent: true, opacity: 0.85 }));
+    line.rotation.x = -Math.PI / 2;
+    line.position.set(archX, gy + 0.06, archZ);
+    this.group.add(line);
+
+    // Rita's garage: lean-to + workbench + billboard
+    const gx = d.cx + 10, gz = d.cz + 28;
+    const gyy = terrainHeight(gx, gz);
+    const shack = new THREE.Group();
+    const wallMat = toonMat({ color: 0x8a6a4a, map: corrugatedTexture('#7a5a3e') });
+    const back = new THREE.Mesh(new THREE.BoxGeometry(7, 3.4, 0.3), wallMat);
+    back.position.set(0, 1.7, -2.4);
+    const sideW = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.4, 4.8), wallMat);
+    sideW.position.set(-3.4, 1.7, 0);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(7.6, 0.24, 5.6), toonMat({ color: 0x5a4a42, map: corrugatedTexture('#4e4038') }));
+    roof.position.set(0, 3.5, 0.2);
+    roof.rotation.x = 0.1;
+    const bench = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.0, 0.9), toonMat({ color: 0x4a4a52 }));
+    bench.position.set(-1.8, 0.5, -1.6);
+    shack.add(back, sideW, roof, bench);
+    shack.position.set(gx, gyy, gz);
+    shack.rotation.y = -0.5;
+    shack.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
+    this.group.add(shack);
+    this.staticTargets.push(shack);
+    this.addCollider(gx, gz, 3.6, 2.6);
+
+    // tire stacks + oil drums scattered around pit row
+    const tireMat = toonMat({ color: 0x22221f, map: swatch('#1d1d1a', 40) });
+    for (let i = 0; i < 9; i++) {
+      const a = rng() * Math.PI * 2;
+      const r = 12 + rng() * 22;
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (Math.abs(x - archX) < 10) continue; // keep the whole start straight clear
+      if (roadFactor(x, z) > 0.15) continue;  // never on any racing line
+      const stackH = 1 + Math.floor(rng() * 3);
+      for (let s = 0; s < stackH; s++) {
+        const tire = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.22, 8, 14), tireMat);
+        tire.rotation.x = Math.PI / 2;
+        tire.position.set(x, terrainHeight(x, z) + 0.22 + s * 0.42, z);
+        tire.castShadow = true;
+        this.group.add(tire);
+      }
+      this.addCollider(x, z, 0.75, 0.75);
+    }
+
+    // plank bleachers facing the straight
+    const bleachX = archX + 16, bleachZ = archZ - 8;
+    for (let row = 0; row < 3; row++) {
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.22, 10), toonMat({ color: 0x8a6a4a, map: swatch('#7a5a3e', 60) }));
+      plank.position.set(bleachX + row * 1.1, terrainHeight(bleachX, bleachZ) + 0.5 + row * 0.55, bleachZ);
+      plank.castShadow = true;
+      this.group.add(plank);
+    }
+    this.addCollider(bleachX + 1, bleachZ, 2.2, 5.2);
+
+    // string lights from the arch to the garage
+    for (let i = 0; i < 6; i++) {
+      const t = i / 5;
+      const lx = archX + 11 + (gx - archX - 11) * t, lz = archZ + (gz - archZ) * t;
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), glowMat([0xffd23c, 0xff5a86, 0x54d4ff][i % 3], 0.9));
+      bulb.position.set(lx, terrainHeight(lx, lz) + 4.6 - Math.sin(t * Math.PI) * 0.7, lz);
+      this.group.add(bulb);
+    }
+  }
+
+  /** Wreck fields: hauler spines, plate lean-tos, cargo spill, scrap piles. */
+  private buildShipbreak(d: DistrictDef): void {
+    const rng = mulberry32(d.cx * 31 + d.cz * 7);
+    const hullMat = toonMat({ color: 0x7a5a44, map: corrugatedTexture('#6a4a36') });
+    const ribMat = toonMat({ color: 0x5a4a42, map: swatch('#4e4038', 60) });
+    // one great spine down the middle: rib arcs shrinking along an axis
+    const spineA = rng() * Math.PI * 2;
+    for (let i = 0; i < 6; i++) {
+      const t = i / 5;
+      const x = d.cx + Math.cos(spineA) * (t - 0.5) * d.radius * 1.1;
+      const z = d.cz + Math.sin(spineA) * (t - 0.5) * d.radius * 1.1;
+      const r = 6.5 - t * 3;
+      const rib = new THREE.Mesh(new THREE.TorusGeometry(r, 0.35, 8, 16, Math.PI), ribMat);
+      rib.position.set(x, terrainHeight(x, z) + 0.2, z);
+      rib.rotation.set(0, spineA + Math.PI / 2, 0);
+      rib.castShadow = true;
+      this.group.add(rib);
+      this.staticTargets.push(rib);
+      this.addCollider(x, z, 1.2, 1.2);
+    }
+    // tilted plate walls + cargo crates + scrap piles
+    for (let i = 0; i < 10; i++) {
+      const a = rng() * Math.PI * 2;
+      const r = d.radius * (0.25 + rng() * 0.65);
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      const y = terrainHeight(x, z);
+      const kind = rng();
+      if (kind < 0.4) {
+        const plate = new THREE.Mesh(new THREE.BoxGeometry(4 + rng() * 3, 3 + rng() * 2, 0.4), hullMat);
+        plate.position.set(x, y + 1.2, z);
+        plate.rotation.set((rng() - 0.5) * 0.5, rng() * Math.PI, (rng() - 0.5) * 0.6);
+        plate.castShadow = true;
+        this.group.add(plate);
+        this.staticTargets.push(plate);
+        this.addCollider(x, z, 2.2, 1.4);
+      } else if (kind < 0.7) {
+        const crate = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 1.6), toonMat({ color: 0x8a6a1a, map: swatch('#7a5e18', 60) }));
+        crate.position.set(x, y + 0.8, z);
+        crate.rotation.y = rng() * Math.PI;
+        crate.castShadow = true;
+        this.group.add(crate);
+        this.staticTargets.push(crate);
+        this.addCollider(x, z, 1.0, 1.0);
+      } else {
+        const pile = new THREE.Mesh(new THREE.DodecahedronGeometry(0.9 + rng() * 0.8, 0), ribMat);
+        pile.position.set(x, y + 0.5, z);
+        pile.rotation.set(rng() * 2, rng() * 2, rng());
+        pile.castShadow = true;
+        this.group.add(pile);
+        this.addCollider(x, z, 0.9, 0.9);
+      }
+    }
+    // salvage-company floodlight on a mast
+    const mx = d.cx + 6, mz = d.cz - 4;
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 8, 8), ribMat);
+    mast.position.set(mx, terrainHeight(mx, mz) + 4, mz);
+    const lampHead = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), glowMat(0xffe8b0, 0.9));
+    lampHead.position.set(mx, terrainHeight(mx, mz) + 8.1, mz);
+    this.group.add(mast, lampHead);
+    this.addCollider(mx, mz, 0.4, 0.4);
   }
 
   /** Still water: toon disc + drifting glint texture; ponds get lilies + reeds. */

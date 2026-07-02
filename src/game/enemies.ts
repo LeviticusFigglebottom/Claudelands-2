@@ -547,11 +547,14 @@ export class EnemySpawner {
 
   aliveCount(): number { return this.enemies.filter((e) => e.alive).length; }
 
+  /** Race mode etc.: true pauses district repopulation entirely. */
+  suppressed = false;
+
   update(dt: number): void {
     const playerPos = enemyHooks().playerPos();
 
     // district repopulation — refills fast when empty, trickles when full-ish
-    for (const pop of this.pops) {
+    for (const pop of this.suppressed ? [] : this.pops) {
       pop.respawnT -= dt;
       if (pop.respawnT > 0) continue;
       const alive = this.enemies.filter((e) => e.alive && e.homeDistrict?.id === pop.def.id).length;

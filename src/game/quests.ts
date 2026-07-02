@@ -34,6 +34,8 @@ export interface QuestHooks {
   spawnElites: (enemyId: string, count: number, x: number, z: number, levelOffset: number, tag: string) => void;
   /** Grant a quest-only legendary reward. */
   grantUnique: (legendaryId: string) => void;
+  /** BL2-style remote chatter: the giver calls in over the ECHO. */
+  holocall: (giver: QuestGiver, lines: string[], title?: string | null) => void;
 }
 
 class QuestSystem {
@@ -121,11 +123,12 @@ class QuestSystem {
     return this.acceptQuest(this.available);
   }
 
-  acceptQuest(q: QuestRuntime | null): QuestRuntime | null {
+  acceptQuest(q: QuestRuntime | null, viaHolocall = false): QuestRuntime | null {
     if (!q || q.status !== 'available' || this.active) return null;
     q.status = 'active';
     audio.questAccept();
     this.hooks?.toast(`QUEST ACCEPTED — <b>${q.def.name}</b>`, '#ffd23c');
+    if (!viaHolocall) this.hooks?.holocall(q.def.giver, [q.def.acceptLine]);
     if (q.def.unlocksGate) this.hooks?.openGate(q.def.unlocksGate);
     if (q.def.unlocksStation) this.hooks?.discoverStation(q.def.unlocksStation);
     if (q.def.objective.kind === 'boss' && q.def.objective.bossId) {
@@ -188,6 +191,7 @@ class QuestSystem {
     audio.questComplete();
     this.hooks?.banner('SIDE JOB COMPLETE');
     this.hooks?.toast(`<b>${s.def.name}</b> — ${s.def.completeLine}`, '#c06bff');
+    this.hooks?.holocall(s.def.giver, [s.def.completeLine], `✔ ${s.def.name} — PAID IN FULL`);
     const scale = levelScale(state.level);
     state.money += Math.round(s.def.rewardCash * scale * 0.35 + s.def.rewardCash);
     state.addXp(s.def.rewardXp);
@@ -239,7 +243,7 @@ class QuestSystem {
     q.status = 'complete';
     audio.questComplete();
     this.hooks?.banner('QUEST COMPLETE');
-    this.hooks?.toast(`<b>${q.def.name}</b> — ${q.def.completeLine}`, '#3ddc4e');
+    this.hooks?.toast(`<b>${q.def.name}</b> — rewards paid`, '#3ddc4e'); // the completeLine plays over the holocall
 
     const scale = levelScale(state.level);
     state.money += Math.round(q.def.rewardCash * scale * 0.35 + q.def.rewardCash);
@@ -259,10 +263,21 @@ class QuestSystem {
     const next = idx + 1 < this.quests.length ? this.quests[idx + 1] : null;
     if (next && next.status === 'locked') {
       next.status = 'available';
-      const g = GIVERS[next.def.giver];
-      this.hooks?.toast(`New work waiting: <b>${g.name}</b> (${g.where.replace(/^(in|at) /, '')})`, '#ffd23c');
-    } else if (this.allDone) {
-      this.hooks?.onVictory();
+      if (next.def.giver === q.def.giver) {
+        // same giver: the turn-in AND the next briefing happen over the ECHO —
+        // no walking back across two maps to hear "good job, now go back"
+        this.hooks?.holocall(q.def.giver, [q.def.completeLine], `✔ ${q.def.name} — TURNED IN REMOTELY`);
+        this.acceptQuest(next, true);
+        this.hooks?.holocall(next.def.giver, [...next.def.briefing, next.def.acceptLine], `NEW CONTRACT — ${next.def.name}`);
+      } else {
+        // a new face: the old giver signs off remotely, but you go MEET them
+        const g = GIVERS[next.def.giver];
+        this.hooks?.holocall(q.def.giver, [q.def.completeLine, `Go see ${g.name}, ${g.where}. Tell them I sent you. Tell them I want a finder’s fee.`], `✔ ${q.def.name} — TURNED IN REMOTELY`);
+        this.hooks?.toast(`New work waiting: <b>${g.name}</b> (${g.where.replace(/^(in|at) /, '')})`, '#ffd23c');
+      }
+    } else {
+      this.hooks?.holocall(q.def.giver, [q.def.completeLine], `✔ ${q.def.name}`);
+      if (this.allDone) this.hooks?.onVictory();
     }
   }
 

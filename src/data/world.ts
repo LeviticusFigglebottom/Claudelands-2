@@ -7,7 +7,7 @@
 
 import { clamp01, lerp } from '../util/maff';
 
-export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle';
+export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle' | 'gulchgate' | 'shipbreak';
 
 export interface DistrictDef {
   id: string;
@@ -25,7 +25,7 @@ export interface DistrictDef {
 
 export interface WorldPoi {
   id: string;
-  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'gate' | 'sign' | 'ship';
+  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'gate' | 'sign' | 'ship' | 'wreck' | 'racer' | 'buggy' | 'pit';
   x: number; z: number; rot?: number;
   data?: string;
 }
@@ -59,6 +59,9 @@ export interface WorldDef {
     /** Linear-level support: walkable serpentine corridor; outside it the
      *  terrain rises into impassable ridge walls. */
     corridor?: { pts: { x: number; z: number }[]; width: number; arenas: { x: number; z: number; r: number }[]; wallHeight: number };
+    /** Analytic mounds applied AFTER road flattening: small ones are jump
+     *  ramps on the racing line, tall ones are guide mesas walling a route. */
+    bumps?: { x: number; z: number; r: number; h: number }[];
   };
   districts: DistrictDef[];
   pois: WorldPoi[];
@@ -179,6 +182,7 @@ export const CLAUDELANDS: WorldDef = {
     { x: 0, z: 126, targetMap: 'frosthollow', targetX: 0, targetZ: 96, label: 'THE FROSTHOLLOW' },
     { x: 62, z: -114, targetMap: 'cinderthroat', targetX: 0, targetZ: 124, label: 'THE CINDER THROAT' },
     { x: -122, z: 34, targetMap: 'brasshaven', targetX: 0, targetZ: 54, label: 'BRASSHAVEN' },
+    { x: 122, z: 20, targetMap: 'rustgulch', targetX: -176, targetZ: 0, label: 'THE RUST GULCH' },
   ],
 };
 
@@ -433,6 +437,8 @@ export const BRASSHAVEN: WorldDef = {
     { id: 'npc_mirelle', kind: 'npc', x: 16, z: 10, rot: -1.3, data: 'mirelle' },
     { id: 'npc_okto', kind: 'npc', x: -6, z: 24, rot: 0.4, data: 'okto' },
     { id: 'ship_brass', kind: 'ship', x: -26, z: 40, rot: 0.6 },
+    { id: 'pit_brass', kind: 'pit', x: 30, z: -34, rot: -0.8 },
+    { id: 'sign_pit_b', kind: 'sign', x: 24, z: -26, rot: -0.8, data: 'THE CRUCIBLE ↘ · WINNERS DRINK FREE · LOSERS RECONSTRUCTED' },
   ],
   spawn: { x: 0, z: 62 },
   exits: [
@@ -477,6 +483,7 @@ export const CRUCIBLE: WorldDef = {
     { id: 'vg_pit', kind: 'vendor_gun', x: -8, z: 40, rot: Math.PI },
     { id: 'vm_pit', kind: 'vendor_med', x: 8, z: 40, rot: Math.PI },
     { id: 'sign_pit', kind: 'sign', x: 0, z: 34, rot: 0, data: 'THE CRUCIBLE: NO REFUNDS. NO SURVIVORS. NO PARKING.' },
+    { id: 'pit_exit', kind: 'pit', x: 0, z: 46, rot: Math.PI, data: 'exit' },
   ],
   spawn: { x: 0, z: 30 },
 };
@@ -579,6 +586,121 @@ export const VELDT: WorldDef = {
     { x: 6, z: -114, targetMap: 'veldt_tangle', targetX: 0, targetZ: 116, label: 'THE TANGLE', style: 'thicket' },
     { x: 110, z: 26, targetMap: 'veldt_shallows', targetX: 0, targetZ: 0, label: 'SHIPWRECK SHALLOWS', style: 'beach',
       sealed: 'Sand, surf, and half a hull on the horizon. The tide is wrong for the crossing. (A future update opens the Shallows.)' },
+  ],
+};
+
+// ===========================================================================
+// MAP — THE RUST GULCH (east of the Slagflats: a huge open canyon where the
+// haulers came down. Wreck fields to strip, scavvers to dodge, and REDLINE'S
+// RUN — a full racing circuit with forks and jumps, carved by one very
+// determined retired courier and her dune buggy.)
+export const RUSTGULCH: WorldDef = {
+  id: 'rustgulch',
+  name: 'THE RUST GULCH',
+  tagline: 'wide open. floor it.',
+  size: 400,
+  skyTop: 0x3a6ab8, skyHorizon: 0xe0a060,
+  sun: { color: 0xffe2b0, intensity: 2.5, dirX: -0.5, dirY: 0.78, dirZ: 0.35 },
+  ambient: { sky: 0x9ab0d0, ground: 0x92603c, intensity: 1.1 },
+  fog: { color: 0xd8a070, near: 130, far: 560 },
+  biome: {
+    ground: { base: '#a55a38', light: '#cf8a54', dark: '#6a3822', crack: 'rgba(30,14,8,0.55)' },
+    rock: '#8a5a44',
+    scrub: 0x8a7a3a,
+    ambientParticle: 'dust',
+    trees: 'cactus',
+    aurora: false,
+    weeds: true,
+  },
+  terrain: {
+    duneAmp: 1.5,
+    roughAmp: 0.9,
+    // REDLINE'S RUN: one big counterclockwise circuit with two forked
+    // sections. The road tint doubles as the racing line.
+    roads: [
+      { x0: -150, z0: -30, x1: -150, z1: 40 },     // start/finish straight
+      { x0: -150, z0: 40, x1: -120, z1: 95 },
+      { x0: -120, z0: 95, x1: -40, z1: 145 },
+      { x0: -40, z0: 145, x1: 60, z1: 150 },
+      { x0: 60, z0: 150, x1: 130, z1: 110 },
+      { x0: 130, z0: 110, x1: 165, z1: 30 },       // fork 1 OUTER — sweeping crest
+      { x0: 165, z0: 30, x1: 140, z1: -60 },
+      { x0: 130, z0: 110, x1: 95, z1: 40 },        // fork 1 INNER — big ramp shortcut
+      { x0: 95, z0: 40, x1: 140, z1: -60 },
+      { x0: 140, z0: -60, x1: 60, z1: -140 },
+      { x0: 60, z0: -140, x1: -50, z1: -155 },     // fork 2 OUTER — south rim
+      { x0: -50, z0: -155, x1: -120, z1: -100 },
+      { x0: 60, z0: -140, x1: -10, z1: -108 },     // fork 2 INNER — gap jump
+      { x0: -10, z0: -108, x1: -120, z1: -100 },
+      { x0: -120, z0: -100, x1: -150, z1: -30 },
+      { x0: -176, z0: 0, x1: -150, z1: 4 },        // entrance spur to the gate
+    ],
+    bumps: [
+      // jumps ON the line (post-road, so they keep their launch faces)
+      { x: 165, z: 30, r: 15, h: 4.5 },            // outer crest jump
+      { x: 95, z: 40, r: 13, h: 5.5 },             // shortcut mega-ramp
+      { x: -10, z: -108, r: 12, h: 5 },            // south gap jump
+      // guide mesas — the circuit reads as a canyon, not a parking lot
+      { x: -20, z: 20, r: 48, h: 15 },             // central mesa
+      { x: 30, z: -15, r: 22, h: 12 },
+      { x: -60, z: 80, r: 18, h: 10 },
+      { x: -185, z: 150, r: 30, h: 18 },
+      { x: 185, z: 170, r: 26, h: 16 },
+      { x: 185, z: -140, r: 28, h: 18 },
+      { x: -180, z: -170, r: 30, h: 20 },
+      { x: 0, z: 192, r: 26, h: 14 },
+    ],
+  },
+  districts: [
+    {
+      id: 'gulchgate', name: 'THE GULCH GATE', subtitle: 'Pit Row. Mind the Tires.', dress: 'gulchgate',
+      cx: -150, cz: 0, radius: 40, baseHeight: 0,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 0,
+    },
+    {
+      id: 'shipbreak', name: 'THE SHIPBREAK', subtitle: 'Where Haulers Go to Lie Down', dress: 'shipbreak',
+      cx: 125, cz: 175, radius: 40, baseHeight: 0.8,
+      faction: 'rustborn', levelOffset: 2,
+      spawnTable: [
+        { enemyId: 'rustpunk', weight: 26 }, { enemyId: 'scrapmutt', weight: 20 },
+        { enemyId: 'lobber', weight: 12 }, { enemyId: 'fusebug', weight: 12 },
+        { enemyId: 'boilerbruiser', weight: 7 },
+      ],
+      maxAlive: 7, respawnDelay: 18,
+    },
+    {
+      id: 'sumpyard', name: 'THE SUMP', subtitle: 'Infield Salvage. Racing Adjacent.', dress: 'shipbreak',
+      cx: 55, cz: -60, radius: 32, baseHeight: 0.5,
+      faction: 'rustborn', levelOffset: 1,
+      spawnTable: [
+        { enemyId: 'scrapmutt', weight: 24 }, { enemyId: 'rustpunk', weight: 18 },
+        { enemyId: 'fusebug', weight: 12 },
+      ],
+      maxAlive: 5, respawnDelay: 20,
+    },
+  ],
+  pois: [
+    { id: 'ft_gulch', kind: 'fast_travel', x: -148, z: 6, data: 'Gulch Gate' },
+    { id: 'npc_rita', kind: 'racer', x: -142, z: 26, rot: 2.4, data: 'rita' },
+    { id: 'buggy_pad', kind: 'buggy', x: -134, z: 10, rot: 0.4 },
+    { id: 'sign_g1', kind: 'sign', x: -152, z: 22, rot: 0.2, data: 'REDLINE’S RUN — RACE DAY IS EVERY DAY' },
+    { id: 'sign_g2', kind: 'sign', x: -160, z: -8, rot: -0.3, data: '← CLAUDELANDS · WRECKS → · TRACK EVERYWHERE ELSE' },
+    { id: 'log_g1', kind: 'wirelog', x: -138, z: 20, data: 'log_gulch1' },
+    { id: 'wreck1', kind: 'wreck', x: 110, z: 160, rot: 0.6 },
+    { id: 'wreck2', kind: 'wreck', x: 138, z: 186, rot: -1.2 },
+    { id: 'wreck3', kind: 'wreck', x: 118, z: 196, rot: 2.1 },
+    { id: 'wreck4', kind: 'wreck', x: 146, z: 156, rot: 0.2 },
+    { id: 'wreck5', kind: 'wreck', x: 48, z: -52, rot: 1.4 },
+    { id: 'wreck6', kind: 'wreck', x: 66, z: -70, rot: -0.6 },
+    { id: 'wreck7', kind: 'wreck', x: 40, z: -74, rot: 2.8 },
+    { id: 'chest_r1', kind: 'chest', x: 132, z: 170, rot: 0.8 },
+    { id: 'chest_r2', kind: 'chest', x: 56, z: -64, rot: -1.6 },
+    { id: 'log_g2', kind: 'wirelog', x: 128, z: 182, data: 'log_gulch2' },
+    { id: 'sign_g3', kind: 'sign', x: 112, z: 152, rot: 0.5, data: 'SHIPBREAK SALVAGE CO. — “IF IT FELL, IT’S OURS”' },
+  ],
+  spawn: { x: -166, z: 0 },
+  exits: [
+    { x: -186, z: 0, targetMap: 'claudelands', targetX: 114, targetZ: 20, label: 'THE CLAUDELANDS' },
   ],
 };
 
@@ -688,6 +810,7 @@ export const MAPS: Record<string, WorldDef> = {
   cinderthroat: CINDERTHROAT,
   brasshaven: BRASSHAVEN,
   crucible: CRUCIBLE,
+  rustgulch: RUSTGULCH,
   veldt: VELDT,
   veldt_tangle: VELDT_TANGLE,
 };
@@ -781,6 +904,15 @@ function rawTerrainHeight(x: number, z: number): number {
   const road = roadFactor(x, z);
   if (road > 0) {
     h = lerp(h, Math.min(h, 0.25 + h * 0.35), road);
+  }
+
+  // bumps land after the road flattening so a jump ON the racing line keeps
+  // its full height instead of being ironed into the rut
+  if (T.bumps) {
+    for (const b of T.bumps) {
+      const d = Math.hypot(x - b.x, z - b.z);
+      if (d < b.r) h += b.h * smooth(b.r, b.r * 0.22, d);
+    }
   }
   return h;
 }

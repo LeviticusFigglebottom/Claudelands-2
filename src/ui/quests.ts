@@ -5,6 +5,8 @@ import { questSystem, type QuestRuntime } from '../game/quests';
 import { QUEST_DONE_IDLE, GIVERS } from '../data/quests';
 import type { QuestGiver } from '../data/quests';
 import { audio } from '../audio/synth';
+import { voice, voiceOf } from '../audio/voice';
+import { prefs } from '../game/prefs';
 import { pick } from '../util/rng';
 
 export class QuestTracker {
@@ -135,7 +137,8 @@ export class DialoguePanel {
       </div></div>
       <div class="p-hint">E / ESC to close</div>`;
 
-    // typewriter with radio blips
+    // typewriter — the character voice performs each line as it types
+    // (radio blips remain the fallback when voices are off)
     const box = root.querySelector('#dlg-box') as HTMLElement;
     let lineIdx = 0, charIdx = 0;
     let current: HTMLElement | null = null;
@@ -145,13 +148,21 @@ export class DialoguePanel {
         current = document.createElement('div');
         current.className = 'dlg-line';
         box.appendChild(current);
+        voice.speak(lines[lineIdx], voiceOf(giver));
       }
       const line = lines[lineIdx];
       charIdx += 2;
       current.textContent = line.slice(0, charIdx);
-      if (charIdx % 6 === 0) audio.dialogBlip();
-      if (charIdx >= line.length) { lineIdx++; charIdx = 0; current = null; this.typing = window.setTimeout(tick, 320); }
-      else this.typing = window.setTimeout(tick, 18);
+      if (!prefs().characterVoices && charIdx % 6 === 0) audio.dialogBlip();
+      if (charIdx >= line.length) {
+        lineIdx++; charIdx = 0; current = null;
+        // let the voice finish its line before the next one starts talking over it
+        const wait = () => {
+          if (voice.speaking) this.typing = window.setTimeout(wait, 120);
+          else this.typing = window.setTimeout(tick, 280);
+        };
+        this.typing = window.setTimeout(wait, 120);
+      } else this.typing = window.setTimeout(tick, 18);
     };
     tick();
 
@@ -167,5 +178,6 @@ export class DialoguePanel {
 
   stop(): void {
     if (this.typing !== null) { clearTimeout(this.typing); this.typing = null; }
+    voice.cancel();
   }
 }

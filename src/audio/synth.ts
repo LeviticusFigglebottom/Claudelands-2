@@ -338,6 +338,99 @@ export class AudioSystem {
     this.tone(this.now(), 0.05, 0.08, 'sawtooth', f, f * 1.2);
   }
 
+  // ---------------------------------------------------------------- vehicle
+  // A persistent two-oscillator engine: saw fundamental + square sub, both
+  // tracking RPM, through a lowpass that opens with throttle. Gain sits at
+  // zero until the buggy is boarded, so the nodes can live forever.
+  private engine: { osc: OscillatorNode; sub: OscillatorNode; filter: BiquadFilterNode; gain: GainNode } | null = null;
+
+  engineStart(): void {
+    if (!this.ctx) return;
+    if (!this.engine) {
+      const ctx = this.ctx;
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = 55;
+      const sub = ctx.createOscillator();
+      sub.type = 'square';
+      sub.frequency.value = 27;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 300;
+      filter.Q.value = 1.2;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      const subGain = ctx.createGain();
+      subGain.gain.value = 0.6;
+      osc.connect(filter);
+      sub.connect(subGain); subGain.connect(filter);
+      filter.connect(gain); gain.connect(this.master);
+      osc.start(); sub.start();
+      this.engine = { osc, sub, filter, gain };
+    }
+    this.engine.gain.gain.setTargetAtTime(0.05, this.now(), 0.1);
+  }
+
+  /** rpm/load in 0..1. Call every frame while driving. */
+  engineUpdate(rpm: number, load: number): void {
+    if (!this.ctx || !this.engine) return;
+    const t = this.now();
+    const f = 46 + rpm * 150;
+    this.engine.osc.frequency.setTargetAtTime(f, t, 0.06);
+    this.engine.sub.frequency.setTargetAtTime(f * 0.5, t, 0.06);
+    this.engine.filter.frequency.setTargetAtTime(240 + load * 900 + rpm * 500, t, 0.08);
+    this.engine.gain.gain.setTargetAtTime(0.035 + load * 0.045 + rpm * 0.02, t, 0.1);
+  }
+
+  engineStop(): void {
+    if (!this.ctx || !this.engine) return;
+    this.engine.gain.gain.setTargetAtTime(0, this.now(), 0.15);
+  }
+
+  skid(): void {
+    if (!this.ctx) return;
+    this.noise(this.now(), 0.16, 0.1, 'bandpass', 900 + Math.random() * 300, 2.5);
+  }
+
+  boostIgnite(): void {
+    if (!this.ctx) return;
+    const t = this.now();
+    this.noise(t, 0.5, 0.28, 'lowpass', 1400, 1, 300);
+    this.tone(t, 0.4, 0.16, 'sawtooth', 90, 240, 0.02);
+  }
+
+  vehicleImpact(hard: boolean): void {
+    if (!this.ctx) return;
+    const t = this.now();
+    this.noise(t, hard ? 0.3 : 0.15, hard ? 0.4 : 0.2, 'lowpass', 700, 1, 90);
+    this.tone(t, 0.12, hard ? 0.25 : 0.12, 'square', 140, 60);
+    if (hard) this.tone(t + 0.03, 0.2, 0.1, 'sine', 400, 900); // metal ring
+  }
+
+  checkpoint(): void {
+    if (!this.ctx) return;
+    const t = this.now();
+    this.tone(t, 0.09, 0.2, 'square', 660, 660);
+    this.tone(t + 0.09, 0.14, 0.22, 'square', 990, 990);
+  }
+
+  countdownBeep(go: boolean): void {
+    if (!this.ctx) return;
+    this.tone(this.now(), go ? 0.5 : 0.14, go ? 0.3 : 0.2, 'square', go ? 880 : 440, go ? 880 : 440);
+  }
+
+  // ---------------------------------------------------------------- respawn
+  digistruct(): void {
+    if (!this.ctx) return;
+    const t = this.now();
+    // rising shimmer: three detuned saws sweeping up through a bandpass
+    for (let i = 0; i < 3; i++) {
+      this.tone(t + i * 0.18, 0.8, 0.08, 'sawtooth', 180 * (i + 1), 700 * (i + 1), 0.1);
+    }
+    this.noise(t, 1.6, 0.12, 'bandpass', 800, 3, 2600);
+    this.tone(t + 1.5, 0.35, 0.22, 'sine', 520, 780, 0.02); // assembly "ping"
+  }
+
   setMasterVolume(v: number): void {
     if (this.master) this.master.gain.value = Math.max(0, Math.min(1, v));
   }

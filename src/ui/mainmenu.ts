@@ -196,6 +196,7 @@ export class MainMenu {
         <div class="mm-set-group">FEEL</div>
         ${toggle('screenShake', 'Screen Shake', 'explosions move the camera')}
         ${toggle('damageNumbers', 'Damage Numbers', 'comic-style hit numbers')}
+        ${toggle('characterVoices', 'Character Voices', 'NPCs and the pit announcer perform their lines')}
         ${slider('fov', 'Field of View', 'wider sees more, warps more', 60, 100, 1)}
         <div class="t-buttons" style="margin-top:14px;"><div class="t-start t-secondary" id="mm-reset">RESET TO DEFAULTS</div></div>
       </div>`, 'menu');

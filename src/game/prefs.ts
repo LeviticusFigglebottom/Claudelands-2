@@ -11,6 +11,7 @@ export interface Prefs {
   vignette: boolean;
   screenShake: boolean;
   damageNumbers: boolean;
+  characterVoices: boolean;  // procedural NPC speech + pit announcer
   fov: number;               // 60..100
   saturation: number;        // 0.8..1.5
 }
@@ -24,6 +25,7 @@ export const DEFAULT_PREFS: Prefs = {
   vignette: true,
   screenShake: true,
   damageNumbers: true,
+  characterVoices: true,
   fov: 75,
   saturation: 1.22,
 };

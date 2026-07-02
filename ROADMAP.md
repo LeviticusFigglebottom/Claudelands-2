@@ -1,5 +1,76 @@
 # ROADMAP
 
+## Pass 10 status — wheels, voices, and no more walking back
+
+**THE RUST GULCH** — the fourth Claudelands-edge zone (east, past the
+Slagflats; the last unclaimed map edge): a huge open canyon (size 400,
+biggest map yet) where the old haulers came down. Two wreck fields — THE
+SHIPBREAK on the north-east rim and THE SUMP in the racing infield — carry
+scavvers, chests, and salvageable hull wrecks. **q14 (The Signal) moved
+here**: the Mayor's five scrapship plates are now pried off the wrecks by
+hand instead of farmed from Helix drops.
+
+**A real vehicle engine** (`game/vehicle.ts`): the JUNKSTALLION dune buggy
+— weighted arcade physics with forward/lateral grip separation (steer
+first, so swinging the nose creates true slip that grip then damps),
+speed-scaled steering authority, handbrake drifts that FEED the boost
+meter, boost with flames and FOV pull, ballistic launches off crests
+(terrain `bumps` are analytic jump ramps applied after road flattening),
+AABB collision bounce with clank + trauma, ram damage, suspension/lean
+visuals, a procedural engine loop (saw+sub through a throttle-opened
+lowpass), and a damped chase camera.
+
+**REDLINE'S RUN** — a replayable race side-activity from REDLINE RITA
+(retired courier, one rule: the buggy stays in the gulch). One lap, seven
+gates, two forked sections (safe outer sweeps vs jump-heavy inner cuts),
+rendered as pylon-and-halo gates with sky beams. The rival is a second
+Vehicle on the same physics driven by a waypoint AI with
+difficulty-scaled speed/skill/boost use and gentle rubber-banding. Three
+tiers (ROOKIE RUN / COURIER CLASS / REDLINE) pay cash + XP every run,
+drop epic/legendary gear on first wins, and persist best times. Enemies
+are suppressed for the duration.
+
+**The Crucible moved downtown**: a pit door inside Brasshaven runs the
+full endless-wave arena with your campaign character — same waves,
+purses, shops — and dying spits you back onto the street outside via the
+house Re-Constructor (saves taken inside resume outside). A walk-out door
+works between waves. Menu Endless mode is unchanged.
+
+**BL2-style death**: bleeding out no longer teleports you — the screen
+whites out (“SIGNAL LOST”), the camera holds on the Re-Constructor while
+a digistruct column prints a flickering hologram of you (rising rings,
+scanline flicker, sparks), then swoops into the new you's eyes as control
+returns. Works everywhere, including the pit's death-exit.
+
+## Pass 11 status — everybody talks
+
+**Character voices, zero assets**: `audio/voice.ts` — not TTS (the Web
+Speech API is exactly the robotic monotone nobody wants, and neural TTS
+means megabytes or a cloud bill), but expressive procedural speech in the
+Animal Crossing tradition, tuned for personality: each syllable is an
+oscillator through two vowel-formant filters, and the character comes
+from prosody — statements fall, questions rise, exclamations hit high and
+loud, CAPS words spike, commas breathe, word-initial stress, per-syllable
+jitter, per-character pitch/timbre/rate/vibrato/drawl (Quibb grumbles at
+92 Hz, Juno motor-mouths at 255 Hz, Okto chants on quantized steps).
+Questgivers perform their dialogue-panel lines and holocalls; a settings
+toggle (“Character Voices”) turns it all off.
+
+**BIG NAZDA, the Crucible announcer**: an echo-slathered ring-announcer
+voice with wave-start/clear/boss lines, down/second-wind commentary, and
+kill-streak callouts — live in both the pit and menu Endless. Enemies
+still don't talk; the HOUSE does.
+
+**Holocalls + auto-progressing chains**: quests that complete remotely
+now TURN IN remotely, BL2 style — a flickering hologram bust of the giver
+slides in by the tracker, speaks the completion line in their voice, and
+when the next contract is from the same giver it AUTO-ACCEPTS and briefs
+you over the same call (no more cross-map walk-backs mid-chain). When the
+next giver is a new face, the old giver signs off remotely and the
+tracker points you at the introduction — first-meeting cinematics stay
+intact. The long-orphaned `acceptLine`s finally play, side jobs call in
+their completions, and mid-call map switches just drop the signal.
+
 ## Pass 9 status — THE TANGLE, running water, and three overdue fixes
 
 **THE TANGLE — the first corridor map**: behind the Veldt's thicket (now

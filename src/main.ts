@@ -40,6 +40,13 @@ import { PausePanel } from './ui/pause';
 import { MainMenu, type StartMode } from './ui/mainmenu';
 import { IntroOverlay, INTRO_PATH } from './ui/intro';
 import { endless } from './game/endless';
+import { vehicles } from './game/vehicle';
+import { race, formatRaceTime } from './game/race';
+import { RACE_DIFFICULTIES, RITA_GREETINGS, CHECKPOINTS } from './data/race';
+import { respawnCine } from './ui/respawn';
+import { holocall } from './ui/holocall';
+import { announcer } from './game/announcer';
+import { voice, voiceOf } from './audio/voice';
 import { shipTravel, PLANET_LOOKS } from './ui/shiptravel';
 import { prefs, onPrefsChanged } from './game/prefs';
 import { CinematicSystem, bossCine, biomeCine, charCine, BOSS_EPITHETS, NPC_INTROS, type CineDef } from './ui/cinematics';
@@ -177,12 +184,15 @@ function discoverStation(name: string): void {
 
 function switchMap(mapId: string, toX?: number, toZ?: number): void {
   if (activeMap().id === mapId) return;
+  race.cancel(false);
   world.dispose(scene);
   enemySpawner.reset();
   loot.reset();
   projectiles.reset();
   setActiveMap(mapId);
   world = new World(scene);
+  vehicles.onMapChanged(scene);
+  player.viewmodel.visible = true;
   enemySpawner.refreshDistricts();
   questSystem.onMapChanged();
   player.world.arenaHalf = WORLD.size / 2;
@@ -257,7 +267,7 @@ const questLogPanel = new QuestLogPanel();
 const dialoguePanel = new DialoguePanel();
 const pausePanel = new PausePanel();
 
-type PanelKind = 'none' | 'inventory' | 'skills' | 'vendor_gun' | 'vendor_med' | 'questlog' | 'dialogue' | 'pause' | 'fasttravel' | 'map';
+type PanelKind = 'none' | 'inventory' | 'skills' | 'vendor_gun' | 'vendor_med' | 'questlog' | 'dialogue' | 'pause' | 'fasttravel' | 'map' | 'race';
 let openPanel: PanelKind = 'none';
 let dialogueGiver: QuestGiver = 'quibb';
 
@@ -317,6 +327,7 @@ function setPanel(kind: PanelKind): void {
         () => setPanel('none'));
       break;
     case 'fasttravel': renderFastTravel(panel); break;
+    case 'race': renderRacePanel(panel); break;
     case 'map': fullMapPanel.render(panel, player.position, player.yaw, fullmapExtras()); break;
     default:
       vendorPanel.render(panel, kind, {
@@ -365,6 +376,103 @@ function renderFastTravel(panel: HTMLElement): void {
   });
 }
 
+// ---------------------------------------------------------------- racing
+function renderRacePanel(panel: HTMLElement): void {
+  const store = race.store();
+  const rows = RACE_DIFFICULTIES.map((d) => {
+    const best = store.best[d.id];
+    return `
+      <button class="ft-row" data-diff="${d.id}">
+        <b>${d.name}</b> — $${d.rewardCash} · ${d.rewardXp} XP${d.firstWinItem && !store.wins[d.id] ? ` · first win: <b>${d.firstWinItem.toUpperCase()} GEAR</b>` : ''}
+        <div style="opacity:0.72; font-size:12px; font-weight:400;">${d.blurb}${best ? ` · best: ${formatRaceTime(best)}` : ''}${store.wins[d.id] ? ' · ✔ beaten' : ''}</div>
+      </button>`;
+  }).join('');
+  panel.innerHTML = `
+    <h1>REDLINE RITA</h1>
+    <div class="p-sub">${pick(Math.random as never, RITA_GREETINGS)}</div>
+    <div class="p-body"><div style="flex:1; max-width:560px; display:flex; flex-direction:column; gap:8px;">
+      <div class="dialogue-box">One lap of REDLINE’S RUN. Seven gates, two forked sections — outer line’s safe, inner cut’s got AIR. Beat me to the flag and keep the purse. Rerun it whenever your pride recovers.<br><br><b>W/S</b> throttle · <b>A/D</b> steer · <b>SPACE</b> slide · <b>SHIFT</b> boost (sliding refills it)</div>
+      ${rows}
+    </div></div>
+    <div class="p-hint">E / ESC to close</div>`;
+  panel.querySelectorAll<HTMLButtonElement>('.ft-row').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const d = RACE_DIFFICULTIES.find((x) => x.id === btn.dataset.diff);
+      if (!d) return;
+      audio.uiClick();
+      setPanel('none');
+      race.start(d);
+    });
+  });
+}
+
+// ---------------------------------------------------------------- the pit
+// The Crucible's front door in Brasshaven: campaign character, endless waves,
+// death spits you back onto the street via the house Re-Constructor.
+let pitActive = false;
+let pitReturn = { x: 34, z: -28 };
+
+function enterPit(): void {
+  if (pitActive) return;
+  const door = MAPS.brasshaven.pois.find((p) => p.kind === 'pit');
+  pitReturn = { x: (door?.x ?? 30) + 4, z: (door?.z ?? -34) + 7 };
+  pitActive = true;
+  switchMap('crucible');
+  endless.start({
+    playerPos: () => player.position,
+    groundHeight: (x, z) => world.groundHeight(x, z),
+    banner,
+    toast: feedText,
+    healPlayer: () => { player.heal(player.maxFlesh); player.shield = player.maxShield; },
+  });
+  announcer.enabled = true;
+  announcer.welcome();
+  feedText('House rules: waves pay <b>cash</b>. Dying pays the <b>door</b>. Walk out between waves any time.', '#ff5a86');
+}
+
+function leavePit(): void {
+  if (!pitActive) return;
+  pitActive = false;
+  endless.stop();
+  announcer.enabled = false;
+  enemySpawner.reset();
+  switchMap('brasshaven', pitReturn.x, pitReturn.z);
+}
+
+// ---------------------------------------------------------------- bleed-out
+// BL2-style death: no instant teleport — the screen whites out and the
+// nearest Re-Constructor prints you a new you, on camera.
+function handleBleedOut(): void {
+  player.downed = false;
+  setDownedOverlay(false);
+  state.money = Math.floor(state.money * 0.9);
+  race.cancel();
+  if (vehicles.driving) {
+    const out = vehicles.exit();
+    if (out) player.position.copy(out);
+  }
+  if (pitActive) {
+    leavePit(); // switchMap places the player at the pit door
+  } else {
+    player.position.copy(player.respawnPoint);
+  }
+  player.flesh = player.maxFlesh;
+  player.shield = player.maxShield;
+  player.paused = true;
+  player.viewmodel.visible = false;
+  respawnCine.start({
+    scene,
+    eye: { pos: player.position.clone(), yaw: player.yaw, pitch: player.pitch },
+    onDone: () => {
+      player.paused = openPanel !== 'none';
+      player.viewmodel.visible = true;
+      document.dispatchEvent(new CustomEvent('player-respawned'));
+      if (openPanel === 'none') canvas.requestPointerLock();
+    },
+  });
+}
+player.onBleedOut = handleBleedOut;
+
 // ---------------------------------------------------------------- zone exits
 // BL2-style edge transitions: walk under the arch, get the zone screen,
 // arrive on the neighbouring map. A short cooldown stops instant bounce-back.
@@ -399,6 +507,12 @@ function checkZoneExits(dt: number): void {
   if (zoneScreenActive || cinema.active || shipTravel.active || player.downed) return;
   for (const ex of WORLD.exits ?? []) {
     if (Math.hypot(player.position.x - ex.x, player.position.z - ex.z) < 5.5) {
+      if (vehicles.driving) {
+        // the Junkstallion stays in the gulch — Rita's one rule
+        feedText('The buggy stays in the gulch. Rita’s one rule. Climb out first (E).', '#ff8c5a');
+        zoneCooldown = 6;
+        return;
+      }
       if (ex.sealed) {
         // future map: the doorway is dressed but the way is shut
         feedText(`<b>${ex.label}</b> — ${ex.sealed}`, '#9adc4a');
@@ -489,6 +603,30 @@ questSystem.init({
     feedText(`<b style="color:#ffa21f">UNIQUE REWARD — ${item.name}</b>`, '#ffa21f');
     audio.victory();
   },
+  holocall: (giver, lines, title) => holocall.call(giver, lines, title ?? null),
+});
+
+// ---------------------------------------------------------------- vehicles + racing
+vehicles.bind();
+vehicles.onMapChanged(scene);
+race.init({
+  scene,
+  world: () => ({ resolveCollision: (p, r) => world.resolveCollision(p, r), arenaHalf: WORLD.size / 2 }),
+  playerPos: () => player.position,
+  banner,
+  toast: feedText,
+  grantItem: (rarity) => {
+    const item = generateWeapon({ level: state.level, rarityId: rarity });
+    loot.spawnItem(item, player.position.clone().add(new THREE.Vector3(1.4, 0.8, 1.4)), true);
+    feedText(`<b style="color:#ffa21f">RITA'S TROPHY SHELF — ${item.name}</b> ("I was saving that. Take it.")`, '#ffa21f');
+    audio.victory();
+  },
+  forceDrive: () => {
+    if (!vehicles.driving) {
+      vehicles.enter(camera);
+      player.viewmodel.visible = false;
+    }
+  },
 });
 
 // ---------------------------------------------------------------- events
@@ -502,7 +640,16 @@ bus.on('levelup', ({ level }) => {
 bus.on('gritTick', ({ label }) => {
   if (label) feedText(`◆ GRIT RANK UP — <b>${label}</b>`, '#ffd23c');
 });
-bus.on('downed', () => setDownedOverlay(true, 0));
+bus.on('downed', () => {
+  setDownedOverlay(true, 0);
+  // shot out of the driver's seat: the fight-for-your-life happens on foot
+  if (vehicles.driving) {
+    race.cancel();
+    const out = vehicles.exit();
+    if (out) player.position.copy(out);
+    player.viewmodel.visible = true;
+  }
+});
 bus.on('secondwind', () => {
   setDownedOverlay(false);
   banner(pick(Math.random as never, SECOND_WIND_LINES));
@@ -519,7 +666,8 @@ function autosave(): void {
     quests: questSystem.serialize(),
     sidequests: questSystem.serializeSides(),
     stations: [...discoveredStations],
-    mapId: activeMap().id,
+    // a save taken inside the pit resumes on the street outside it
+    mapId: pitActive ? 'brasshaven' : activeMap().id,
     classId: getPlayerClass().id,
     difficultyId: difficulty().id,
     cines: [...seenCines],
@@ -612,6 +760,7 @@ function endCinematic(): void {
 // ---------------------------------------------------------------- input glue
 document.addEventListener('keydown', (e) => {
   if (!started) return;
+  if (respawnCine.active) return; // death costs a beat — no skipping the printer
   if (shipTravel.active) { shipTravel.skip(); return; } // any key skips the hop
   if (cinema.active) { cinema.skip(); return; } // any key skips a cinematic
   if (cinematicT >= 0) { intro.end(); return; } // any key skips the intro
@@ -633,9 +782,21 @@ document.addEventListener('keydown', (e) => {
 
   if (e.code === 'KeyT') {
     // remote Re-Constructor uplink — anywhere, as long as nothing is shooting at you
-    if (player.downed || gameMode === 'endless') return;
+    if (player.downed || gameMode === 'endless' || pitActive) return;
+    if (vehicles.driving) { feedText('The uplink refuses moving vehicles. Park first.', '#ff5a5a'); audio.dryFire(); return; }
     if (enemySpawner.aggroCount() > 0) { feedText('RE-CONSTRUCTOR UPLINK REFUSED — finish the argument first', '#ff5a5a'); audio.dryFire(); return; }
     setPanel('fasttravel');
+    return;
+  }
+  if (vehicles.driving) {
+    // behind the wheel: E climbs out, everything else is pedals
+    if (e.code === 'KeyE') {
+      if (vehicles.raceLock) { feedText('Mid-race! Finish it or crash with dignity.', '#ff8c5a'); return; }
+      const out = vehicles.exit();
+      if (out) player.position.copy(out);
+      player.viewmodel.visible = true;
+      return;
+    }
     return;
   }
   if (e.code === 'KeyR') player.startReload();
@@ -653,6 +814,12 @@ document.addEventListener('keydown', (e) => {
 });
 
 function interact(): void {
+  if (vehicles.nearBuggy(player.position)) {
+    vehicles.enter(camera);
+    player.viewmodel.visible = false;
+    feedText('<b>THE JUNKSTALLION</b> — W/S drive · A/D steer · SPACE slide · SHIFT boost · E out', '#ffd23c');
+    return;
+  }
   const p = loot.nearestItem(player.position);
   if (p && p.item) {
     loot.take(p);
@@ -668,7 +835,7 @@ function interact(): void {
     return;
   }
   for (const it of world.interactables) {
-    if (it.pos.distanceTo(player.position) > 3.4) continue;
+    if (it.pos.distanceTo(player.position) > (it.range ?? 3.4)) continue;
     switch (it.kind) {
       case 'chest':
         it.chest?.open(state.level, bark);
@@ -698,6 +865,44 @@ function interact(): void {
       case 'wirelog':
         if (playWireLog(it.data ?? '')) world.removeInteractable(it);
         return;
+      case 'wreck': {
+        const q14 = questSystem.quests.find((q) => q.def.id === 'q14_signal');
+        if (q14?.status === 'active' && q14.progress < q14.def.objective.count) {
+          loot.spawnQuestItem(it.pos.clone().add(new THREE.Vector3(0.8, 0.4, 0.8)), 'Scrapship Hull Plate');
+          audio.reloadClack(1);
+          feedText('Hull plate pried loose — grab it.', '#ffd23c');
+          world.removeInteractable(it);
+        } else if (q14?.status === 'complete') {
+          const scrap = 120 + Math.round(Math.random() * 90) + state.level * 6;
+          state.money += scrap;
+          audio.cash();
+          feedText(`Stripped the wreck for scrap — <b>+$${scrap}</b>`, '#d8b028');
+          world.removeInteractable(it);
+        } else {
+          bark('THE WRECK', 'Bolted down tight. The good plates need a salvage writ — the Mayor of Brasshaven issues those, with strings.');
+        }
+        return;
+      }
+      case 'racer': {
+        const info = NPC_INTROS.rita;
+        if (playCine('npc_rita', () => charCine(player.position, it.pos, info.name, info.sub), () => setPanel('race'))) return;
+        setPanel('race');
+        return;
+      }
+      case 'pit': {
+        if (it.data === 'exit') {
+          if (!pitActive) { bark('THE CRUCIBLE', 'You came in through the main menu. That door only opens from Brasshaven.'); return; }
+          if (endless.phase === 'combat' && enemySpawner.aliveCount() > 0) {
+            feedText('The door bars mid-wave. Finish the argument first.', '#ff5a5a');
+            audio.dryFire();
+            return;
+          }
+          leavePit();
+        } else {
+          enterPit();
+        }
+        return;
+      }
     }
   }
 }
@@ -706,6 +911,16 @@ function interact(): void {
 const hoverCard = document.getElementById('item-card-hover')!;
 function updatePrompts(): void {
   if (openPanel !== 'none' || cinematicT >= 0) { hoverCard.innerHTML = ''; showInteract(null); return; }
+  if (vehicles.driving) {
+    hoverCard.innerHTML = '';
+    showInteract(vehicles.raceLock ? null : 'CLIMB OUT');
+    return;
+  }
+  if (vehicles.nearBuggy(player.position)) {
+    hoverCard.innerHTML = '';
+    showInteract('DRIVE THE JUNKSTALLION');
+    return;
+  }
   const p = loot.nearestItem(player.position);
   if (p?.item) {
     hoverCard.innerHTML = itemCardHTML(p.item, compareFor(p.item));
@@ -714,7 +929,7 @@ function updatePrompts(): void {
   }
   hoverCard.innerHTML = '';
   for (const it of world.interactables) {
-    if (it.pos.distanceTo(player.position) < 3.4) {
+    if (it.pos.distanceTo(player.position) < (it.range ?? 3.4)) {
       showInteract(it.label);
       return;
     }
@@ -774,7 +989,15 @@ let started = false;
 function stepSim(dt: number): void {
   tickCombatClock(dt);
   statsys.update(dt);
-  player.update(dt);
+  if (vehicles.driving && vehicles.buggy) {
+    // the buggy IS the player while driving: physics owns position + camera
+    vehicles.update(dt, { resolveCollision: (p, r) => world.resolveCollision(p, r), arenaHalf: WORLD.size / 2 }, race.frozen);
+    player.position.copy(vehicles.buggy.pos);
+    player.position.y += 0.6; // seat height, so enemies aim at the driver
+  } else {
+    player.update(dt);
+  }
+  race.update(dt);
   actionSkill.update(dt);
   enemySpawner.update(dt);
   projectiles.update(dt);
@@ -796,7 +1019,8 @@ function stepSim(dt: number): void {
   world.update(dt, player.position);
   debris.update(dt, player.position);
   fx.update(dt);
-  if (gameMode === 'endless') endless.update(dt);
+  if (gameMode === 'endless' || pitActive) endless.update(dt);
+  announcer.update(dt);
 
   // station discovery + respawn point
   let bestD = Infinity;
@@ -848,6 +1072,15 @@ function frame(): void {
     return;
   }
 
+  if (respawnCine.active) {
+    // death sequence: the Re-Constructor prints you a new you, on camera
+    world.update(dt, player.position);
+    fx.update(dt);
+    respawnCine.update(dt, camera);
+    post.render(dt);
+    return;
+  }
+
   if (openPanel !== 'none') {
     // menus freeze the world completely
     music.update(dt, 0);
@@ -856,15 +1089,16 @@ function frame(): void {
   }
 
   stepSim(dt);
+  if (vehicles.driving) vehicles.updateCamera(camera, dt);
   maybeBossCine();
   checkZoneExits(dt);
   world.followSun(player.position);
 
   const bossActive = enemySpawner.boss?.alive && enemySpawner.boss.position.distanceTo(player.position) < 70;
-  music.update(dt, bossActive ? 2 : enemySpawner.aggroCount() > 0 ? 1 : 0);
+  music.update(dt, bossActive ? 2 : enemySpawner.aggroCount() > 0 || race.active ? 1 : 0);
 
   const d = districtAt(player.position.x, player.position.z);
-  if (gameMode === 'endless') hud.setDistrict('THE CRUCIBLE', endless.hudLine);
+  if (gameMode === 'endless' || pitActive) hud.setDistrict('THE CRUCIBLE', endless.hudLine);
   else hud.setDistrict(d?.name ?? WORLD.name, d?.subtitle ?? 'The open waste.');
 
   if (player.downed) setDownedOverlay(true, player.downedT / player.downedMax);
@@ -987,6 +1221,8 @@ function startRun(mode: StartMode, classId: string, difficultyId: DifficultyId):
   seenCines.add('map_claudelands');
   started = true;
   switchMap('crucible');
+  announcer.enabled = true;
+  announcer.welcome();
   endless.start({
     playerPos: () => player.position,
     groundHeight: (x, z) => world.groundHeight(x, z),
@@ -1041,6 +1277,31 @@ canvas.addEventListener('click', () => {
   setPanelDebug: setPanel,
   openDialogueDebug: (giver: QuestGiver) => { dialogueGiver = giver; setPanel('dialogue'); },
   get mapId() { return activeMap().id; },
+  vehicles, race, respawnCine,
+  get pitActive() { return pitActive; },
+  enterBuggyDebug: () => {
+    if (!vehicles.buggy) return false;
+    player.position.copy(vehicles.buggy.pos);
+    vehicles.enter(camera);
+    player.viewmodel.visible = false;
+    return true;
+  },
+  exitBuggyDebug: () => {
+    const out = vehicles.exit();
+    if (out) player.position.copy(out);
+    player.viewmodel.visible = true;
+  },
+  startRaceDebug: (id: string) => {
+    const d = RACE_DIFFICULTIES.find((x) => x.id === id) ?? RACE_DIFFICULTIES[0];
+    race.start(d);
+  },
+  raceCheckpoints: CHECKPOINTS,
+  killPlayerDebug: () => handleBleedOut(),
+  enterPitDebug: () => enterPit(),
+  leavePitDebug: () => leavePit(),
+  interactDebug: () => interact(),
+  holocall, announcer, voice,
+  speakDebug: (text: string, who: string) => voice.speak(text, voiceOf(who)),
   switchMapDebug: switchMap,
   skipIntro: () => { if (cinematicT >= 0) intro.end(); },
   cinema, seenCines, shipTravel,

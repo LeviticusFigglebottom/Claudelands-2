@@ -96,6 +96,9 @@ export class Player implements Damageable {
   onHurtFrom: ((relAngle: number) => void) | null = null;
   /** Set by main: where to respawn after bleeding out. */
   respawnPoint = new THREE.Vector3(0, 0, 112);
+  /** Set by main: full bleed-out handler (respawn cinematic, pit exits).
+   *  When set, it replaces the default instant respawn entirely. */
+  onBleedOut: (() => void) | null = null;
 
   constructor(camera: THREE.PerspectiveCamera) {
     this.camera = camera;
@@ -435,6 +438,7 @@ export class Player implements Damageable {
   }
 
   private respawnFromDowned(): void {
+    if (this.onBleedOut) { this.onBleedOut(); return; }
     this.respawn();
     document.dispatchEvent(new CustomEvent('player-respawned'));
   }

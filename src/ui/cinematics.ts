@@ -40,6 +40,7 @@ export const NPC_INTROS: Record<string, { name: string; sub: string }> = {
   mirelle: { name: 'MIRELLE TWO-LINES', sub: 'fished the fathom nine winters. it fished back.' },
   okto: { name: 'BROTHER OKTO', sub: 'bone-priest, lapsed. the bones and he are on a break.' },
   juno: { name: 'DR. JUNO CALLA', sub: 'xenobotanist. sole survivor. extremely caffeinated.' },
+  rita: { name: 'REDLINE RITA', sub: 'fastest courier the wastes ever fired. retired. allegedly.' },
 };
 
 /** Slow orbit around a boss, ending face-to-face. */

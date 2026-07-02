@@ -3,17 +3,23 @@
 *A rust-bitten, cel-shaded looter-shooter — now an open wasteland.* You are
 a contractor hired by Foreman Quibb to de-throne Grand Duke Gutterball,
 trash-king of the Claudelands — and to deal with whatever Helix Combine
-buried in the Slagflat crater. TWO PLANETS and six worlds — the sun-blasted
-Claudelands, the frozen Frosthollow, the volcanic Cinder Throat gauntlet,
-BRASSHAVEN the sanctuary city, the lush Mangrove Shelf of VELDT MINOR
-(reached by scrapship, with a planet-aware launch-and-landing cinematic),
-and THE TANGLE, a ridge-walled deep-jungle gauntlet with waterfalls, ponds,
-and a garden god at the end of it — FOUR playable Vault-Rats,
-nineteen main quests plus Brasshaven side jobs with quest-only unique
-legendaries, five bosses, in-game cinematics, BL2-style zone-edge
-transitions, bazillions of guns — plus ENDLESS MODE in the Crucible
-fighting pit, and a cinematic attract-mode main menu with graphics settings
-and a Veteran Start.
+buried in the Slagflat crater. TWO PLANETS and seven worlds — the
+sun-blasted Claudelands, the frozen Frosthollow, the volcanic Cinder Throat
+gauntlet, BRASSHAVEN the sanctuary city, THE RUST GULCH (a huge open canyon
+with wreck fields to strip and a full RACING CIRCUIT — drive the
+JUNKSTALLION dune buggy with drifts, boost, and jumps against an AI rival
+at three difficulties), the lush Mangrove Shelf of VELDT MINOR (reached by
+scrapship, with a planet-aware launch-and-landing cinematic), and THE
+TANGLE, a ridge-walled deep-jungle gauntlet with waterfalls, ponds, and a
+garden god at the end of it — FOUR playable Vault-Rats, nineteen main
+quests (with BL2-style holocall turn-ins and auto-accepted chains) plus
+Brasshaven side jobs with quest-only unique legendaries, five bosses,
+procedural CHARACTER VOICES for every questgiver and a Crucible announcer,
+in-game cinematics, a digistruct death-and-respawn sequence, BL2-style
+zone-edge transitions, bazillions of guns — plus ENDLESS MODE in the
+Crucible fighting pit (also open for business inside Brasshaven), and a
+cinematic attract-mode main menu with graphics settings and a Veteran
+Start.
 
 Everything is procedural — meshes, textures, sound, *music* — and everything
 that is content (guns, parts, manufacturers, elements, skills, enemies,
@@ -28,6 +34,8 @@ districts, quests, jokes) is data. See `DECISIONS.md` for the why and
 | ![Boss: Gutterball](docs/screenshots/boss.png) | ![Quibb dialogue](docs/screenshots/dialogue.png) |
 | ![The Frosthollow](docs/screenshots/frosthollow.png) | ![Pinebreak combat](docs/screenshots/pinebreak.png) |
 | ![Brasshaven](docs/screenshots/brasshaven.png) | ![Boss pre-fight cinematic](docs/screenshots/boss-cine.png) |
+| ![Redline's Run race grid](docs/screenshots/race-grid.png) | ![Driving the Junkstallion](docs/screenshots/buggy.png) |
+| ![Digistruct respawn](docs/screenshots/digistruct.png) | ![ECHO holocall](docs/screenshots/holocall.png) |
 | ![The Tangle](docs/screenshots/tangle.png) | ![Lagoon waterfall](docs/screenshots/waterfall.png) |
 | ![Interplanetary travel](docs/screenshots/ship-space.png) | ![The Bloom Mother](docs/screenshots/bloom-mother.png) |
 | ![ECHO map](docs/screenshots/echo-map.png) | ![ECHO backpack](docs/screenshots/echo-backpack.png) |
@@ -57,7 +65,7 @@ saves live in the player's browser (localStorage).
 
 | Input | Action |
 | --- | --- |
-| WASD / Space / Shift | Move / jump / sprint |
+| WASD / Space / Shift | Move / jump / sprint (driving: throttle+steer / drift / boost) |
 | Mouse / LMB / RMB | Aim / fire / aim-down-sights |
 | R | Reload (each manufacturer reloads in its own style; BRISKCO throws the gun) |
 | F | Action skill — deploy the Sentry Rig |

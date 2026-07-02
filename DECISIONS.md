@@ -49,6 +49,32 @@ from both the path and every arena, so "mostly linear, opens into arenas"
 costs one distance function and zero new collision code. Districts still sit
 on the arenas, so population/quests/dressing all work unchanged.
 
+## Vehicles: grip separation, not spline karts (pass 10)
+
+`game/vehicle.ts` runs one arcade-but-weighted model for every driver,
+player or AI: steer FIRST (rotating the nose out from under the world-space
+velocity is what creates slip), then decompose velocity against the new
+heading, damp the lateral component by a grip constant, recompose. Drifting
+is nothing but a lower grip constant + a steering multiplier — the slide,
+the counter-steer feel, and the boost-meter economy (fed by |lateral|) all
+fall out of one number. Airtime is equally cheap: snap to the analytic
+terrain while `pos.y <= ground`, go ballistic the moment a crest drops the
+ground away. The AI rival is the same class fed steer/throttle by a
+waypoint chaser, so difficulty tuning is data (speed/skill factors), never
+a second physics.
+
+## Character voices: prosody over phonemes (pass 11)
+
+No TTS: Web Speech is the robotic monotone the brief forbids, neural TTS
+breaks the zero-asset rule. Instead each syllable is an oscillator through
+two vowel-formant bandpasses, and ALL the acting lives in prosody rules —
+sentence-mood contours (fall/rise/bang), CAPS emphasis, word stress, comma
+breaths, jitter — plus a per-character profile (pitch/range/rate/waveform/
+formant-shift/breath/vibrato/drawl). Dialogue, holocalls, race barks, and
+the pit announcer (same engine + slap-back delay) share it. Lines stay
+readable text; the voice is a performance layer, so writing more dialogue
+costs nothing.
+
 ## Population, not waves (pass 2)
 
 Districts self-repopulate on a cadence (only when the player is near-ish, never

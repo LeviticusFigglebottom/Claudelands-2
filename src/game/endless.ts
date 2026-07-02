@@ -9,6 +9,7 @@ import { enemySpawner, type Enemy } from './enemies';
 import { spawnBoss, type BossId } from './boss';
 import { state } from './state';
 import { audio } from '../audio/synth';
+import { announcer } from './announcer';
 
 const BOSS_CYCLE: { id: BossId; def: EnemyDef }[] = [
   { id: 'gutterball', def: BOSS_GUTTERBALL },
@@ -102,10 +103,12 @@ class EndlessSystem {
     if (this.isBossWave) {
       const boss = BOSS_CYCLE[(Math.floor(this.wave / 5) - 1) % BOSS_CYCLE.length];
       this.hooks!.banner(`WAVE ${this.wave} — ${boss.def.name.toUpperCase()}`);
+      announcer.waveStart(this.wave, boss.def.name);
       spawnBoss(boss.id, new THREE.Vector3(0, 0, -20), this.waveLevel() + 1);
       this.toSpawn = Math.min(4 + this.wave, 14); // the boss brings friends
     } else {
       this.hooks!.banner(`WAVE ${this.wave}`);
+      announcer.waveStart(this.wave, null);
       this.toSpawn = Math.min(5 + Math.floor(this.wave * 1.6), 26);
     }
     audio.questAccept();
@@ -137,6 +140,7 @@ class EndlessSystem {
     state.money += bonus;
     this.hooks!.healPlayer();
     this.hooks!.banner(`WAVE ${this.wave} CLEAR`);
+    announcer.waveClear(this.wave);
     this.hooks!.toast(`Purse: <b>+$${bonus}</b> · next wave in ${INTERMISSION}s`, '#ffd23c');
     audio.victory();
     try {
