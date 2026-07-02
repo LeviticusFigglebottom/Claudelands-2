@@ -55,7 +55,7 @@ export class ExplosiveBarrel implements Damageable {
     const band = new THREE.Mesh(new THREE.CylinderGeometry(0.43, 0.43, 0.14, 10), toonMat({ color: 0xffd23c }));
     band.position.y = 0.75;
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.4),
-      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['!!'], style: 'warning', bg: '#ffd23c', fg: '#181818', accent: '#181818' }) }));
+      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['!!'], style: 'warning', bg: '#ffd23c', fg: '#181818', accent: '#181818' }, 1) }));
     sign.position.set(0, 0.55, 0.43);
     this.group.add(body, band, sign);
     this.group.position.copy(this.position);
@@ -422,8 +422,7 @@ export class World {
     const postR = postL.clone(); postR.position.x = 7;
     const lintel = new THREE.Mesh(new THREE.BoxGeometry(15.6, 1.4, 1.4), charMat);
     lintel.position.set(0, terrainHeight(0, 118) + 7.6, 118);
-    const skullSign = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 2),
-      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['THE', 'KINDLED', 'WELCOME FUEL'], style: 'warning', bg: '#d8843c', fg: '#1a1210', accent: '#1a1210' }), side: THREE.DoubleSide }));
+    const skullSign = World.textSign(3.2, 2, { lines: ['THE', 'KINDLED', 'WELCOME FUEL'], style: 'warning', bg: '#d8843c', fg: '#1a1210', accent: '#1a1210' }, { twoSided: true });
     skullSign.position.set(0, terrainHeight(0, 118) + 5.4, 118.8);
     this.group.add(postL, postR, lintel, skullSign);
     this.staticTargets.push(postL, postR);
@@ -524,8 +523,7 @@ export class World {
       stack.position.set(-9 + i * 6, 14, 0);
       facade.add(stack);
     }
-    const logo = new THREE.Mesh(new THREE.PlaneGeometry(5, 3),
-      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['HELIX', 'FOUNDRY 9', '(UNDER NEW MGMT)'], style: 'warning', bg: '#4a4442', fg: '#ffd23c', accent: '#2ba8a0' }) }));
+    const logo = World.textSign(5, 3, { lines: ['HELIX', 'FOUNDRY 9', '(UNDER NEW MGMT)'], style: 'warning', bg: '#4a4442', fg: '#ffd23c', accent: '#2ba8a0' });
     logo.position.set(8, 8, 1.6);
     facade.add(wall, maw, stripe, logo);
     facade.position.set(d.cx, terrainHeight(d.cx, d.cz - 14), d.cz - 14);
@@ -577,8 +575,7 @@ export class World {
         { lines: ['NOODLE', 'CHURCH'], bg: '#2a6a5a', fg: '#eafff4' },
       ];
       const ad = ads[Math.floor(rng() * ads.length)];
-      const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 2.2),
-        new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ad.lines, style: 'ad', bg: ad.bg, fg: ad.fg, accent: '#ff5a86' }), side: THREE.DoubleSide }));
+      const sign = World.textSign(3.4, 2.2, { lines: ad.lines, style: 'ad', bg: ad.bg, fg: ad.fg, accent: '#ff5a86' }, { twoSided: true });
       sign.position.set(0, hgt + 1.6, 0);
       sign.rotation.y = rng() * Math.PI;
       b.add(sign);
@@ -607,8 +604,7 @@ export class World {
     const fin = new THREE.Mesh(new THREE.BoxGeometry(10, 16, 1.4), teal);
     fin.position.set(34, 20, 0);
     fin.rotation.z = 0.3;
-    const name = new THREE.Mesh(new THREE.PlaneGeometry(24, 7),
-      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['BRASSHAVEN'], style: 'propaganda', bg: '#4a4442', fg: '#ffd23c', accent: 'rgba(255,220,120,0.2)' }) }));
+    const name = World.textSign(24, 7, { lines: ['BRASSHAVEN'], style: 'propaganda', bg: '#4a4442', fg: '#ffd23c', accent: 'rgba(255,220,120,0.2)' });
     name.position.set(0, 12, 19.2);
     hull.add(body, fin, name);
     hull.position.set(0, terrainHeight(0, -52), -52);
@@ -751,8 +747,7 @@ export class World {
     const orb = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 10), glowMat(0xc06bff, 0.9));
     orb.position.set(1.6, 3.2, 0);
     orb.name = 'blinker';
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.2),
-      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['ZAZA\u2019S', 'WINTER', 'WONDERS'], style: 'ad', bg: '#5a2a6a', fg: '#ffd23c', accent: '#ff5a86' }) }));
+    const sign = World.textSign(2.4, 1.2, { lines: ['ZAZA\u2019S', 'WINTER', 'WONDERS'], style: 'ad', bg: '#5a2a6a', fg: '#ffd23c', accent: '#ff5a86' });
     sign.position.set(0, 2.2, 1.55);
     caravan.add(body, chimney, orb, sign);
     caravan.position.set(7, terrainHeight(7, 66), 66);
@@ -1038,10 +1033,24 @@ export class World {
     this.barrels.push(b);
   }
 
+  /** Aspect-correct text plane; twoSided adds a mirrored-back copy so text never reads reversed. */
+  private static textSign(w: number, h: number, spec: Parameters<typeof posterTexture>[0], opts: { transparent?: boolean; opacity?: number; twoSided?: boolean } = {}): THREE.Object3D {
+    const mat = new THREE.MeshBasicMaterial({ map: posterTexture(spec, w / h), transparent: opts.transparent, opacity: opts.opacity ?? 1 });
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+    if (!opts.twoSided) return front;
+    const g = new THREE.Group();
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+    back.rotation.y = Math.PI;
+    front.position.z = 0.012;
+    back.position.z = -0.012;
+    g.add(front, back);
+    return g;
+  }
+
   private poster(x: number, z: number, ry: number, idx: number, y?: number): void {
     const spec = POSTERS[idx % POSTERS.length];
     const poster = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.9),
-      new THREE.MeshBasicMaterial({ map: posterTexture(spec) }));
+      new THREE.MeshBasicMaterial({ map: posterTexture(spec, 1.5 / 1.9) }));
     poster.position.set(x, (y ?? terrainHeight(x, z) + 1.7), z);
     poster.rotation.y = ry;
     poster.rotation.z = (idx % 2 === 0 ? 1 : -1) * 0.04;
@@ -1050,7 +1059,7 @@ export class World {
 
   private graffiti(x: number, z: number, ry: number, idx: number): void {
     const spec = GRAFFITI[idx % GRAFFITI.length];
-    const tex = posterTexture({ ...spec, bg: '#00000000' });
+    const tex = posterTexture({ ...spec, bg: '#00000000' }, 2.2 / 2.6);
     const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.92 });
     const tag = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.6), mat);
     tag.position.set(x, terrainHeight(x, z) + 1.3, z);
@@ -1094,8 +1103,7 @@ export class World {
     const postL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 5, 0.3), woodMat);
     postL.position.set(-4, terrainHeight(-4, 70) + 2.5, 70);
     const postR = postL.clone(); postR.position.x = 4;
-    const banner = new THREE.Mesh(new THREE.PlaneGeometry(9, 1.6),
-      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['GUTTERLIGHT'], style: 'propaganda', bg: '#3a4a5a', fg: '#f2e4c4' }), side: THREE.DoubleSide }));
+    const banner = World.textSign(9, 1.6, { lines: ['GUTTERLIGHT'], style: 'propaganda', bg: '#3a4a5a', fg: '#f2e4c4' }, { twoSided: true });
     banner.position.set(0, terrainHeight(0, 70) + 4.6, 70);
     this.group.add(postL, postR, banner);
     this.staticTargets.push(postL, postR);
@@ -1156,8 +1164,7 @@ export class World {
     skull.position.set(0, 0.16, 0);
     const ribs = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 0.7), boneMat);
     ribs.position.set(0.1, 0.1, 0.6);
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.5),
-      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['TAXED'], style: 'graffiti', bg: '#00000000', fg: '#f2e4c4', accent: '#241a10' }), transparent: true }));
+    const sign = World.textSign(0.9, 0.5, { lines: ['TAXED'], style: 'graffiti', bg: '#00000000', fg: '#f2e4c4', accent: '#241a10' }, { transparent: true });
     sign.position.set(0, 0.7, -0.3);
     sign.rotation.x = -0.4;
     bones.add(skull, ribs, sign);
@@ -1265,8 +1272,7 @@ export class World {
     const stripe = new THREE.Mesh(new THREE.BoxGeometry(20.2, 1, 9.2), teal);
     stripe.rotation.z = 0.22;
     stripe.position.y = 3.4;
-    const logo = new THREE.Mesh(new THREE.PlaneGeometry(4, 4),
-      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['HELIX', 'HX-77'], style: 'warning', bg: '#e8e4da', fg: '#1a1a1a', accent: '#2ba8a0' }) }));
+    const logo = World.textSign(4, 4, { lines: ['HELIX', 'HX-77'], style: 'warning', bg: '#e8e4da', fg: '#1a1a1a', accent: '#2ba8a0' });
     logo.position.set(2, 3.2, 4.72);
     logo.rotation.z = -0.22;
     hauler.add(hull, nose, fin, stripe, logo);
@@ -1383,8 +1389,7 @@ export class World {
       const y = terrainHeight(x, z);
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 6, 6), darkMat);
       pole.position.set(x, y + 3, z);
-      const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.2),
-        new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['OBEY', 'THE DUKE'], style: 'propaganda', bg: '#8a2f24', fg: '#f2e4c4' }), side: THREE.DoubleSide }));
+      const flag = World.textSign(1.6, 2.2, { lines: ['OBEY', 'THE DUKE'], style: 'propaganda', bg: '#8a2f24', fg: '#f2e4c4' }, { twoSided: true });
       flag.position.set(x + 0.85, y + 4.8, z);
       this.group.add(pole, flag);
       this.staticTargets.push(pole);
@@ -1431,7 +1436,7 @@ export class World {
       new THREE.PlaneGeometry(1.3, 1.5),
       new THREE.MeshBasicMaterial({ map: posterTexture(guns
         ? { lines: ['ZAZA’S', 'BANG', 'BANG'], style: 'ad', bg: '#5a2a6a', fg: '#ffd23c', accent: '#ff5a86' }
-        : { lines: ['DOC', 'FIZZY', 'JUICE'], style: 'ad', bg: '#2a6a5a', fg: '#eafff4', accent: '#7dff2a' }) }),
+        : { lines: ['DOC', 'FIZZY', 'JUICE'], style: 'ad', bg: '#2a6a5a', fg: '#eafff4', accent: '#7dff2a' }, 1.3 / 1.5) }),
     );
     face.position.set(0, 1.45, 0.51);
     const marquee = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.3, 1.1), toonMat({ color: guns ? 0xffd23c : 0x7dff2a }));
@@ -1551,8 +1556,7 @@ export class World {
     const door = new THREE.Mesh(new THREE.BoxGeometry(11, 6, 0.6), teal);
     door.position.y = 3;
     door.name = 'gate_door';
-    const warning = new THREE.Mesh(new THREE.PlaneGeometry(3, 2),
-      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['SEALED BY', 'HELIX', 'ORDER 88-C'], style: 'warning', bg: '#d8a828', fg: '#1a1a1a', accent: '#1a1a1a' }) }));
+    const warning = World.textSign(3, 2, { lines: ['SEALED BY', 'HELIX', 'ORDER 88-C'], style: 'warning', bg: '#d8a828', fg: '#1a1a1a', accent: '#1a1a1a' });
     warning.position.set(0, 3.4, 0.35);
     door.add(warning);
     g.add(postL, postR, lintel, door);
@@ -1571,8 +1575,7 @@ export class World {
     const woodMat = toonMat({ color: 0x8a6a42, map: swatch('#7a5a36', 80) });
     const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.4, 0.16), woodMat);
     post.position.set(poi.x, y + 1.2, poi.z);
-    const board = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.8),
-      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: [poi.data ?? '???'], style: 'graffiti', bg: '#4a3a26', fg: '#f2e4c4', accent: '#241a10' }), side: THREE.DoubleSide }));
+    const board = World.textSign(3.4, 0.8, { lines: [poi.data ?? '???'], style: 'graffiti', bg: '#4a3a26', fg: '#f2e4c4', accent: '#241a10' }, { twoSided: true });
     board.position.set(poi.x, y + 2.1, poi.z);
     board.rotation.y = poi.rot ?? 0;
     board.rotation.z = 0.03;

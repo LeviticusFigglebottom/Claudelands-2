@@ -41,7 +41,8 @@ export class Compass {
     const facing = yaw + Math.PI; // bearing the camera looks toward (atan2(x,z) convention)
 
     for (const t of this.tickEls) {
-      const rel = this.wrap(t.bearing - facing);
+      // screen-relative angle: positive = right of view (camera right = (cos yaw, -sin yaw))
+      const rel = this.wrap(facing - t.bearing);
       if (Math.abs(rel) > HALF_FOV) { t.el.style.display = 'none'; continue; }
       t.el.style.display = 'block';
       t.el.style.left = `${(0.5 + rel / (HALF_FOV * 2)) * width}px`;
@@ -62,7 +63,7 @@ export class Compass {
       el.textContent = m.icon;
       el.style.color = m.color;
       const bearing = Math.atan2(m.x - playerPos.x, m.z - playerPos.z);
-      const rel = this.wrap(bearing - facing);
+      const rel = this.wrap(facing - bearing);
       // smooth clamp: markers slide continuously to the bar's edge, and get
       // a direction chevron when the target is outside the view cone
       const clamped = Math.max(-HALF_FOV, Math.min(HALF_FOV, rel));

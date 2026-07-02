@@ -1,5 +1,37 @@
 # ROADMAP
 
+## Pass 5.1 status — instruments that tell the truth, maps that look like maps
+
+**Compass & minimap chirality fixed**: both instruments used a mirrored
+screen-relative angle, so a target on your right showed on the left and the
+radar rotated *with* your turn instead of against it. The screen-relative
+angle is now `facing − bearing` everywhere: compass markers slide to the
+correct edge (with a chevron) when off-view and center exactly when you face
+them; the minimap rotates like a real radar and its N tick matches.
+
+**Full map is a real chart**: shared painted-terrain module (contour lines
+every 2.5m, hillshade, shorelined water, readable dirt-track roads) under
+structure line-art stamped from the world's actual collision footprints —
+buildings, forts, wrecks, kilns, the Brasshaven hull, tree scatter as dots —
+plus labeled discovered stations, POI icons, faction district rings, and a
+correctly rotating player arrow. Map orientation now matches the first-person
+camera (N up, same chirality as the minimap), and the minimap draws the same
+painted terrain rotated to view. One quest line whose "north" contradicted the
+compass was corrected.
+
+**Signs actually read**: `posterTexture` now takes the target plane's aspect
+ratio (canvas sized to match — no more squashed 5.6:1 banners drawn on a
+0.8:1 texture), measures each line and fits it to the sign's text area, and
+centers the block with proper baselines per style. Every two-`side`d text
+plane (town banner, station boards, Duke flags, city ads, gate sign) is now a
+front+back pair so text never renders mirrored.
+
+**Menus behave like an ECHO device**: BACKPACK / SKILLS / MAP / LOG tab strip
+on every device panel — click a tab or flip with Q/E; the world FREEZES
+completely while any menu is open (enemies, projectiles, damage all hold);
+and the HUD now fades out for the intro cutscene exactly like in-game
+cinematics.
+
 ## Pass 5 status — cinematics, ECHO UI, painted maps, crits, Brasshaven
 
 **In-game cinematic system** (`ui/cinematics.ts`): triggered, gameplay-pausing,

@@ -146,65 +146,101 @@ export interface PosterSpec {
   style: 'propaganda' | 'graffiti' | 'warning' | 'ad';
 }
 
-export function posterTexture(spec: PosterSpec): THREE.CanvasTexture {
-  const [c, ctx] = canvas(256, 320);
+/**
+ * `aspect` is the width/height of the plane this texture will cover — the
+ * canvas matches it so text is never squashed or stretched. Text is measured
+ * and fitted per line, then the block is centered in the sign's text area.
+ */
+export function posterTexture(spec: PosterSpec, aspect = 0.8): THREE.CanvasTexture {
+  const W = Math.max(96, Math.min(1024, Math.round(288 * Math.sqrt(aspect))));
+  const H = Math.max(96, Math.min(1024, Math.round(288 / Math.sqrt(aspect))));
+  const [c, ctx] = canvas(W, H);
   ctx.fillStyle = spec.bg;
-  ctx.fillRect(0, 0, 256, 320);
+  ctx.fillRect(0, 0, W, H);
+
+  // text area (centered block); the warning style shrinks it to its inner box
+  let padX = W * 0.08;
+  let cy = H * 0.5;
+  let blockH = H * 0.74;
 
   if (spec.style === 'propaganda') {
     // sunburst
     ctx.fillStyle = spec.accent ?? 'rgba(255,255,255,0.15)';
+    const r = Math.max(W, H) * 1.3;
     for (let i = 0; i < 12; i++) {
       ctx.beginPath();
-      ctx.moveTo(128, 130);
+      ctx.moveTo(W / 2, H * 0.42);
       const a0 = (i / 12) * Math.PI * 2, a1 = a0 + 0.14;
-      ctx.lineTo(128 + Math.cos(a0) * 300, 130 + Math.sin(a0) * 300);
-      ctx.lineTo(128 + Math.cos(a1) * 300, 130 + Math.sin(a1) * 300);
+      ctx.lineTo(W / 2 + Math.cos(a0) * r, H * 0.42 + Math.sin(a0) * r);
+      ctx.lineTo(W / 2 + Math.cos(a1) * r, H * 0.42 + Math.sin(a1) * r);
       ctx.fill();
     }
-    ctx.strokeStyle = spec.fg; ctx.lineWidth = 8;
-    ctx.strokeRect(8, 8, 240, 304);
+    ctx.strokeStyle = spec.fg; ctx.lineWidth = Math.max(4, H * 0.025);
+    ctx.strokeRect(H * 0.025, H * 0.025, W - H * 0.05, H - H * 0.05);
+    padX = W * 0.09;
   } else if (spec.style === 'warning') {
     ctx.fillStyle = spec.accent ?? '#111';
-    for (let i = -4; i < 10; i++) {
-      ctx.save(); ctx.translate(i * 42, 0); ctx.rotate(Math.PI / 4);
-      ctx.fillRect(0, -160, 18, 640);
+    const stripe = Math.max(14, H * 0.06);
+    for (let x = -H; x < W + H; x += stripe * 2.4) {
+      ctx.save(); ctx.translate(x, 0); ctx.rotate(Math.PI / 4);
+      ctx.fillRect(0, -H, stripe, (W + H) * 2);
       ctx.restore();
     }
+    const bx = W * 0.08, by = H * 0.19, bw = W * 0.84, bh = H * 0.62;
     ctx.fillStyle = spec.bg;
-    ctx.fillRect(20, 60, 216, 200);
-    ctx.strokeStyle = spec.fg; ctx.lineWidth = 6; ctx.strokeRect(20, 60, 216, 200);
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = spec.fg; ctx.lineWidth = Math.max(3, H * 0.02);
+    ctx.strokeRect(bx, by, bw, bh);
+    padX = W * 0.13;
+    cy = by + bh / 2;
+    blockH = bh * 0.86;
   } else if (spec.style === 'ad') {
     ctx.fillStyle = spec.accent ?? '#ffd23c';
-    ctx.beginPath(); ctx.arc(128, 110, 80, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = spec.fg; ctx.lineWidth = 5; ctx.strokeRect(6, 6, 244, 308);
+    ctx.beginPath(); ctx.arc(W / 2, H * 0.36, Math.min(W, H) * 0.31, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = spec.fg; ctx.lineWidth = Math.max(3, H * 0.018);
+    ctx.strokeRect(H * 0.02, H * 0.02, W - H * 0.04, H - H * 0.04);
+    cy = H * 0.54;
   }
 
-  // Text
+  // Text — measured per line, fitted to the area, centered as a block
   ctx.textAlign = 'center';
-  ctx.fillStyle = spec.fg;
-  const n = spec.lines.length;
-  spec.lines.forEach((line, i) => {
-    const size = Math.min(44, 300 / Math.max(3, line.length * 0.62));
-    ctx.font = `900 ${size}px Impact, 'Arial Black', sans-serif`;
-    const y = 160 + (i - (n - 1) / 2) * (size + 14);
+  ctx.textBaseline = 'middle';
+  const lines = spec.lines;
+  const n = lines.length;
+  const maxW = W - padX * 2;
+  const gap = Math.max(4, blockH * 0.04);
+  const sizes = lines.map((line) => {
+    let s = Math.min((blockH - gap * (n - 1)) / n, H * 0.32);
+    ctx.font = `900 ${s}px Impact, 'Arial Black', sans-serif`;
+    const w = ctx.measureText(line).width;
+    if (w > maxW) s = Math.max(9, s * (maxW / w));
+    return s;
+  });
+  const total = sizes.reduce((a, b) => a + b, 0) + gap * (n - 1);
+  let yCursor = cy - total / 2;
+  lines.forEach((line, i) => {
+    const s = sizes[i];
+    ctx.font = `900 ${s}px Impact, 'Arial Black', sans-serif`;
+    const ly = yCursor + s / 2;
+    ctx.fillStyle = spec.fg;
     if (spec.style === 'graffiti') {
       ctx.save();
-      ctx.translate(128, y);
-      ctx.rotate((Math.random() - 0.5) * 0.16);
+      ctx.translate(W / 2, ly);
+      ctx.rotate((Math.random() - 0.5) * 0.12);
       ctx.strokeStyle = spec.accent ?? '#000';
-      ctx.lineWidth = 6;
+      ctx.lineWidth = Math.max(3, s * 0.14);
       ctx.strokeText(line, 0, 0);
       ctx.fillText(line, 0, 0);
       ctx.restore();
     } else {
-      ctx.fillText(line, 128, y);
+      ctx.fillText(line, W / 2, ly);
     }
+    yCursor += s + gap;
   });
 
   // wear & tear
-  grunge(ctx, 256, 320, 'rgba(40,25,12,1)', 30, 4, 26, 0.16);
-  inkSpeckle(ctx, 256, 320, 90, 0.4);
+  grunge(ctx, W, H, 'rgba(40,25,12,1)', 30, 4, 26, 0.14);
+  inkSpeckle(ctx, W, H, 90, 0.35);
   const t = tex(c);
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
   return t;

@@ -79,11 +79,11 @@ export const QUESTS: QuestDef[] = [
     giver: 'quibb',
     name: 'Regicide, Please',
     briefing: [
-      'Gate’s open. Trash Mountain is that ugly lump up north — the Duke holds court at the summit.',
+      'Gate’s open. Trash Mountain is that ugly lump down south — the Duke holds court at the summit.',
       'He’s big, he’s mean, and his crown is load-bearing. That last part is a TIP, contractor.',
       'De-throne him. Permanently. I’ll draft the invoice.',
     ],
-    acceptLine: 'North! The mountain! Aim for the crown!',
+    acceptLine: 'South! The mountain! Aim for the crown!',
     objective: { kind: 'boss', label: 'Grand Duke Gutterball de-throned', count: 1, bossId: 'gutterball', markerX: 0, markerZ: -98 },
     rewardCash: 500, rewardXp: 600, rewardItem: 'epic',
     completeLine: 'The Duke is dead. The gully is quieter. The seagulls are not.',

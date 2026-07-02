@@ -1,73 +1,22 @@
-// Full map panel (M): stylized top-down chart of the active world — district
-// circles, roads/corridor, stations, gate, NPCs, quest marker, boss, and the
-// player arrow. Drawn from map data, parchment-styled.
+// Full map panel (M): a real top-down chart of the active world — painted
+// terrain (contours, roads, water), structure line-art stamped from the
+// world's actual colliders (buildings, walls, wrecks, trees), labeled
+// districts and stations, POIs, quest marker, boss, and the player arrow.
+// Orientation matches the in-world camera: north (+z) up, +x to the LEFT
+// (same chirality as the minimap, so both instruments always agree).
 
 import * as THREE from 'three';
-import { WORLD, activeMap, meshHeight, roadFactor } from '../data/world';
+import { WORLD } from '../data/world';
 import { enemySpawner } from '../game/enemies';
+import { paintedTerrain, mapHalf } from './terrainpaint';
 
-// ---------------------------------------------------------------------------
-// Painted terrain backdrop — a real top-down colored render of the height-
-// field with hillshading, biome palette, roads, lakes, and ridge walls.
-// Cached per map (one ~90k-sample paint on first open).
-const terrainCache = new Map<string, HTMLCanvasElement>();
-
-function hexToRgb(hex: string): [number, number, number] {
-  const h = hex.replace('#', '');
-  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
-}
-
-function paintTerrain(): HTMLCanvasElement {
-  const cached = terrainCache.get(WORLD.id);
-  if (cached) return cached;
-  const RES = 320;
-  const c = document.createElement('canvas');
-  c.width = c.height = RES;
-  const ctx = c.getContext('2d')!;
-  const img = ctx.createImageData(RES, RES);
-  const half = WORLD.size / 2 + 24;
-  const g = WORLD.biome.ground;
-  const dark = hexToRgb(g.dark), base = hexToRgb(g.base), light = hexToRgb(g.light);
-  const rock = hexToRgb(WORLD.biome.rock);
-  const lake = WORLD.terrain.lake;
-  const mix = (a: [number, number, number], b: [number, number, number], t: number): [number, number, number] =>
-    [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
-
-  for (let py = 0; py < RES; py++) {
-    const wz = (py / RES) * half * 2 - half;
-    for (let px = 0; px < RES; px++) {
-      const wx = (px / RES) * half * 2 - half;
-      const h = meshHeight(wx, wz);
-      let col: [number, number, number];
-      if (h > 11) {
-        // ridge walls / high ground read as rock
-        col = mix(rock, [rock[0] * 0.5, rock[1] * 0.5, rock[2] * 0.5], Math.min(1, (h - 11) / 10));
-      } else {
-        const t = Math.max(0, Math.min(1, h / 6));
-        col = t < 0.5 ? mix(dark, base, t * 2) : mix(base, light, (t - 0.5) * 2);
-      }
-      if (lake && Math.hypot(wx - lake.x, wz - lake.z) < lake.r) {
-        col = mix([207, 228, 240], col, 0.15);
-      }
-      const road = roadFactor(wx, wz);
-      if (road > 0.12) col = mix(col, [col[0] * 0.55, col[1] * 0.5, col[2] * 0.45], road);
-      // hillshade from west-east slope
-      const shade = Math.max(0.55, Math.min(1.25, 1 + (meshHeight(wx - 1.2, wz) - meshHeight(wx + 1.2, wz)) * 0.22));
-      const i = (py * RES + px) * 4;
-      img.data[i] = Math.min(255, col[0] * shade);
-      img.data[i + 1] = Math.min(255, col[1] * shade);
-      img.data[i + 2] = Math.min(255, col[2] * shade);
-      img.data[i + 3] = 255;
-    }
-  }
-  ctx.putImageData(img, 0, 0);
-  terrainCache.set(WORLD.id, c);
-  return c;
-}
+export interface MapStructure { minX: number; maxX: number; minZ: number; maxZ: number }
 
 export interface FullmapExtras {
   quest: { x: number; z: number } | null;
   discovered: Set<string>;
+  /** The active world's collision footprints — drawn as structure line-art. */
+  structures: MapStructure[];
 }
 
 export class FullMapPanel {
@@ -78,24 +27,42 @@ export class FullMapPanel {
       <div class="p-body" style="align-items:center; justify-content:center;">
         <canvas id="fullmap-canvas" width="1200" height="1200" style="width:min(62vh,90%); height:auto; border:2px solid rgba(216,176,40,0.5);"></canvas>
       </div>
-      <div class="p-hint">M / ESC to close · ◆ objective · ⬡ Re-Constructor · ☠ boss · ▲ you</div>`;
+      <div class="p-hint">M / ESC to close · Q ◂ ▸ E switch tabs · ◆ objective · ⬡ Re-Constructor · ☠ boss · ▲ you</div>`;
 
     const canvas = root.querySelector('#fullmap-canvas') as HTMLCanvasElement;
     const ctx = canvas.getContext('2d')!;
     const S = 1200;
-    const half = WORLD.size / 2 + 24;
+    const half = mapHalf();
     const toMap = (wx: number, wz: number): [number, number] => [
-      (wx + half) / (half * 2) * S,
-      (wz + half) / (half * 2) * S,
+      (half - wx) / (half * 2) * S,
+      (half - wz) / (half * 2) * S,
     ];
 
-    // painted terrain backdrop
+    // painted terrain backdrop (shared with the minimap)
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(paintTerrain(), 0, 0, S, S);
+    ctx.drawImage(paintedTerrain(), 0, 0, S, S);
+
+    // structure line-art from the world's real collision footprints
+    ctx.fillStyle = 'rgba(240, 230, 202, 0.5)';
+    ctx.strokeStyle = 'rgba(24, 18, 10, 0.85)';
+    ctx.lineWidth = 2;
+    for (const st of extras.structures) {
+      const [x1, y1] = toMap(st.maxX, st.maxZ);
+      const [x2, y2] = toMap(st.minX, st.minZ);
+      const w = x2 - x1, h = y2 - y1;
+      if (w < 4 && h < 4) {
+        // scatter footprint (tree, post, crate) → single map dot
+        ctx.fillRect(x1 + w / 2 - 1.5, y1 + h / 2 - 1.5, 3, 3);
+      } else {
+        ctx.fillRect(x1, y1, w, h);
+        ctx.strokeRect(x1, y1, w, h);
+      }
+    }
+
     // soft vignette so the chart reads as a device screen
-    const vg = ctx.createRadialGradient(S / 2, S / 2, S * 0.35, S / 2, S / 2, S * 0.72);
+    const vg = ctx.createRadialGradient(S / 2, S / 2, S * 0.38, S / 2, S / 2, S * 0.74);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(0,10,14,0.55)');
+    vg.addColorStop(1, 'rgba(0,10,14,0.5)');
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, S, S);
 
@@ -118,17 +85,19 @@ export class FullMapPanel {
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
+      // keep labels on the canvas even for edge districts
+      const ly = Math.max(44, Math.min(S - 30, y - r - 10));
       ctx.font = '900 30px Impact, sans-serif';
       ctx.lineWidth = 6;
       ctx.strokeStyle = 'rgba(0,0,0,0.75)';
-      ctx.strokeText(d.name, x, y - r - 10);
+      ctx.strokeText(d.name, x, ly);
       ctx.fillStyle = '#ffe8b0';
-      ctx.fillText(d.name, x, y - r - 10);
+      ctx.fillText(d.name, x, ly);
       ctx.font = '400 19px Arial, sans-serif';
       ctx.lineWidth = 4;
-      ctx.strokeText(d.subtitle, x, y - r + 16);
+      ctx.strokeText(d.subtitle, x, ly + 26);
       ctx.fillStyle = 'rgba(232,216,176,0.85)';
-      ctx.fillText(d.subtitle, x, y - r + 16);
+      ctx.fillText(d.subtitle, x, ly + 26);
     }
 
     // POIs
@@ -139,6 +108,14 @@ export class FullMapPanel {
         ctx.fillStyle = known ? '#54d4ff' : 'rgba(84,212,255,0.3)';
         ctx.font = '900 34px Impact, sans-serif';
         ctx.fillText('⬡', x, y + 12);
+        if (known) {
+          ctx.font = '700 17px Arial, sans-serif';
+          ctx.lineWidth = 4;
+          ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+          ctx.strokeText(poi.data ?? '', x, y + 34);
+          ctx.fillStyle = '#bfeaff';
+          ctx.fillText(poi.data ?? '', x, y + 34);
+        }
       } else if (poi.kind === 'vendor_gun' || poi.kind === 'vendor_med') {
         ctx.fillStyle = poi.kind === 'vendor_gun' ? '#ff5a86' : '#7dff2a';
         ctx.font = '900 26px Impact, sans-serif';
@@ -178,13 +155,13 @@ export class FullMapPanel {
       ctx.stroke();
     }
 
-    // player arrow
+    // player arrow — forward is (-sin yaw, -cos yaw) in world (x,z); on this
+    // map (+x left, +z up) that becomes a clockwise-from-up rotation of
+    // atan2(sin yaw, -cos yaw)
     const [px, py] = toMap(playerPos.x, playerPos.z);
-    const facing = yaw + Math.PI;
     ctx.save();
     ctx.translate(px, py);
-    // arrow drawn pointing up; bearing b (world +z = down-map) → rotate π - b
-    ctx.rotate(Math.PI - facing);
+    ctx.rotate(Math.atan2(Math.sin(yaw), -Math.cos(yaw)));
     ctx.fillStyle = '#ffffff';
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 3;
@@ -198,14 +175,17 @@ export class FullMapPanel {
     ctx.stroke();
     ctx.restore();
 
-    // map name & compass rose
-    ctx.fillStyle = 'rgba(216,176,40,0.7)';
+    // compass rose (N = +z = map-up)
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(216,176,40,0.85)';
     ctx.font = '900 34px Impact, sans-serif';
     ctx.fillText('N', S - 60, 60);
     ctx.beginPath();
     ctx.moveTo(S - 60, 74); ctx.lineTo(S - 60, 110);
-    ctx.strokeStyle = 'rgba(216,176,40,0.7)';
+    ctx.moveTo(S - 60, 74); ctx.lineTo(S - 68, 88);
+    ctx.moveTo(S - 60, 74); ctx.lineTo(S - 52, 88);
+    ctx.strokeStyle = 'rgba(216,176,40,0.85)';
+    ctx.lineWidth = 3;
     ctx.stroke();
-    void activeMap;
   }
 }

@@ -233,6 +233,35 @@ type PanelKind = 'none' | 'inventory' | 'skills' | 'vendor_gun' | 'vendor_med' |
 let openPanel: PanelKind = 'none';
 let dialogueGiver: QuestGiver = 'quibb';
 
+/** The ECHO device's main tabs — click or Q/E to flip between them. */
+const PANEL_TABS: { kind: PanelKind; label: string; key: string }[] = [
+  { kind: 'inventory', label: 'BACKPACK', key: 'TAB' },
+  { kind: 'skills', label: 'SKILLS', key: 'K' },
+  { kind: 'map', label: 'MAP', key: 'M' },
+  { kind: 'questlog', label: 'LOG', key: 'J' },
+];
+
+function attachPanelTabs(panel: HTMLElement, kind: PanelKind): void {
+  if (!PANEL_TABS.some((t) => t.kind === kind)) return;
+  const strip = document.createElement('div');
+  strip.className = 'panel-tabs';
+  strip.innerHTML =
+    '<span class="ptab-cycle">Q ◂</span>' +
+    PANEL_TABS.map((t) => `<button class="ptab${t.kind === kind ? ' ptab-on' : ''}" data-kind="${t.kind}">${t.label}<span class="ptab-key">${t.key}</span></button>`).join('') +
+    '<span class="ptab-cycle">▸ E</span>';
+  strip.querySelectorAll<HTMLButtonElement>('.ptab').forEach((b) => {
+    b.addEventListener('click', () => { audio.uiClick(); setPanel(b.dataset.kind as PanelKind); });
+  });
+  panel.prepend(strip);
+}
+
+function cyclePanelTab(dir: number): void {
+  const idx = PANEL_TABS.findIndex((t) => t.kind === openPanel);
+  if (idx < 0) return;
+  audio.uiClick();
+  setPanel(PANEL_TABS[(idx + dir + PANEL_TABS.length) % PANEL_TABS.length].kind);
+}
+
 function setPanel(kind: PanelKind): void {
   dialoguePanel.stop();
   openPanel = kind;
@@ -269,6 +298,7 @@ function setPanel(kind: PanelKind): void {
         playerHealthFrac: () => player.flesh / player.maxFlesh,
       });
   }
+  attachPanelTabs(panel, kind);
 }
 
 function renderFastTravel(panel: HTMLElement): void {
@@ -433,6 +463,7 @@ function updateCinematic(dt: number): void {
 function endCinematic(): void {
   cinematicT = -1;
   intro.end();
+  document.getElementById('ui-root')?.classList.remove('cine-on');
   player.paused = false;
   player.viewmodel.visible = true;
   canvas.requestPointerLock();
@@ -453,7 +484,12 @@ document.addEventListener('keydown', (e) => {
     else setPanel('pause');
     return;
   }
-  if (openPanel !== 'none') return;
+  if (openPanel !== 'none') {
+    // Q/E flip between the ECHO device's tabs
+    if (e.code === 'KeyQ') cyclePanelTab(-1);
+    if (e.code === 'KeyE' && PANEL_TABS.some((t) => t.kind === openPanel)) cyclePanelTab(1);
+    return;
+  }
 
   if (e.code === 'KeyT') {
     // remote Re-Constructor uplink — anywhere, as long as nothing is shooting at you
@@ -564,7 +600,7 @@ function questPointOnMap(): { x: number; z: number } | null {
 }
 
 function fullmapExtras() {
-  return { quest: questPointOnMap(), discovered: discoveredStations };
+  return { quest: questPointOnMap(), discovered: discoveredStations, structures: world.colliders };
 }
 
 function compassMarkers(): CompassMarker[] {
@@ -652,6 +688,13 @@ function frame(): void {
     return;
   }
 
+  if (openPanel !== 'none') {
+    // menus freeze the world completely
+    music.update(dt, 0);
+    post.render(dt);
+    return;
+  }
+
   stepSim(dt);
   maybeBossCine();
   world.followSun(player.position);
@@ -699,6 +742,7 @@ buildTitleScreen(hasSave(), (continueRun) => {
     player.paused = true;
     player.viewmodel.visible = false;
     seenCines.add('map_claudelands'); // the full intro already covers the first biome
+    document.getElementById('ui-root')?.classList.add('cine-on'); // HUD hides for the cutscene
     intro.start();
     autosave();
   });

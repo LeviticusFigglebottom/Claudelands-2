@@ -490,5 +490,15 @@ body { font-family: var(--ui-font); user-select: none; }
 .cine-card.cine-char .cine-title { color: var(--hud-edge); }
 #cine-root .cine-skip { position: absolute; right: 24px; bottom: 12.5vh; color: #998a6a; font-size: 12px; letter-spacing: 0.15em; }
 
-/* during an in-game cinematic, everything but the letterbox layer fades out */
-#ui-root.cine-on > :not(#cine-root) { opacity: 0; transition: opacity 0.3s; }
+/* during any cutscene, everything but the cinematic layers fades out */
+#ui-root.cine-on > :not(#cine-root):not(#title-screen) { opacity: 0; transition: opacity 0.3s; }
+
+/* ECHO device tab strip (backpack / skills / map / log) */
+.panel-tabs { display: flex; align-items: center; gap: 8px; margin: -6px 0 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(60,224,240,0.25); }
+.panel-tabs .ptab { flex: 0 0 auto; background: rgba(20,60,70,0.35); border: 1px solid rgba(60,224,240,0.35); color: #9fdbe4;
+  font-family: inherit; font-weight: 700; letter-spacing: 0.12em; font-size: 13px; padding: 7px 16px; cursor: pointer; }
+.panel-tabs .ptab:hover { border-color: #3ce0f0; color: #eafcff; }
+.panel-tabs .ptab-on { background: #3ce0f0; color: #04262c; border-color: #3ce0f0; }
+.panel-tabs .ptab-key { margin-left: 8px; opacity: 0.55; font-size: 10px; font-weight: 400; }
+.panel-tabs .ptab-on .ptab-key { opacity: 0.7; }
+.panel-tabs .ptab-cycle { color: rgba(159,219,228,0.5); font-size: 12px; letter-spacing: 0.1em; }

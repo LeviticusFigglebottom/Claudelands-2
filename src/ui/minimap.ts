@@ -7,6 +7,7 @@ import { WORLD } from '../data/world';
 import { enemySpawner } from '../game/enemies';
 import { loot } from '../game/loot';
 import { rarityById } from '../data/rarity';
+import { paintedTerrain, mapHalf, MAP_RES } from './terrainpaint';
 
 const SIZE = 170;
 const RANGE = 48; // meters shown edge-to-center
@@ -43,6 +44,25 @@ export class Minimap {
     ctx.clip();
     ctx.fillStyle = 'rgba(12, 10, 8, 0.78)';
     ctx.fillRect(0, 0, S, S);
+
+    // painted terrain, rotated so the view direction is up. The terrain image
+    // maps world → pixels as px=(half-wx)·RES/2half, py=(half-wz)·RES/2half;
+    // composing that with the radar's rotate-to-forward transform gives a pure
+    // rotation+scale (no mirror), applied here via setTransform.
+    {
+      const half = mapHalf();
+      const k = (C - 12) / RANGE;
+      const K = k * (half * 2 / MAP_RES);
+      const cosF = Math.cos(facing), sinF = Math.sin(facing);
+      const e = C + k * (-cosF * (half - playerPos.x) + sinF * (half - playerPos.z));
+      const f = C + k * (-sinF * (half - playerPos.x) - cosF * (half - playerPos.z));
+      ctx.save();
+      ctx.setTransform(K * cosF, K * sinF, -K * sinF, K * cosF, e, f);
+      ctx.globalAlpha = 0.55;
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(paintedTerrain(), 0, 0);
+      ctx.restore();
+    }
     // range rings
     ctx.strokeStyle = 'rgba(216,176,40,0.16)';
     ctx.lineWidth = 2;
@@ -61,7 +81,9 @@ export class Minimap {
       const dx = wx - playerPos.x, dz = wz - playerPos.z;
       const dist = Math.hypot(dx, dz);
       const bearing = Math.atan2(dx, dz);
-      const rel = bearing - facing;
+      // screen-relative angle: positive = right of view, so the world rotates
+      // against your turn (look left → blips sweep right), like a real radar
+      const rel = facing - bearing;
       let r = (dist / RANGE) * (C - 12);
       let clamped = false;
       if (r > C - 12) {
@@ -130,7 +152,7 @@ export class Minimap {
     ctx.beginPath();
     ctx.arc(C, C, C - 4, 0, Math.PI * 2);
     ctx.stroke();
-    const nRel = -facing; // bearing 0 (world north/+z) relative to view
+    const nRel = facing; // bearing 0 (world north/+z) in screen-relative terms
     const nx = C + Math.sin(nRel) * (C - 14);
     const ny = C - Math.cos(nRel) * (C - 14);
     ctx.fillStyle = '#f2e4c4';
