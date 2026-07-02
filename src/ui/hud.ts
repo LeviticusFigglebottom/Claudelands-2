@@ -164,10 +164,13 @@ export class Hud {
     }
   }
 
+  /** Set by main: the boss bar stays hidden until the pre-fight cinematic has played. */
+  bossIntroSeen: (bossId: string) => boolean = () => true;
+
   private updateBossBar(): void {
     const bar = document.getElementById('boss-bar')!;
     const boss: Enemy | null = enemySpawner.boss;
-    if (boss && boss.alive) {
+    if (boss && boss.alive && this.bossIntroSeen(boss.def.id)) {
       const total = boss.maxFlesh + boss.maxShield + boss.maxArmor;
       const cur = boss.flesh + boss.shield + boss.armor;
       bar.innerHTML = `

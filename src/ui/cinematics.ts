@@ -34,6 +34,10 @@ export const BOSS_EPITHETS: Record<string, string> = {
 export const NPC_INTROS: Record<string, { name: string; sub: string }> = {
   quibb: { name: 'FOREMAN QUIBB', sub: 'retired. technically. nobody told the paperwork.' },
   zaza: { name: 'MADAME ZAZA', sub: 'seer, merchant, menace.' },
+  mayor: { name: 'MAYOR OTTOLINE BRASS', sub: 'won the city in a card game. owned the deck.' },
+  brann: { name: 'BRANN THE ADJUSTER', sub: 'eleven years of denied claims. one grudge.' },
+  mirelle: { name: 'MIRELLE TWO-LINES', sub: 'fished the fathom nine winters. it fished back.' },
+  okto: { name: 'BROTHER OKTO', sub: 'bone-priest, lapsed. the bones and he are on a break.' },
 };
 
 /** Slow orbit around a boss, ending face-to-face. */
@@ -78,6 +82,10 @@ export function charCine(from: THREE.Vector3, npcPos: THREE.Vector3, name: strin
   };
 }
 
+/** A cinematic ignores skip input for its first moments so a held key or a
+ *  buffered press can't blow past it before the player even sees it. */
+const SKIP_GRACE = 1.1;
+
 export class CinematicSystem {
   active = false;
   private t = 0;
@@ -101,12 +109,15 @@ export class CinematicSystem {
       <div class="cine-bar top"></div>
       <div class="cine-bar bottom"></div>
       <div id="cine-cards2"></div>
-      <div class="cine-skip">press any key to skip</div>`;
+      <div class="cine-skip" style="display:none">press any key to skip</div>`;
     this.root.style.display = 'block';
     document.getElementById('ui-root')?.classList.add('cine-on');
   }
 
-  skip(): void { this.end(); }
+  skip(): void {
+    if (this.t < SKIP_GRACE) return; // still in the no-accidents window
+    this.end();
+  }
 
   private end(): void {
     if (!this.active) return;
@@ -123,6 +134,11 @@ export class CinematicSystem {
     if (!this.active || !this.def) return false;
     this.t += dt;
     const def = this.def;
+
+    if (this.t >= SKIP_GRACE) {
+      const hint = this.root?.querySelector('.cine-skip') as HTMLElement | null;
+      if (hint && hint.style.display === 'none') hint.style.display = 'block';
+    }
 
     def.cards.forEach((c, i) => {
       if (this.t >= c.at && !this.shown.has(i)) {

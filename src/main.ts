@@ -18,7 +18,7 @@ import { enemySpawner, setEnemyHooks, type Enemy } from './game/enemies';
 import { ENEMIES } from './data/enemies';
 import { spawnBoss, type BossId } from './game/boss';
 import { actionSkill } from './game/actionskill';
-import { setNumberSpawner, setTargetProvider, setPlayerDamageRouter, tickCombatClock, type Damageable } from './game/combat';
+import { setNumberSpawner, setTargetProvider, setPlayerDamageRouter, tickCombatClock, applyDamage, type Damageable } from './game/combat';
 import { questSystem, type QuestStatus } from './game/quests';
 import { setDifficulty, difficulty, type DifficultyId } from './game/settings';
 import { setPlayerClass, getPlayerClass } from './data/classes';
@@ -44,6 +44,7 @@ import { itemCardHTML } from './ui/itemcard';
 import { pick } from './util/rng';
 import { SECOND_WIND_LINES, LEVELUP_LINES, VICTORY_LINES } from './data/flavor';
 import type { ItemInstance } from './game/types';
+import { GIVERS } from './data/quests';
 import type { QuestGiver } from './data/quests';
 
 // ---------------------------------------------------------------- renderer
@@ -94,6 +95,8 @@ player.world = {
 player.bindInput(canvas);
 setPlayerDamageRouter((amount, element, from) => player.damage(amount, element, from));
 actionSkill.playerPos = () => player.position;
+actionSkill.healPlayer = (amt) => player.heal(amt);
+actionSkill.playerMaxHealth = () => player.maxFlesh;
 
 projectiles.player = player;
 projectiles.targets = () => [...enemySpawner.enemies, ...world.barrels, player] as unknown as Damageable[];
@@ -171,6 +174,7 @@ function switchMap(mapId: string, toX?: number, toZ?: number): void {
 
 // ---------------------------------------------------------------- UI
 const hud = new Hud();
+hud.bossIntroSeen = (bossId) => seenCines.has('boss_' + bossId) && !cinema.active;
 const compass = new Compass();
 const minimap = new Minimap();
 const fullMapPanel = new FullMapPanel();
@@ -285,7 +289,7 @@ function setPanel(kind: PanelKind): void {
     case 'pause': pausePanel.render(panel, () => setPanel('none')); break;
     case 'dialogue':
       dialoguePanel.render(panel, dialogueGiver,
-        () => { questSystem.accept(); autosave(); setPanel('none'); },
+        () => { questSystem.acceptFrom(dialogueGiver); autosave(); setPanel('none'); },
         () => setPanel('none'));
       break;
     case 'fasttravel': renderFastTravel(panel); break;
@@ -337,6 +341,46 @@ function renderFastTravel(panel: HTMLElement): void {
   });
 }
 
+// ---------------------------------------------------------------- zone exits
+// BL2-style edge transitions: walk under the arch, get the zone screen,
+// arrive on the neighbouring map. A short cooldown stops instant bounce-back.
+let zoneScreenActive = false;
+let zoneCooldown = 0;
+
+function zoneTransition(label: string, targetMap: string, tx: number, tz: number): void {
+  if (zoneScreenActive) return;
+  zoneScreenActive = true;
+  document.exitPointerLock();
+  const overlay = document.createElement('div');
+  overlay.id = 'zone-screen';
+  overlay.innerHTML = `
+    <div class="zs-kicker">NOW ENTERING</div>
+    <div class="zs-name">${label}</div>
+    <div class="zs-tag">${MAPS[targetMap]?.tagline ?? ''}</div>`;
+  document.getElementById('ui-root')?.appendChild(overlay);
+  audio.turretDeploy();
+  requestAnimationFrame(() => overlay.classList.add('zs-in'));
+  setTimeout(() => {
+    switchMap(targetMap, tx, tz);
+    zoneCooldown = 3;
+    setTimeout(() => {
+      overlay.classList.remove('zs-in');
+      setTimeout(() => { overlay.remove(); zoneScreenActive = false; if (!cinema.active && openPanel === 'none') canvas.requestPointerLock(); }, 450);
+    }, 900);
+  }, 650);
+}
+
+function checkZoneExits(dt: number): void {
+  if (zoneCooldown > 0) { zoneCooldown -= dt; return; }
+  if (zoneScreenActive || cinema.active || player.downed) return;
+  for (const ex of WORLD.exits ?? []) {
+    if (Math.hypot(player.position.x - ex.x, player.position.z - ex.z) < 5.5) {
+      zoneTransition(ex.label, ex.targetMap, ex.targetX, ex.targetZ);
+      return;
+    }
+  }
+}
+
 // ---------------------------------------------------------------- quests
 questSystem.init({
   openGate: (id) => {
@@ -351,6 +395,23 @@ questSystem.init({
     banner(pick(Math.random as never, VICTORY_LINES));
     audio.victory();
     feedText('<b style="color:#3ddc4e">ALL CONTRACTS COMPLETE.</b> Two worlds, restocking themselves. Happy hunting.', '#3ddc4e');
+  },
+  spawnElites: (enemyId, count, x, z, levelOffset, tag) => {
+    const def = ENEMIES[enemyId];
+    if (!def) return;
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2;
+      const px = x + Math.cos(a) * (3 + Math.random() * 5);
+      const pz = z + Math.sin(a) * (3 + Math.random() * 5);
+      const e = enemySpawner.spawnOne(def, new THREE.Vector3(px, 0, pz), true, levelOffset);
+      e.questTag = tag;
+    }
+  },
+  grantUnique: (legendaryId) => {
+    const item = generateWeapon({ level: state.level, legendaryId });
+    loot.spawnItem(item, player.position.clone().add(new THREE.Vector3(1.2, 0.6, 1.2)), true);
+    feedText(`<b style="color:#ffa21f">UNIQUE REWARD — ${item.name}</b>`, '#ffa21f');
+    audio.victory();
   },
 });
 
@@ -380,6 +441,7 @@ function autosave(): void {
   if (!started) return;
   writeSave({
     quests: questSystem.serialize(),
+    sidequests: questSystem.serializeSides(),
     stations: [...discoveredStations],
     mapId: activeMap().id,
     classId: getPlayerClass().id,
@@ -403,6 +465,7 @@ function restoreSave(): boolean {
     (id) => world.openGate(id),
     (name) => discoveredStations.add(name),
   );
+  questSystem.loadSides((data.sidequests as { id: string; s: QuestStatus; p: number }[]) ?? []);
   const cines = data.cines as string[] | undefined;
   if (cines) cines.forEach((c) => seenCines.add(c));
   else ['map_claudelands', 'npc_quibb', 'map_' + ((data.mapId as string) ?? 'claudelands')].forEach((c) => seenCines.add(c)); // legacy saves predate cinematics
@@ -537,7 +600,7 @@ function interact(): void {
       case 'vendor_gun': setPanel('vendor_gun'); return;
       case 'vendor_med': setPanel('vendor_med'); return;
       case 'npc': {
-        const giver: QuestGiver = it.data === 'zaza' ? 'zaza' : 'quibb';
+        const giver: QuestGiver = (it.data && it.data in GIVERS ? it.data : 'quibb') as QuestGiver;
         dialogueGiver = giver;
         const npcInfo = NPC_INTROS[giver];
         // first meeting: character-intro splash, then the dialogue opens
@@ -697,6 +760,7 @@ function frame(): void {
 
   stepSim(dt);
   maybeBossCine();
+  checkZoneExits(dt);
   world.followSun(player.position);
 
   const bossActive = enemySpawner.boss?.alive && enemySpawner.boss.position.distanceTo(player.position) < 70;
@@ -755,7 +819,7 @@ canvas.addEventListener('click', () => {
 // Used by tools/screenshot.mjs and integration tests. fastForward steps the
 // sim without rendering (headless CI runs at ~2fps).
 (window as unknown as Record<string, unknown>).__game = {
-  player, camera, state, enemySpawner, loot, questSystem,
+  player, camera, state, enemySpawner, loot, questSystem, actionSkill,
   get world() { return world; },
   gen: { generateWeapon, generateShield, generateGrenadeMod },
   equip: (w: import('./game/types').WeaponInstance) => {
@@ -768,6 +832,7 @@ canvas.addEventListener('click', () => {
   cinema, seenCines,
   skipCine: () => { if (cinema.active) cinema.skip(); },
   enemyDefs: ENEMIES,
+  applyDamageDebug: applyDamage,
   spawnBossDebug: (id: string, x: number, z: number) => spawnBoss(id as BossId, new THREE.Vector3(x, 0, z)),
   setClassDebug: (id: string) => { setPlayerClass(id); hud.setCharacter(); },
   fastForward: (seconds: number) => {

@@ -57,11 +57,11 @@ export class LootSystem {
     if (chance(Math.random as never, 0.5)) this.spawnAmmo(pos);
     if (chance(Math.random as never, 0.12)) this.spawnHealth(pos);
 
-    const gunChance = [0.18, 0.45, 1.0, 1.0][Math.min(tier, 3)];
-    const rolls = tier >= 3 ? 4 : tier >= 2 ? 2 : 1;
+    const gunChance = [0.11, 0.32, 0.9, 1.0][Math.min(tier, 3)];
+    const rolls = tier >= 3 ? 3 : tier >= 2 ? 2 : 1;
     for (let i = 0; i < rolls; i++) {
       if (!chance(Math.random as never, gunChance)) continue;
-      const luck = this.luck() + tier * 0.65 + difficulty().lootLuckBonus;
+      const luck = this.luck() + tier * 0.5 + difficulty().lootLuckBonus;
       // bosses never drop below rare — dying to a white pistol drop is a bug, not comedy
       const rarityFloor = tier >= 3 ? 'rare' : undefined;
       const roll = Math.random();

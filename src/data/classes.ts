@@ -165,17 +165,116 @@ const stormcaller: ClassDef = {
   ],
   playable: true,
 };
+// ---------------------------------------------------------------------------
+// THE HOUNDMASTER — Kez Okafor. Summons RIVET, a bounding scrap-hound.
 const houndmaster: ClassDef = {
   id: 'houndmaster', name: 'The Houndmaster', charName: 'Kez Okafor',
   blurb: 'Rebuilt a scrap-hound from a wreck. It rebuilt her right back.',
-  actionSkill: { id: 'iron_hound', name: 'Iron Hound', desc: 'Summon RIVET, a bounding scrap-hound that mauls and fetches (mostly mauls).', cooldown: 30, duration: 16 },
-  trees: [], playable: false,
+  actionSkill: { id: 'iron_hound', name: 'Iron Hound', desc: 'Summon RIVET, a bounding scrap-hound that runs down your enemies and mauls them with recycled enthusiasm.', cooldown: 30, duration: 16 },
+  trees: [
+    {
+      id: 'pack_instinct',
+      name: 'Pack Instinct',
+      blurb: 'Two of you. One leash. Zero rules.',
+      skills: [
+        { id: 'pi_goodboy', name: 'Good Boy', kind: 'passive', maxPoints: 5, tier: 1, stats: { turretDamage: 0.08 }, desc: (p) => `+${P(8 * p)} Iron Hound damage.` },
+        { id: 'pi_whistle', name: 'Short Whistle', kind: 'passive', maxPoints: 5, tier: 1, stats: { skillCooldown: 0.04 }, desc: (p) => `-${P(4 * p)} Iron Hound cooldown.` },
+        { id: 'pi_stamina', name: 'Junkyard Stamina', kind: 'passive', maxPoints: 5, tier: 2, stats: { turretDuration: 0.1 }, desc: (p) => `+${P(10 * p)} Iron Hound duration.` },
+        { id: 'pi_fangs', name: 'Rebar Fangs', kind: 'killskill', maxPoints: 5, tier: 2, stats: { gunDamage: 0.04 }, killskillDuration: 7, desc: (p) => `Kill Skill: +${P(4 * p)} gun damage for 7s. Rivet gets excited. It spreads.` },
+        { id: 'pi_scentblood', name: 'Scent of Blood', kind: 'passive', maxPoints: 5, tier: 3, stats: { fireRate: 0.04 }, desc: (p) => `+${P(4 * p)} fire rate.` },
+        { id: 'pi_burning', name: 'Hound: Cinder Bite', kind: 'augment', maxPoints: 1, tier: 4, augmentId: 'hound_ember', desc: () => `Rivet’s bites ignite targets with Ember.`, flavor: 'Someone fed the dog a furnace.' },
+        { id: 'pi_leech', name: 'Hound: Retriever', kind: 'augment', maxPoints: 1, tier: 5, augmentId: 'hound_fetch', desc: () => `Rivet’s bites return 3% of their damage to you as health. Fetch, but for vitality.`, flavor: 'DROP it. Good. Now give it to ME.' },
+        { id: 'pi_capstone', name: 'Two Dog Night', kind: 'augment', maxPoints: 1, tier: 6, augmentId: 'hound_twins', desc: () => `CAPSTONE: summon TWO hounds.`, flavor: 'Rivet built a friend. Out of a mailbox.' },
+      ],
+    },
+    {
+      id: 'run_with_it',
+      name: 'Run With It',
+      blurb: 'Keep up or hold the leash.',
+      skills: [
+        { id: 'rw_offleash', name: 'Off-Leash', kind: 'passive', maxPoints: 5, tier: 1, stats: { moveSpeed: 0.04 }, desc: (p) => `+${P(4 * p)} move speed.` },
+        { id: 'rw_quickhands', name: 'Quick Hands', kind: 'passive', maxPoints: 5, tier: 1, stats: { reloadSpeed: 0.05 }, desc: (p) => `+${P(5 * p)} reload speed.` },
+        { id: 'rw_houndstooth', name: 'Houndstooth', kind: 'killskill', maxPoints: 5, tier: 2, stats: { moveSpeed: 0.05, reloadSpeed: 0.04 }, killskillDuration: 7, desc: (p) => `Kill Skill: +${P(5 * p)} move speed and +${P(4 * p)} reload speed for 7s.` },
+        { id: 'rw_flush', name: 'Flush Them Out', kind: 'passive', maxPoints: 5, tier: 2, stats: { gunDamage: 0.04 }, desc: (p) => `+${P(4 * p)} gun damage.` },
+        { id: 'rw_bigbag', name: 'Bigger Saddlebags', kind: 'passive', maxPoints: 5, tier: 3, stats: { magSize: 0.05 }, desc: (p) => `+${P(5 * p)} magazine size.` },
+        { id: 'rw_hackles', name: 'Hackles Up', kind: 'passive', maxPoints: 5, tier: 4, stats: { shieldCapacity: 0.06 }, desc: (p) => `+${P(6 * p)} shield capacity.` },
+        { id: 'rw_chase', name: 'Chase Instinct', kind: 'killskill', maxPoints: 5, tier: 5, stats: { fireRate: 0.05 }, killskillDuration: 7, desc: (p) => `Kill Skill: +${P(5 * p)} fire rate for 7s.` },
+        { id: 'rw_capstone', name: 'Second Wind (Literal)', kind: 'passive', maxPoints: 1, tier: 6, stats: { eyeStorm: 1 }, desc: () => `CAPSTONE: kills while Rivet is out extend the summon by 2 seconds.`, flavor: 'The walk is over when RIVET says it’s over.' },
+      ],
+    },
+    {
+      id: 'junkyard_rules',
+      name: 'Junkyard Rules',
+      blurb: 'Everything is salvage if you’re stubborn.',
+      skills: [
+        { id: 'jr_nose', name: 'A Nose for It', kind: 'passive', maxPoints: 5, tier: 1, stats: { lootLuck: 0.04 }, desc: (p) => `+${P(4 * p)} rare loot luck.` },
+        { id: 'jr_mutt', name: 'Mutt’s Constitution', kind: 'passive', maxPoints: 5, tier: 1, stats: { maxHealth: 0.05 }, desc: (p) => `+${P(5 * p)} max health.` },
+        { id: 'jr_scrapcash', name: 'Scrap for Cash', kind: 'passive', maxPoints: 5, tier: 2, stats: { cashBonus: 0.08 }, desc: (p) => `+${P(8 * p)} cash from all sources.` },
+        { id: 'jr_gristle', name: 'Gristle', kind: 'killskill', maxPoints: 5, tier: 2, stats: { shieldRate: 0.08 }, killskillDuration: 7, desc: (p) => `Kill Skill: +${P(8 * p)} shield recharge rate for 7s.` },
+        { id: 'jr_shrapnel', name: 'Shrapnel Chew-Toys', kind: 'passive', maxPoints: 5, tier: 3, stats: { grenadeDamage: 0.07 }, desc: (p) => `+${P(7 * p)} grenade damage.` },
+        { id: 'jr_boneshield', name: 'Bone to Pick', kind: 'passive', maxPoints: 5, tier: 4, stats: { splashDamage: 0.05 }, desc: (p) => `+${P(5 * p)} splash damage.` },
+        { id: 'jr_stubborn', name: 'Old Yeller-Backer', kind: 'passive', maxPoints: 5, tier: 5, stats: { fflTime: 0.1 }, desc: (p) => `+${P(10 * p)} Fight For Your Life duration.` },
+        { id: 'jr_capstone', name: 'Buried Bones', kind: 'passive', maxPoints: 1, tier: 6, stats: { jackpot: 1 }, desc: () => `CAPSTONE: critical kills refund a full magazine and shake loose bonus cash.`, flavor: 'Rivet buried something for later. It was ammunition.' },
+      ],
+    },
+  ],
+  playable: true,
 };
+
+// ---------------------------------------------------------------------------
+// THE RAVAGER — Tovah Grimm. RED MIST: a berserk stance of shockwave slams.
 const ravager: ClassDef = {
   id: 'ravager', name: 'The Ravager', charName: 'Tovah Grimm',
   blurb: 'Former pit champion. Retired undefeated. Un-retired immediately.',
-  actionSkill: { id: 'red_mist', name: 'Red Mist', desc: 'Holster your guns and go in swinging: massive melee damage, damage resistance, and a lot of yelling.', cooldown: 28, duration: 12 },
-  trees: [], playable: false,
+  actionSkill: { id: 'red_mist', name: 'Red Mist', desc: 'See red: shed 40% of incoming damage and slam the ground in rolling shockwaves while it lasts. The yelling is load-bearing.', cooldown: 28, duration: 12 },
+  trees: [
+    {
+      id: 'slaughterhouse',
+      name: 'Slaughterhouse',
+      blurb: 'The floor is a weapon. So is the ceiling.',
+      skills: [
+        { id: 'sl_haymaker', name: 'Haymaker Rounds', kind: 'passive', maxPoints: 5, tier: 1, stats: { gunDamage: 0.04 }, desc: (p) => `+${P(4 * p)} gun damage.` },
+        { id: 'sl_tremor', name: 'Tremor Sense', kind: 'passive', maxPoints: 5, tier: 1, stats: { splashDamage: 0.06 }, desc: (p) => `+${P(6 * p)} splash damage. The slam counts.` },
+        { id: 'sl_followthrough', name: 'Follow-Through', kind: 'killskill', maxPoints: 5, tier: 2, stats: { gunDamage: 0.05 }, killskillDuration: 7, desc: (p) => `Kill Skill: +${P(5 * p)} gun damage for 7s.` },
+        { id: 'sl_ringcraft', name: 'Ringcraft', kind: 'passive', maxPoints: 5, tier: 2, stats: { skillCooldown: 0.04 }, desc: (p) => `-${P(4 * p)} Red Mist cooldown.` },
+        { id: 'sl_windup', name: 'Wind-Up', kind: 'passive', maxPoints: 5, tier: 3, stats: { turretDamage: 0.08 }, desc: (p) => `+${P(8 * p)} Red Mist slam damage.` },
+        { id: 'sl_grudge', name: 'Grudge Rounds', kind: 'passive', maxPoints: 5, tier: 4, stats: { grenadeDamage: 0.08 }, desc: (p) => `+${P(8 * p)} grenade damage.` },
+        { id: 'sl_quake', name: 'Mist: Ring the Bell', kind: 'augment', maxPoints: 1, tier: 5, augmentId: 'mist_quake', desc: () => `Red Mist slams reach much further.`, flavor: 'Everyone hears the bell. EVERYONE.' },
+        { id: 'sl_capstone', name: 'Finisher', kind: 'passive', maxPoints: 1, tier: 6, stats: { overkill: 1 }, desc: () => `CAPSTONE: overkill damage from a killing blow carries into your next shot.`, flavor: 'The crowd wants a big ending. Give them nine.' },
+      ],
+    },
+    {
+      id: 'adrenaline',
+      name: 'Adrenaline',
+      blurb: 'Anger is cardio.',
+      skills: [
+        { id: 'ad_roadwork', name: 'Roadwork', kind: 'passive', maxPoints: 5, tier: 1, stats: { moveSpeed: 0.04 }, desc: (p) => `+${P(4 * p)} move speed.` },
+        { id: 'ad_slip', name: 'Slip the Jab', kind: 'passive', maxPoints: 5, tier: 1, stats: { shieldRate: 0.06 }, desc: (p) => `+${P(6 * p)} shield recharge rate.` },
+        { id: 'ad_bell', name: 'Saved by the Bell', kind: 'killskill', maxPoints: 5, tier: 2, stats: { moveSpeed: 0.05, shieldRate: 0.06 }, killskillDuration: 7, desc: (p) => `Kill Skill: +${P(5 * p)} move speed and +${P(6 * p)} shield recharge for 7s.` },
+        { id: 'ad_corner', name: 'Cut the Corner', kind: 'passive', maxPoints: 5, tier: 2, stats: { reloadSpeed: 0.05 }, desc: (p) => `+${P(5 * p)} reload speed.` },
+        { id: 'ad_combination', name: 'Combination', kind: 'passive', maxPoints: 5, tier: 3, stats: { fireRate: 0.04 }, desc: (p) => `+${P(4 * p)} fire rate.` },
+        { id: 'ad_secondround', name: 'Answer the Bell', kind: 'passive', maxPoints: 5, tier: 4, stats: { turretDuration: 0.08 }, desc: (p) => `+${P(8 * p)} Red Mist duration.` },
+        { id: 'ad_bloodup', name: 'Blood Up', kind: 'killskill', maxPoints: 5, tier: 5, stats: { splashDamage: 0.06 }, killskillDuration: 7, desc: (p) => `Kill Skill: +${P(6 * p)} splash damage for 7s.` },
+        { id: 'ad_capstone', name: 'No Corners, No Towel', kind: 'passive', maxPoints: 1, tier: 6, stats: { eyeStorm: 1 }, desc: () => `CAPSTONE: kills while Red Mist is up extend it by 2 seconds.`, flavor: 'The round ends when Tovah says.' },
+      ],
+    },
+    {
+      id: 'scar_tissue',
+      name: 'Scar Tissue',
+      blurb: 'Pain is information. Ignore it.',
+      skills: [
+        { id: 'sc_chin', name: 'Iron Chin', kind: 'passive', maxPoints: 5, tier: 1, stats: { maxHealth: 0.05 }, desc: (p) => `+${P(5 * p)} max health.` },
+        { id: 'sc_guard', name: 'High Guard', kind: 'passive', maxPoints: 5, tier: 1, stats: { shieldCapacity: 0.06 }, desc: (p) => `+${P(6 * p)} shield capacity.` },
+        { id: 'sc_clinch', name: 'Clinch', kind: 'killskill', maxPoints: 5, tier: 2, stats: { shieldRate: 0.08 }, killskillDuration: 7, desc: (p) => `Kill Skill: +${P(8 * p)} shield recharge for 7s.` },
+        { id: 'sc_bodyshot', name: 'Take the Body Shot', kind: 'passive', maxPoints: 5, tier: 2, stats: { splashDamage: 0.05 }, desc: (p) => `+${P(5 * p)} splash damage.` },
+        { id: 'sc_leather', name: 'Leather Lungs', kind: 'passive', maxPoints: 5, tier: 3, stats: { magSize: 0.05 }, desc: (p) => `+${P(5 * p)} magazine size.` },
+        { id: 'sc_leech', name: 'Mist: Taste of Iron', kind: 'augment', maxPoints: 1, tier: 4, augmentId: 'mist_leech', desc: () => `Each Red Mist slam that connects feeds you 3% of your max health.`, flavor: 'Winner eats.' },
+        { id: 'sc_cussed', name: 'Too Mean to Die', kind: 'passive', maxPoints: 5, tier: 5, stats: { fflTime: 0.1 }, desc: (p) => `+${P(10 * p)} Fight For Your Life duration.` },
+        { id: 'sc_capstone', name: 'Receipts', kind: 'passive', maxPoints: 1, tier: 6, stats: { lightningRod: 1 }, desc: () => `CAPSTONE: 20% of damage you take while shields are up is returned to the nearest enemy. Itemized.`, flavor: 'Tovah remembers every hit. Out loud.' },
+      ],
+    },
+  ],
+  playable: true,
 };
 
 export const CLASSES: ClassDef[] = [gunsmith, stormcaller, houndmaster, ravager];

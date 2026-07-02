@@ -50,6 +50,8 @@ export class Enemy implements Damageable {
   statuses: StatusEffect[] = [];
   slowUntil = 0;
   critZone!: THREE.Mesh;
+  /** Set on elite packs spawned for a side quest; recordKill matches on it. */
+  questTag?: string;
   bodyParts: THREE.Mesh[] = [];
   homeDistrict: DistrictDef | null = null;
   aggro = false;

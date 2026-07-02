@@ -170,6 +170,7 @@ export class Player implements Damageable {
     if (this.downed || !this.alive) return;
     const el = (element in ELEMENTS ? element : 'kinetic') as ElementId;
     let dmg = amount * difficulty().enemyDamage;
+    dmg *= actionSkill.incomingScale(); // Red Mist sheds incoming damage
     const sh = state.shield;
     if (sh?.special?.id === 'adaptive') dmg *= 0.82;
     // Lightning Rod capstone: shielded hits arc back at the nearest enemy

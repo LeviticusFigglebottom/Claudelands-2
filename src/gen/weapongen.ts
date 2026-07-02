@@ -8,7 +8,7 @@ import { RARITY_LIST, rarityById, type RarityDef } from '../data/rarity';
 import { MANUFACTURERS, makerById } from '../data/manufacturers';
 import { PART_POOLS, WEAPON_TYPES, WEAPON_TYPE_LIST, MULT_KEYS, ADD_KEYS } from '../data/weapons';
 import { COMBAT_ELEMENTS, ELEMENTS } from '../data/elements';
-import { legendaryFor } from '../data/legendaries';
+import { legendaryFor, LEGENDARIES } from '../data/legendaries';
 import { QUALITY_PREFIXES, ELEMENT_PREFIXES, EPIC_RED_TEXT } from '../data/flavor';
 import type { ElementId, PartSlot, StatMods, WeaponInstance, WeaponPartDef, WeaponStats, WeaponType } from '../game/types';
 
@@ -43,20 +43,25 @@ export interface GenOpts {
   makerId?: string;
   seed?: number;
   luck?: number;
+  /** Force a specific legendary signature (quest-unique rewards). */
+  legendaryId?: string;
 }
 
 export function generateWeapon(opts: GenOpts): WeaponInstance {
   const seed = opts.seed ?? freshSeed();
   const rng = mulberry32(seed);
   const level = Math.max(1, Math.round(opts.level));
-  const rarity = opts.rarityId ? rarityById(opts.rarityId) : rollRarity(rng, opts.luck ?? 0, opts.minRarity);
+  const forced = opts.legendaryId ? LEGENDARIES.find((l) => l.id === opts.legendaryId) ?? null : null;
+  const rarity = forced ? rarityById('legendary') : opts.rarityId ? rarityById(opts.rarityId) : rollRarity(rng, opts.luck ?? 0, opts.minRarity);
 
-  const typeDef = opts.type
-    ? WEAPON_TYPES[opts.type]
-    : weightedPick(rng, WEAPON_TYPE_LIST.map((t) => ({ item: t, w: t.dropWeight })));
+  const typeDef = forced
+    ? WEAPON_TYPES[forced.type]
+    : opts.type
+      ? WEAPON_TYPES[opts.type]
+      : weightedPick(rng, WEAPON_TYPE_LIST.map((t) => ({ item: t, w: t.dropWeight })));
 
   // Legendary+ guns are defined by their signature: it fixes maker & type.
-  const legendary = rarity.tier >= 4 ? legendaryFor(typeDef.id, rng()) : null;
+  const legendary = forced ?? (rarity.tier >= 4 ? legendaryFor(typeDef.id, rng()) : null);
 
   const bodyPool = PART_POOLS.body;
   const body = legendary

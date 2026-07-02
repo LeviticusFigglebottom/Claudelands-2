@@ -1,5 +1,40 @@
 # ROADMAP
 
+## Pass 6 status — side jobs, the Mayor, zone edges, four Vault-Rats
+
+**All four classes playable.** THE HOUNDMASTER (Kez Okafor) summons RIVET,
+a bounding scrap-hound that runs enemies down and mauls on a cadence —
+augments for igniting bites, health-leech "fetch", and a two-hound capstone,
+across Pack Instinct / Run With It / Junkyard Rules. THE RAVAGER (Tovah
+Grimm) pops RED MIST: 40% incoming damage shed and rolling ground-slam
+shockwaves, with a long-reach slam augment, slam lifesteal, kill-extension,
+and a damage-reflection capstone across Slaughterhouse / Adrenaline / Scar
+Tissue. Both use the shared kill-skill/augment/stat machinery — no bespoke
+engine paths.
+
+**Brasshaven side jobs**: three named citizens (Brother Okto, Mirelle
+Two-Lines, Brann the Adjuster — each with a first-meeting cinematic) send you
+BACK to old landmarks: the Boneyard ribcage, the Frozen Fathom shore, the
+HX-77 crash site. Each spawns a tagged elite pack (badass-tier, +3/+4
+levels) and pays out a quest-only unique legendary (Ossuary / Lake Effect /
+The Adjuster — never in the world drop pool).
+
+**The main line continues**: q13 "Local Notoriety" — the Mayor of Brasshaven
+(Ottoline Brass) won't talk business until you've finished at least one side
+job for her citizens. Then q14 "The Signal": a distress call from VELDT
+MINOR, and a scrapship (THE PAPERWEIGHT) that needs five Helix hull plates
+salvaged from the Slagflats. Next pass: the first zone of the next planet.
+
+**Zone edges, BL2-style**: physical exit arches at map edges with a
+full-screen "NOW ENTERING" zone card — Claudelands touches the Frosthollow
+(north), the Cinder Throat (southeast), and Brasshaven (west road), each with
+a return arch; prop scatter keeps the approaches clear. Cutscene QoL: a 1.1s
+no-skip grace window (the skip hint appears only after it) and boss health
+bars stay hidden until the pre-fight cinematic has played. Quest tracker,
+markers, and toasts now name the correct giver (the "return to Quibb" after
+Zaza's quests bug). Drop rates and rarity weights lowered across the board
+(gun drop chance, per-tier weights, tier luck).
+
 ## Pass 5.1 status — instruments that tell the truth, maps that look like maps
 
 **Compass & minimap chirality fixed**: both instruments used a mirrored

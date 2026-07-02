@@ -2,8 +2,54 @@
 // are additive rows later. Objectives are declarative; game/quests.ts owns
 // progression. All dialogue is original and lives here for the writers.
 
-export type ObjectiveKind = 'goto' | 'kill_faction' | 'collect' | 'boss';
-export type QuestGiver = 'quibb' | 'zaza';
+export type ObjectiveKind = 'goto' | 'kill_faction' | 'collect' | 'boss' | 'kill_elites' | 'notoriety';
+export type QuestGiver = 'quibb' | 'zaza' | 'mayor' | 'brann' | 'mirelle' | 'okto';
+
+/** Everyone who hands out work: display name, where they stand, greetings. */
+export const GIVERS: Record<QuestGiver, { name: string; where: string; mapId: string; x: number; z: number; greetings: string[] }> = {
+  quibb: {
+    name: 'Foreman Quibb', where: 'in Gutterlight', mapId: 'claudelands', x: -3, z: 80,
+    greetings: [
+      'Quibb. Foreman. Retired, technically. Nobody told the paperwork.',
+      'You again! Good. The paperwork multiplies when I\u2019m alone.',
+    ],
+  },
+  zaza: {
+    name: 'Madame Zaza', where: 'at Chatterjaw Landing', mapId: 'frosthollow', x: 3, z: 68,
+    greetings: [
+      'Zaza foresaw your visit, sugar. The crystal ball is a snow globe now. Budget cuts.',
+      'The spirits say hello. They also say duck more.',
+    ],
+  },
+  mayor: {
+    name: 'Mayor Ottoline Brass', where: 'in Brasshaven', mapId: 'brasshaven', x: 0, z: -20,
+    greetings: [
+      'Welcome to MY city. I won it in a card game. The deck was mine too.',
+      'Brasshaven runs on three things: brass, havens, and me.',
+    ],
+  },
+  brann: {
+    name: 'Brann the Adjuster', where: 'in Brasshaven', mapId: 'brasshaven', x: -14, z: 8,
+    greetings: [
+      'Brann. Claims adjuster, Helix Combine. Ex. VERY ex.',
+      'I process three things: claims, grudges, and claims about grudges.',
+    ],
+  },
+  mirelle: {
+    name: 'Mirelle Two-Lines', where: 'in Brasshaven', mapId: 'brasshaven', x: 16, z: 10,
+    greetings: [
+      'Mirelle. I fished the Fathom for nine winters. The Fathom fished back.',
+      'You smell like open water. That\u2019s not a compliment, sweetheart.',
+    ],
+  },
+  okto: {
+    name: 'Brother Okto', where: 'in Brasshaven', mapId: 'brasshaven', x: -6, z: 24,
+    greetings: [
+      'Okto. Bone-priest. Lapsed. The bones and I are on a break.',
+      'The Boneyard remembers everyone. It has a WAITING LIST.',
+    ],
+  },
+};
 
 export interface QuestDef {
   id: string;
@@ -29,6 +75,10 @@ export interface QuestDef {
   unlocksGate?: string;
   /** Station name auto-discovered on accept (story-driven map unlock). */
   unlocksStation?: string;
+  /** Side quests: elite pack spawned at the target POI on accept. */
+  elite?: { enemyId: string; count: number; x: number; z: number; mapId: string; levelOffset: number };
+  /** Side quests: a quest-only legendary granted on completion. */
+  rewardUnique?: string;
 }
 
 export const QUESTS: QuestDef[] = [
@@ -203,6 +253,85 @@ export const QUESTS: QuestDef[] = [
     rewardCash: 5000, rewardXp: 4000,
     completeLine: 'Welcome to Brasshaven, contractor. The city already knows your name. It\u2019s on a poster.',
     unlocksStation: 'Brasshaven Gate',
+  },
+  {
+    id: 'q13_notoriety',
+    name: 'Local Notoriety',
+    giver: 'mayor',
+    briefing: [
+      'So YOU\u2019RE the contractor. Heard about the saint. And the weather. And the filing cabinet.',
+      'I have work \u2014 BIG work, off-world work \u2014 but this city runs on reputation, and yours is all imports.',
+      'Do a job for one of my citizens first. Brann, Mirelle, Okto \u2014 they\u2019re all owed something by the wasteland. Then we talk.',
+    ],
+    acceptLine: 'Go be useful somewhere visible! The city is watching. Literally. I have cameras.',
+    objective: { kind: 'notoriety', label: 'Local jobs finished', count: 1, markerX: 0, markerZ: 8, mapId: 'brasshaven' },
+    rewardCash: 2000, rewardXp: 3000,
+    completeLine: 'The city\u2019s talking about you. Mostly good things. The Mayor will see you now.',
+  },
+  {
+    id: 'q14_signal',
+    name: 'The Signal',
+    giver: 'mayor',
+    briefing: [
+      'Three nights ago my relay caught a distress signal. Not from this planet, contractor. From VELDT MINOR.',
+      'Somebody up there is still broadcasting, and whatever\u2019s making them broadcast is still chewing.',
+      'I can get you there \u2014 IF we build a scrapship. Helix drive plating, out in the Slagflats. Salvage me five plates.',
+    ],
+    acceptLine: 'Five hull plates! The Slagflats! Try not to dent the good ones!',
+    objective: { kind: 'collect', label: 'Scrapship plates salvaged', count: 5, faction: 'helix', markerX: 85, markerZ: -25, mapId: 'claudelands' },
+    rewardCash: 8000, rewardXp: 8000, rewardItem: 'legendary',
+    completeLine: 'The scrapship has a hull, a name (THE PAPERWEIGHT), and a heading: Veldt Minor. Wheels up soon, contractor.',
+  },
+];
+
+// ---------------------------------------------------------------- side jobs
+// Brasshaven citizens send you BACK into the wasteland: old landmarks, new
+// (upgraded) trouble, one-of-a-kind rewards. Unlocked when the city opens.
+export const SIDE_QUESTS: QuestDef[] = [
+  {
+    id: 'sq_boneyard',
+    name: 'Repossession, With Teeth',
+    giver: 'okto',
+    briefing: [
+      'The Boneyard\u2019s leviathan \u2014 I buried three congregations inside that ribcage. Sacred ground. WAS.',
+      'A Rustborn crew moved in. Big ones. They\u2019re prying up the reliquary plates and WEARING them.',
+      'Evict them. All of them. The bones will know, and the bones tip well.',
+    ],
+    acceptLine: 'The ribcage! West of the gully! Mind the sermon acoustics!',
+    objective: { kind: 'kill_elites', label: 'Reliquary robbers evicted', count: 5, markerX: -85, markerZ: -25, mapId: 'claudelands' },
+    elite: { enemyId: 'boilerbruiser', count: 5, x: -85, z: -25, mapId: 'claudelands', levelOffset: 3 },
+    rewardCash: 3000, rewardXp: 3500, rewardUnique: 'leg_ossuary',
+    completeLine: 'The ribcage is quiet again. Something in it exhaled. Take this \u2014 the bones insist.',
+  },
+  {
+    id: 'sq_fathom',
+    name: 'Nine Winters, One Grudge',
+    giver: 'mirelle',
+    briefing: [
+      'Nine winters I fished the Frozen Fathom. Last winter something started fishing my crew.',
+      'The Frostborn call the lake shore holy now. They put up TOTEMS. On MY dock.',
+      'Clear the shore pack \u2014 the big ones \u2014 and I\u2019ll give you the only thing I saved from the ice.',
+    ],
+    acceptLine: 'Fathom Shore! East side of the Hollow! Don\u2019t stand on anything that breathes!',
+    objective: { kind: 'kill_elites', label: 'Shore pack culled', count: 5, markerX: 40, markerZ: -14, mapId: 'frosthollow' },
+    elite: { enemyId: 'avalanche_bruiser', count: 5, x: 40, z: -14, mapId: 'frosthollow', levelOffset: 3 },
+    rewardCash: 3000, rewardXp: 3500, rewardUnique: 'leg_lake_effect',
+    completeLine: 'The dock\u2019s mine again. Here \u2014 it came out of a fish. Don\u2019t ask which end.',
+  },
+  {
+    id: 'sq_hauler',
+    name: 'Claim Denied',
+    giver: 'brann',
+    briefing: [
+      'Hauler HX-77. Crashed in the Slagflats. I filed the claim eleven years ago. Helix denied it. ELEVEN YEARS.',
+      'Now their lattice wardens are back at the wreck, shredding the evidence \u2014 MY evidence.',
+      'Scrap every warden at that crash site and the appeal writes itself. In shrapnel.',
+    ],
+    acceptLine: 'The crash site! East, past the crater! Aim for the paperwork!',
+    objective: { kind: 'kill_elites', label: 'Site wardens scrapped', count: 4, markerX: 79, markerZ: -11, mapId: 'claudelands' },
+    elite: { enemyId: 'lattice_warden', count: 4, x: 79, z: -11, mapId: 'claudelands', levelOffset: 4 },
+    rewardCash: 3200, rewardXp: 3800, rewardUnique: 'leg_adjuster',
+    completeLine: 'Eleven years of appeals, settled out of court. Take the settlement. It shoots.',
   },
 ];
 

@@ -5,8 +5,11 @@ a contractor hired by Foreman Quibb to de-throne Grand Duke Gutterball,
 trash-king of the Claudelands — and to deal with whatever Helix Combine
 buried in the Slagflat crater. Four worlds — the sun-blasted Claudelands,
 the frozen Frosthollow, the volcanic Cinder Throat gauntlet, and BRASSHAVEN,
-the sanctuary city in a beached mega-hauler — two playable Vault-Rats,
-twelve quests, four bosses, in-game cinematics, bazillions of guns.
+the sanctuary city in a beached mega-hauler — FOUR playable Vault-Rats,
+fourteen main quests plus Brasshaven side jobs with quest-only unique
+legendaries, four bosses, in-game cinematics, BL2-style zone-edge
+transitions, bazillions of guns — and a scrapship being built for the
+distress signal from VELDT MINOR.
 
 Everything is procedural — meshes, textures, sound, *music* — and everything
 that is content (guns, parts, manufacturers, elements, skills, enemies,

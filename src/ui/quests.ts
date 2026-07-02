@@ -2,9 +2,8 @@
 // and Quibb's dialogue panel (typewriter briefing + accept button).
 
 import { questSystem, type QuestRuntime } from '../game/quests';
-import { QUEST_DONE_IDLE, QUIBB_GREETINGS } from '../data/quests';
+import { QUEST_DONE_IDLE, GIVERS } from '../data/quests';
 import type { QuestGiver } from '../data/quests';
-import { ZAZA_GREETINGS } from '../data/flavor';
 import { audio } from '../audio/synth';
 import { pick } from '../util/rng';
 
@@ -24,11 +23,21 @@ export class QuestTracker {
         <div class="qt-name">◆ ${q.def.name}</div>
         <div class="qt-obj">${obj.label}${progress}</div>`;
     } else if (questSystem.available) {
-      key = 'avail';
-      html = `<div class="qt-name">◆ NEW JOB AVAILABLE</div><div class="qt-obj">Talk to Foreman Quibb in Gutterlight</div>`;
+      const g = GIVERS[questSystem.available.def.giver];
+      key = 'avail:' + questSystem.available.def.id;
+      html = `<div class="qt-name">◆ NEW JOB AVAILABLE</div><div class="qt-obj">Talk to ${g.name} ${g.where}</div>`;
     } else if (questSystem.allDone) {
       key = 'done';
       html = `<div class="qt-name" style="color:#3ddc4e">◆ CONTRACT FULFILLED</div><div class="qt-obj">The wasteland restocks itself. Enjoy.</div>`;
+    }
+    const s = questSystem.activeSide;
+    if (s) {
+      const sObj = s.def.objective;
+      const sProg = sObj.count > 1 ? ` — ${s.progress}/${sObj.count}` : '';
+      key += `|${s.def.id}:${s.progress}`;
+      html += `
+        <div class="qt-name" style="color:#c06bff">◇ ${s.def.name}</div>
+        <div class="qt-obj">${sObj.label}${sProg}</div>`;
     }
     if (key !== this.lastKey) {
       this.lastKey = key;
@@ -56,10 +65,27 @@ export class QuestLogPanel {
           </div>
         </div>`;
     }).join('');
+    const sideRows = questSystem.sides.map((q) => {
+      const badge = q.status === 'complete' ? '✔' : q.status === 'active' ? '▶' : q.status === 'available' ? '!' : '·';
+      const obj = q.def.objective;
+      const progress = q.status === 'active' && obj.count > 1 ? ` (${q.progress}/${obj.count})` : '';
+      const g = GIVERS[q.def.giver];
+      return `
+        <div class="quest-row ${q.status}">
+          <div class="q-badge" style="color:#c06bff">${badge}</div>
+          <div>
+            <div class="q-name">${q.def.name} <span style="opacity:0.6; font-weight:400">· ${g.name}</span></div>
+            <div class="q-obj">${q.status === 'locked' ? '— Brasshaven keeps its problems to itself. For now. —' : obj.label + progress}</div>
+          </div>
+        </div>`;
+    }).join('');
     root.innerHTML = `
       <h1>CONTRACT LEDGER</h1>
-      <div class="p-sub">Employer: Foreman Quibb · Gutterlight · “Payment on completion. Survival optional but encouraged.”</div>
-      <div class="p-body"><div style="flex:1; overflow-y:auto;">${rows}</div></div>
+      <div class="p-sub">“Payment on completion. Survival optional but encouraged.”</div>
+      <div class="p-body"><div style="flex:1; overflow-y:auto;">
+        <div class="ql-section">MAIN CONTRACTS</div>${rows}
+        <div class="ql-section" style="color:#c06bff">SIDE JOBS · BRASSHAVEN</div>${sideRows}
+      </div></div>
       <div class="p-hint">J / ESC to close</div>`;
   }
 }
@@ -69,21 +95,21 @@ export class DialoguePanel {
 
   render(root: HTMLElement, giver: QuestGiver, onAccept: () => void, onClose: () => void): void {
     const available: QuestRuntime | null = questSystem.availableFrom(giver);
-    const zaza = giver === 'zaza';
-    const greeting = pick(Math.random as never, zaza ? ZAZA_GREETINGS : QUIBB_GREETINGS);
-    const otherGiverHint = questSystem.available && !available
-      ? [`Not my department, sugarplum. ${questSystem.available.def.giver === 'zaza' ? 'Madame Zaza' : 'Foreman Quibb'} is holding work for you.`]
+    const info = GIVERS[giver];
+    const greeting = pick(Math.random as never, info.greetings);
+    const pendingElsewhere = questSystem.available && !available ? GIVERS[questSystem.available.def.giver] : null;
+    const busySide = questSystem.activeSide && !available && !questSystem.active
+      ? [`Finish the job you took first: ${questSystem.activeSide.def.objective.label}.`]
       : null;
     const lines = available
       ? available.def.briefing
       : questSystem.active
-        ? (zaza
-          ? [`The spirits say your job isn’t finished, sugar: ${questSystem.active.def.objective.label}.`, 'The spirits are pushy like that.']
-          : [`Job’s not done, contractor: ${questSystem.active.def.objective.label}.`, 'The wasteland won’t shoot itself. Well. Sometimes it does.'])
-        : otherGiverHint ?? [pick(Math.random as never, QUEST_DONE_IDLE)];
+        ? [`Job’s not done, contractor: ${questSystem.active.def.objective.label}.`, 'Off you go. Gravity helps.']
+        : busySide
+          ?? (pendingElsewhere ? [`Not my department. ${pendingElsewhere.name} is holding work for you ${pendingElsewhere.where}.`] : [pick(Math.random as never, QUEST_DONE_IDLE)]);
 
     root.innerHTML = `
-      <h1>${zaza ? 'MADAME ZAZA' : 'FOREMAN QUIBB'}</h1>
+      <h1>${info.name.toUpperCase()}</h1>
       <div class="p-sub">${greeting}</div>
       <div class="p-body"><div style="flex:1">
         <div class="dialogue-box" id="dlg-box"></div>

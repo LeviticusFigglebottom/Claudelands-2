@@ -63,6 +63,15 @@ export interface WorldDef {
   districts: DistrictDef[];
   pois: WorldPoi[];
   spawn: { x: number; z: number };
+  /** BL2-style walk-off zone transitions at the map's edges. */
+  exits?: ZoneExit[];
+}
+
+export interface ZoneExit {
+  x: number; z: number;
+  targetMap: string;
+  targetX: number; targetZ: number;
+  label: string;               // the zone you're walking INTO
 }
 
 // ===========================================================================
@@ -162,6 +171,11 @@ export const CLAUDELANDS: WorldDef = {
     { id: 'sign_mount', kind: 'sign', x: 3, z: -54, rot: 0, data: 'NO REGICIDE WITHOUT AN APPOINTMENT' },
   ],
   spawn: { x: 0, z: 112 },
+  exits: [
+    { x: 0, z: 126, targetMap: 'frosthollow', targetX: 0, targetZ: 96, label: 'THE FROSTHOLLOW' },
+    { x: 62, z: -114, targetMap: 'cinderthroat', targetX: 0, targetZ: 124, label: 'THE CINDER THROAT' },
+    { x: -122, z: 34, targetMap: 'brasshaven', targetX: 0, targetZ: 54, label: 'BRASSHAVEN' },
+  ],
 };
 
 // ===========================================================================
@@ -247,6 +261,9 @@ export const FROSTHOLLOW: WorldDef = {
     { id: 'sign_ice', kind: 'sign', x: 3, z: -58, rot: 0, data: 'AVALANCHE COUNTRY. HE KNOWS YOU’RE HERE.' },
   ],
   spawn: { x: 0, z: 90 },
+  exits: [
+    { x: 0, z: 108, targetMap: 'claudelands', targetX: 0, targetZ: 114, label: 'THE CLAUDELANDS' },
+  ],
 };
 
 // ===========================================================================
@@ -356,6 +373,9 @@ export const CINDERTHROAT: WorldDef = {
     { id: 'sign_foundry', kind: 'sign', x: -4, z: -100, rot: 0, data: 'OFFERINGS AHEAD. BE ONE.' },
   ],
   spawn: { x: 0, z: 130 },
+  exits: [
+    { x: 0, z: 140, targetMap: 'claudelands', targetX: 52, targetZ: -106, label: 'THE CLAUDELANDS' },
+  ],
 };
 
 // ===========================================================================
@@ -404,8 +424,15 @@ export const BRASSHAVEN: WorldDef = {
     { id: 'log_b1', kind: 'wirelog', x: 20, z: -22, data: 'log_brasshaven' },
     { id: 'sign_b1', kind: 'sign', x: 0, z: 52, rot: 0, data: 'BRASSHAVEN: NO SPITTING. NO REGICIDE. NO REFUNDS.' },
     { id: 'sign_b2', kind: 'sign', x: -4, z: -14, rot: 0.4, data: 'MARKET ROW → · HULLTOWN ↑ · GATE ←' },
+    { id: 'npc_mayor', kind: 'npc', x: 0, z: -20, rot: 0, data: 'mayor' },
+    { id: 'npc_brann', kind: 'npc', x: -14, z: 8, rot: 1.1, data: 'brann' },
+    { id: 'npc_mirelle', kind: 'npc', x: 16, z: 10, rot: -1.3, data: 'mirelle' },
+    { id: 'npc_okto', kind: 'npc', x: -6, z: 24, rot: 0.4, data: 'okto' },
   ],
   spawn: { x: 0, z: 62 },
+  exits: [
+    { x: 0, z: 74, targetMap: 'claudelands', targetX: -112, targetZ: 34, label: 'THE CLAUDELANDS' },
+  ],
 };
 
 export const MAPS: Record<string, WorldDef> = {

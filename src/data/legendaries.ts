@@ -11,6 +11,8 @@ export interface LegendaryDef {
   type: WeaponType;
   redText: string;
   effectLabel: string;      // shown on the card under the red text
+  /** Never rolls from the world pool; only granted by its quest. */
+  questOnly?: boolean;
   effect:                   // consumed by combat/player code
     | { kind: 'pellet_storm'; pellets: number }        // massive extra pellets
     | { kind: 'bouncing_orbs' }                        // shots arc lightning twice
@@ -70,10 +72,29 @@ export const LEGENDARIES: LegendaryDef[] = [
     effectLabel: 'Volt hits chain twice instead of once.',
     effect: { kind: 'bouncing_orbs' }, forceElement: 'volt',
   },
+  // ---- quest-unique rewards (side jobs only; never in the world drop pool)
+  {
+    id: 'leg_ossuary', name: 'Ossuary', maker: 'vulkram', type: 'shotgun',
+    redText: '“The Boneyard tithes in kind.”',
+    effectLabel: 'Fires a rattling wall of extra pellets; impacts echo a second burst.',
+    effect: { kind: 'pellet_storm', pellets: 7 }, questOnly: true,
+  },
+  {
+    id: 'leg_lake_effect', name: 'Lake Effect', maker: 'aetheric', type: 'smg',
+    redText: '“The thing under the ice says hi.”',
+    effectLabel: 'Every freezing hit repeats itself a beat later.',
+    effect: { kind: 'echo_round', delay: 0.35 }, forceElement: 'rime', questOnly: true,
+  },
+  {
+    id: 'leg_adjuster', name: 'The Adjuster', maker: 'cordwood', type: 'sniper',
+    redText: '“CLAIM STATUS: DENIED. APPEAL STATUS: DENIED. YOU: DENIED.”',
+    effectLabel: 'Damage climbs steeply as the magazine empties (+20%/missing round).',
+    effect: { kind: 'money_shot', multPerMissing: 0.2 }, questOnly: true,
+  },
 ];
 
 export function legendaryFor(type: WeaponType, roll: number): LegendaryDef | null {
-  const pool = LEGENDARIES.filter((l) => l.type === type);
+  const pool = LEGENDARIES.filter((l) => l.type === type && !l.questOnly);
   if (pool.length === 0) return LEGENDARIES[Math.floor(roll * LEGENDARIES.length) % LEGENDARIES.length];
   return pool[Math.floor(roll * pool.length) % pool.length];
 }

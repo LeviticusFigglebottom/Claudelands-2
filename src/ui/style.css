@@ -491,7 +491,7 @@ body { font-family: var(--ui-font); user-select: none; }
 #cine-root .cine-skip { position: absolute; right: 24px; bottom: 12.5vh; color: #998a6a; font-size: 12px; letter-spacing: 0.15em; }
 
 /* during any cutscene, everything but the cinematic layers fades out */
-#ui-root.cine-on > :not(#cine-root):not(#title-screen) { opacity: 0; transition: opacity 0.3s; }
+#ui-root.cine-on > :not(#cine-root):not(#title-screen):not(#zone-screen) { opacity: 0; transition: opacity 0.3s; }
 
 /* ECHO device tab strip (backpack / skills / map / log) */
 .panel-tabs { display: flex; align-items: center; gap: 8px; margin: -6px 0 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(60,224,240,0.25); }
@@ -502,3 +502,14 @@ body { font-family: var(--ui-font); user-select: none; }
 .panel-tabs .ptab-key { margin-left: 8px; opacity: 0.55; font-size: 10px; font-weight: 400; }
 .panel-tabs .ptab-on .ptab-key { opacity: 0.7; }
 .panel-tabs .ptab-cycle { color: rgba(159,219,228,0.5); font-size: 12px; letter-spacing: 0.1em; }
+
+.ql-section { margin: 14px 0 6px; font-size: 12px; letter-spacing: 0.2em; color: rgba(159,219,228,0.7); border-bottom: 1px solid rgba(60,224,240,0.2); padding-bottom: 4px; }
+
+/* zone transition screen (BL2-style "Now Entering") */
+#zone-screen { position: absolute; inset: 0; z-index: 9; background: #000; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; opacity: 0; transition: opacity 0.45s; pointer-events: none; }
+#zone-screen.zs-in { opacity: 1; }
+#zone-screen .zs-kicker { font-size: 15px; letter-spacing: 0.5em; color: #998a6a; }
+#zone-screen .zs-name { font-family: var(--title-font); font-size: clamp(44px, 7vw, 92px); color: var(--paper);
+  text-shadow: 5px 5px 0 #000, -2px -2px 0 rgba(216,176,40,0.35); letter-spacing: 0.05em; transform: skew(-4deg); margin: 8px 0 6px; }
+#zone-screen .zs-tag { font-size: 17px; font-style: italic; color: #d8c8a4; }

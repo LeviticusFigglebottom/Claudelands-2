@@ -306,6 +306,14 @@ export class World {
     this.colliders.push({ minX: x - hw, maxX: x + hw, minZ: z - hd, maxZ: z + hd });
   }
 
+  /** Free-placed props must not block the walk-up to a zone exit. */
+  private clearOfExits(x: number, z: number): boolean {
+    for (const ex of WORLD.exits ?? []) {
+      if (Math.hypot(x - ex.x, z - ex.z) < 12) return false;
+    }
+    return true;
+  }
+
   /** Scatter keep-out: too close to a collider, POI, or road = don't place. */
   private clearOfAssets(x: number, z: number, margin = 1.6): boolean {
     if (roadFactor(x, z) > 0.12) return false;
@@ -315,6 +323,7 @@ export class World {
     for (const p of WORLD.pois) {
       if (Math.hypot(x - p.x, z - p.z) < 5.5) return false;
     }
+    if (!this.clearOfExits(x, z)) return false;
     return true;
   }
 
@@ -366,6 +375,7 @@ export class World {
 
   /** Charred snag: blackened trunk with bare branch stubs. */
   private burntTree(x: number, z: number, scale = 1): void {
+    if (!this.clearOfExits(x, z)) return;
     const y = terrainHeight(x, z);
     const tree = new THREE.Group();
     const charMat = toonMat({ color: 0x241e1a, map: swatch('#1f1a16', 40) });
@@ -975,6 +985,7 @@ export class World {
       const a = rng() * Math.PI * 2;
       const r = rng() * radius * 0.85;
       const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+      if (!this.clearOfExits(x, z)) continue;
       const y = terrainHeight(x, z);
       const pile = new THREE.Group();
       const kind = rng();
@@ -1409,11 +1420,16 @@ export class World {
         case 'vendor_med': this.buildVendor(poi, false); break;
         case 'fast_travel': this.buildFastTravel(poi); break;
         case 'wirelog': this.buildWireLog(poi); break;
-        case 'npc': if (poi.data === 'zaza') this.buildZaza(poi); else this.buildQuibb(poi); break;
+        case 'npc':
+          if (poi.data === 'zaza') this.buildZaza(poi);
+          else if (poi.data === 'quibb' || !poi.data) this.buildQuibb(poi);
+          else this.buildTownNpc(poi);
+          break;
         case 'gate': this.buildGate(poi); break;
         case 'sign': this.buildSign(poi); break;
       }
     }
+    this.buildZoneExits();
   }
 
   private buildChest(poi: WorldPoi): void {
@@ -1503,6 +1519,82 @@ export class World {
       label: 'PLAY WIRE SPOOL',
       data: poi.data,
     });
+  }
+
+  /** Named townsfolk (Brasshaven givers): distinct palette per character. */
+  private buildTownNpc(poi: WorldPoi): void {
+    const looks: Record<string, { coat: number; skin: number; hat: number; hatKind: 'top' | 'hood' | 'cap'; accent: number; label: string }> = {
+      mayor: { coat: 0x8a6a1a, skin: 0xc89878, hat: 0x2a2622, hatKind: 'top', accent: 0xffd23c, label: 'TALK TO MAYOR BRASS' },
+      brann: { coat: 0x2ba8a0, skin: 0xb08868, hat: 0x4a4442, hatKind: 'cap', accent: 0x7dffef, label: 'TALK TO BRANN' },
+      mirelle: { coat: 0x4a6a8a, skin: 0xd8b090, hat: 0x8a94a0, hatKind: 'hood', accent: 0x9ad8e8, label: 'TALK TO MIRELLE' },
+      okto: { coat: 0xe8e0cc, skin: 0x9a7858, hat: 0xe8e0cc, hatKind: 'hood', accent: 0xffb43c, label: 'TALK TO BROTHER OKTO' },
+    };
+    const look = looks[poi.data ?? ''] ?? looks.brann;
+    const y = terrainHeight(poi.x, poi.z);
+    const g = new THREE.Group();
+    const legs = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.7, 0.3), toonMat({ color: 0x3a3632 }));
+    legs.position.y = 0.35;
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.66, 0.34), toonMat({ color: look.coat }));
+    torso.position.y = 1.06;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.32, 0.3), toonMat({ color: look.skin }));
+    head.position.y = 1.6;
+    g.add(legs, torso, head);
+    if (look.hatKind === 'top') {
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.04, 10), toonMat({ color: look.hat }));
+      brim.position.y = 1.78;
+      const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.18, 0.34, 10), toonMat({ color: look.hat }));
+      crown.position.y = 1.96;
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(0.185, 0.185, 0.07, 10), toonMat({ color: look.accent }));
+      band.position.y = 1.85;
+      g.add(brim, crown, band);
+    } else if (look.hatKind === 'hood') {
+      const hood = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.42, 8), toonMat({ color: look.hat }));
+      hood.position.y = 1.86;
+      g.add(hood);
+    } else {
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.1, 0.34), toonMat({ color: look.hat }));
+      cap.position.y = 1.8;
+      g.add(cap);
+    }
+    const pin = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), glowMat(look.accent, 1));
+    pin.position.set(0.18, 1.24, 0.18);
+    const marker = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 4), glowMat(0xc06bff, 0.95));
+    marker.position.y = 2.35;
+    marker.rotation.x = Math.PI;
+    marker.name = 'quest_marker';
+    g.add(pin, marker);
+    g.position.set(poi.x, y, poi.z);
+    g.rotation.y = poi.rot ?? 0;
+    g.traverse((o) => (o.castShadow = true));
+    this.group.add(g);
+    this.addCollider(poi.x, poi.z, 0.5, 0.5);
+    this.interactables.push({ kind: 'npc', pos: new THREE.Vector3(poi.x, y, poi.z), label: look.label, data: poi.data });
+  }
+
+  /** Zone-exit arch: two posts, a lintel, and the destination on a board. */
+  private buildZoneExits(): void {
+    for (const ex of WORLD.exits ?? []) {
+      const y = terrainHeight(ex.x, ex.z);
+      const g = new THREE.Group();
+      const postMat = toonMat({ color: 0x5a5248, map: swatch('#4a4440', 70) });
+      const postL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 6.4, 0.5), postMat);
+      postL.position.set(-4, 3.2, 0);
+      const postR = postL.clone(); postR.position.x = 4;
+      const lintel = new THREE.Mesh(new THREE.BoxGeometry(9.4, 0.8, 0.7), postMat);
+      lintel.position.y = 6;
+      const board = World.textSign(7.5, 1.5, { lines: ['→ ' + ex.label + ' →'], style: 'graffiti', bg: '#3a3226', fg: '#f2e4c4', accent: '#241a10' }, { twoSided: true });
+      board.position.y = 4.9;
+      const lampL = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), glowMat(0x54d4ff, 0.95));
+      lampL.position.set(-4, 6.6, 0);
+      const lampR = lampL.clone(); lampR.position.x = 4;
+      g.add(postL, postR, lintel, board, lampL, lampR);
+      // face the map centre so the arch reads on approach
+      g.rotation.y = Math.atan2(ex.x, ex.z) + Math.PI / 2 + (Math.abs(ex.x) > Math.abs(ex.z) ? 0 : Math.PI / 2);
+      g.position.set(ex.x, y, ex.z);
+      g.traverse((o) => (o.castShadow = true));
+      this.group.add(g);
+      this.staticTargets.push(postL, postR);
+    }
   }
 
   private buildQuibb(poi: WorldPoi): void {
