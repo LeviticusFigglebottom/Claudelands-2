@@ -1,67 +1,78 @@
 # ROADMAP
 
-Living document. What shipped in pass 1, what's stubbed or shallow, and the
-concrete next moves for pass 2+. "Seam" = the extension point already exists in
-code/data; the work is content or depth, not refactoring.
+Living document. What shipped per pass, what's stubbed or shallow, and the
+concrete next moves. "Seam" = the extension point already exists in code/data;
+the work is content or depth, not refactoring.
 
-## Pass 1 status — the vertical slice
+## Pass 2 status — the open wasteland
 
-The full loop runs in one hand-dressed arena (Gully Seven): shoot → kill →
-loot beam → pick up a part-generated gun → item card reflects parts →
-XP/level → spend skill points → Sentry Rig action skill → mini-boss → endless
-trickle. Six manufacturers, six weapon types, five elements, five gear kinds,
-rarity common→legendary (+opaline tier reserved), one playable class with three
-6-tier trees, Grit Rank meta-progression, two vendors, chests, wire-spool audio
-logs, FFYL/second wind.
+The world is now a 260m multi-district overworld on analytic heightfield
+terrain: **Gutterlight** (hub town: Quibb, vendors, fast travel, string
+lights), **Gully Seven** (Rustborn fort), **the Boneyard** (leviathan skeleton,
+graves, cacti), **the Slagflats** (Helix crash site, slag pools, crater), and
+**Trash Mountain** (gated boss court). A five-quest main line (goto → cull →
+salvage → Gutterball → HX-1 Warden Prime) with dialogue, tracker, log, compass
+markers, gate unlock, and reward drops. Districts self-repopulate with
+patrolling enemies from two factions (8 archetypes + badasses + 2 phased
+bosses). New: dynamic music, save/continue, pause menu, fast-travel network,
+vendor selling, compass, target nameplates, boss bars, damage-direction arc,
+manufacturer reload animations with mag drops, shell casings, bullet-hole /
+scorch / bile decals, elemental death variants (rime freeze-shatter, ember ash,
+volt arcs, bile puddles), explosive barrels, grenade fuse blink/beep + wall
+bounces, footsteps/landing, weapon sway, tumbleweeds, scrap rats, vultures,
+FXAA, sun disc, player-following shadows. Deploys to Vercel as a static site.
+
+## Pass 1 recap
+
+Rendering identity (toon + ink + hatch + bloom + grade), part-based weapon
+generation (6 manufacturers × 6 types × 7 slots), rarities + legendaries with
+red text, shields/grenades/class mods/relics, 5-element damage matrix, Gunsmith
+class (Sentry Rig + three 6-tier trees), Grit Rank meta, FFYL, vendors, chests,
+wire spools, art sandbox, headless screenshot harness.
 
 ## Stubbed / shallow (explicit debts)
 
-| Area | State in pass 1 | Pass 2+ move |
+| Area | State | Next move |
 | --- | --- | --- |
-| Other 3 classes | Data stubs (`data/classes.ts`, `playable: false`) | Implement action skills (transform / pet / berserk); class select on title screen. Seam: skills are data; action-skill code is isolated in `game/actionskill.ts`. |
-| Opaline (pearl) tier | Rarity row exists, never dropped naturally | Named opaline uniques with build-around effects + world-drop source. |
-| Legendary pool | 6 signatures | Grow per manufacturer×type; add drop-source pinning (boss dedicated drops). Seam: `data/legendaries.ts`. |
-| Missions/quests | None — kill-the-boss implicit objective | Quest data format + giver NPC with personality + objective HUD. Flavor hooks (`data/flavor.ts`) ready for writers. |
-| World scale | One arena | Zone streaming: `ZoneDef` is already data (spawn tables, POIs, waves). Add zone loader + real fast-travel between zones (station UI is stubbed in-world). |
-| Nav/AI | Straight-line chase + range hold; no pathfinding | Grid/flow-field nav around colliders; cover use for gunners; leap attacks for mutts. |
-| Enemy variety | 5 archetypes + badass + 1 mini-boss | Faction #2 (Helix Combine security bots — armor-heavy to make Bile matter), flying archetype, true boss with phases/mechanics. |
-| Save system | Grit Rank only (localStorage) | Serialize `GameState` (items are plain data by design — this is mostly plumbing). |
-| Damage number pooling | DOM nodes created per hit | Pool + cap; fine until sustained AoE builds. |
-| Gun mesh fidelity | Parametric primitives | Per-part authored meshes (glTF) behind the same `PartLook` recipe interface; add inverted-hull outline pass for chunky first-person line weight. |
-| Sounds | WebAudio synth | Keep the synth as the fallback layer; add sample-based layers for shots/impacts. Mix bus exists in `audio/synth.ts`. |
-| ADS | FOV zoom + sensitivity scale | True sight alignment (move viewmodel to eye axis), scope overlays for Longeye. |
-| Second-wind targets | Any kill revives | Weight toward "the one who downed you" bonus; crawl speed skill hooks exist (`fflTime`). |
-| Multiplayer | Not attempted | Out of scope until systems stabilize. |
+| Other 3 classes | Data stubs (`playable: false`) | Implement Stormcaller (shock transform) first; class select on title. Seam: skills are data, action-skill code isolated. |
+| Side quests | Main line only | Add `sideQuests` rows + multiple active quests + per-quest tracker slots. Seam: quest defs are declarative rows. |
+| Opaline tier | Rarity row exists, never drops | Named opaline uniques with build-around effects. |
+| Legendary pool | 6 signatures | Grow per manufacturer×type; boss-dedicated drops (bosses currently drop a random legendary). |
+| Nav/AI | Straight-line steering | Flow-field around colliders; gunner cover use; drone kiting. |
+| Enemy LOS | Fires through thin props at range | Cheap LOS raycast vs `staticTargets` before ranged attacks. |
+| Second zone | One overworld | The seam is proven (world-as-data); a second map = new `data/world2.ts` + a loader + Re-Constructor network across maps. |
+| True save slots | Single autosave slot | Slot UI + export/import string. |
+| ADS sights | FOV zoom + centering | True sight alignment per gun; scope overlay for Longeye. |
+| Audio | All synth | Keep synth as fallback; optional sample layers. Mix bus exists. |
+| Gun mesh fidelity | Parametric primitives | Authored glTF per part behind the same `PartLook` interface. |
+| Multiplayer | Not attempted | Out of scope. |
 
-## Pass 2 priorities (ordered)
+## Pass 3 priorities (ordered)
 
-1. **Class select + one more playable class** (Stormcaller: shock-transform) —
-   proves the class format scales; forces action-skill augment generalization.
-2. **Quest system + Gutterlight hub stub** — gives the loop a spine and a place
-   for vendors/writers; fast-travel becomes real with a second zone.
-3. **Second zone (`data/zone2.ts`) + zone loader** — validates world-as-data.
-4. **Boss redesign**: Gutterball phases (crown-off = crit exposed), dedicated
-   legendary drop.
-5. **Loot feel deepening**: pickup vacuum on hold-E, compare-on-ground diff
-   arrows (card compare exists), auto-sort/junk-mark in backpack.
-6. **Perf pass**: instanced particles are done; pool damage numbers, merge
-   static arena geometry, add quality toggle for the ink prepass at high DPR.
+1. **Stormcaller playable + class select** — proves multi-class end-to-end.
+2. **Side-quest layer** (3-4 originals: rat racing, poster defacement tour,
+   Zaza's "mystery box" fetch) + multiple-active-quest tracker.
+3. **Enemy LOS + cover AI** — biggest remaining combat-feel gap.
+4. **Boss dedicated drops + opaline uniques** — completes the loot chase.
+5. **Second map** via the world-as-data seam, with cross-map fast travel.
+6. **Perf pass**: merge static district geometry, instanced gibs/casings,
+   quality toggle for the ink prepass at high DPR.
 
-## Tuning debts (small, high-value)
+## Deploy
 
-- Recoil/kick curves per weapon type (data exists: `recoil` stat is wired).
-- Hatch scale vs. resolution (currently screen-space constant).
-- Enemy bark cadence + more lines per archetype.
-- Vendor restock timer (currently restocks on level-up only).
+- `npm run build` → static `dist/` (game at `/`, art sandbox at `/sandbox.html`).
+- Vercel: import the repo, defaults apply via `vercel.json` (framework=vite,
+  output=dist). No server, no env vars, no functions.
 
-## Identity checklist (pass-1 self-review)
+## Identity checklist (pass-2 self-review)
 
-- [x] Still frame reads as the genre (outlines + toon + hatching + palette) — see `shots/`
-- [x] 3+ manufacturers visibly/mechanically distinct (6 shipped; sandbox lineup shot)
-- [x] Kill → rarity-colored loot beam + audio sting
-- [x] Picked-up gun's appearance & stats reflect parts on the item card
-- [x] Five elements with distinct VFX + status effects
-- [x] Comic damage numbers with crit differentiation
-- [x] Action skill + skill tree usable, points spendable
-- [x] Arena has authored decor, posters/graffiti, ambient audio, wire-spool logs
-- [x] This file marks every stub with a concrete next step
+- [x] Still frames read as the genre in every district — see `docs/screenshots/`
+- [x] 6 manufacturers visibly/mechanically distinct; reload styles match maker
+- [x] Kill → rarity beam + sting; elemental deaths differ per element
+- [x] Item cards reflect parts/stats; compare arrows; vendor buy/sell
+- [x] 5 elements with distinct VFX + status; matrix matters by faction
+- [x] Comic damage numbers with crit flair; hit-direction + nameplates
+- [x] Action skill + trees + Grit spendable; saves persist across sessions
+- [x] World feels alive: patrols, critters, vultures, tumbleweeds, music,
+      barks, quests, bosses, gates, fast travel
+- [x] Deployable to Vercel with zero functionality loss

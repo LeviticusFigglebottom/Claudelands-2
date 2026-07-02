@@ -18,12 +18,13 @@ import { swatch } from '../render/textures';
 import { chance, pick } from '../util/rng';
 import { CHEST_LINES } from '../data/flavor';
 
-export type PickupKind = 'item' | 'cash' | 'ammo' | 'health';
+export type PickupKind = 'item' | 'cash' | 'ammo' | 'health' | 'quest';
 
 export interface Pickup {
   kind: PickupKind;
   item?: ItemInstance;
   amount?: number;
+  questLabel?: string;
   group: THREE.Group;
   beam?: THREE.Group;
   pos: THREE.Vector3;
@@ -110,6 +111,15 @@ export class LootSystem {
   spawnCash(pos: THREE.Vector3, amount: number): void {
     this.spawnSimple('cash', pos, amount, 0x7dff2a, new THREE.CylinderGeometry(0.1, 0.1, 0.04, 8));
   }
+  /** Quest objective drop (e.g. a Helix drive core): magnetized, glowing gold. */
+  spawnQuestItem(pos: THREE.Vector3, label: string): void {
+    this.spawnSimple('quest', pos, 0, 0xffd23c, new THREE.OctahedronGeometry(0.2));
+    const p = this.pickups[this.pickups.length - 1];
+    p.questLabel = label;
+    const beam = fx.lootBeam(new THREE.Vector3(0, 0, 0), 0xffd23c, 2);
+    p.group.add(beam);
+    audio.lootSting(2);
+  }
   spawnAmmo(pos: THREE.Vector3): void {
     this.spawnSimple('ammo', pos, 0, 0xd8b028, new THREE.BoxGeometry(0.22, 0.14, 0.14));
   }
@@ -168,12 +178,13 @@ export class LootSystem {
         p.bobT += dt * 2;
       }
 
-      // magnet pull for consumables
+      // magnet pull for consumables (quest drops pull from farther out)
       if (p.magnet && p.settled) {
         const d = p.pos.distanceTo(playerPos);
-        if (d < 3.2) {
-          p.pos.lerp(playerPos, Math.min(1, dt * (4.5 - d)));
-          if (d < 0.9) { onAutoPickup(p); continue; }
+        const reach = p.kind === 'quest' ? 6 : 3.2;
+        if (d < reach) {
+          p.pos.lerp(playerPos, Math.min(1, dt * Math.max(1.5, reach + 1.3 - d)));
+          if (d < 1.2) { onAutoPickup(p); continue; }
         }
       }
 

@@ -101,6 +101,7 @@ export class ActionSkillSystem {
   cooldownRemaining = 0;
   scene!: THREE.Scene;
   enemies: () => Enemy[] = () => [];
+  groundHeight: (x: number, z: number) => number = () => 0;
 
   attach(scene: THREE.Scene): void { this.scene = scene; }
 
@@ -132,7 +133,7 @@ export class ActionSkillSystem {
       : [playerPos.clone().addScaledVector(fwd, 2)];
 
     for (const s of spots) {
-      s.y = 0;
+      s.y = this.groundHeight(s.x, s.z);
       const t = new Turret(s, duration, damage, ember);
       this.scene.add(t.group);
       this.turrets.push(t);

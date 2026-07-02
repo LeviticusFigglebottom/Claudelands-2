@@ -1,8 +1,7 @@
-// Self-review harness: serves dist/, boots the game in headless Chromium,
-// drives the full loop via the __game debug seam (headless GPU is ~2fps, so
-// simulation advances through fastForward), and captures the key identity
-// moments: spawn vista, combat, elements, loot beams, item card, skill tree,
-// inventory, art sandbox.
+// Self-review harness — pass 2. Serves dist/, boots the game headless,
+// drives the full loop via the __game seam (fastForward steps the sim since
+// headless GPU renders ~2fps), and captures every identity moment: hub,
+// districts, combat, elements, loot, quests, bosses, panels, sandbox.
 // Usage: npm run build && npm run screenshot [outdir]
 
 import { createServer } from 'http';
@@ -46,13 +45,18 @@ page.on('pageerror', (e) => console.error('[pageerror]', e.message));
 page.on('console', (m) => { if (m.type() === 'error') console.error('[console]', m.text()); });
 
 const shot = async (name) => {
-  await page.waitForTimeout(1800); // headless swiftshader ≈2fps: let frames present
+  await page.waitForTimeout(2200); // headless present-lag
   await page.screenshot({ path: join(OUT, name + '.png') });
   console.log('shot:', name);
 };
 const ff = (s) => page.evaluate((sec) => window.__game.fastForward(sec), s);
+const teleport = (x, z, yaw = 0, pitch = -0.06) => page.evaluate(([x, z, yaw, pitch]) => {
+  const g = window.__game;
+  g.player.position.set(x, g.world.groundHeight(x, z), z);
+  g.player.yaw = yaw; g.player.pitch = pitch;
+  g.fastForward(0.1);
+}, [x, z, yaw, pitch]);
 
-/** Point the player at the nearest living enemy's crit zone. */
 const aim = () => page.evaluate(() => {
   const g = window.__game;
   const es = g.enemySpawner.enemies.filter((e) => e.alive);
@@ -66,135 +70,139 @@ const aim = () => page.evaluate(() => {
   e.critZone.getWorldPosition(t);
   const eye = p.camera.position;
   const dx = t.x - eye.x, dy = t.y - eye.y, dz = t.z - eye.z;
-  p.yaw = Math.atan2(-dx, -dz);
-  p.pitch = Math.atan2(dy, Math.hypot(dx, dz));
+  p.yaw = Math.atan2(-dx, -dz); p.pitch = Math.atan2(dy, Math.hypot(dx, dz));
   return es.length;
 });
-const burst = async (sim = 0.12) => {
-  await page.evaluate((s) => {
-    const g = window.__game;
-    g.player.mouseDown = true;
-    g.fastForward(s);
-    g.player.mouseDown = false;
-    g.fastForward(0.05);
-  }, sim);
-};
+const burst = (sim = 0.12) => page.evaluate((s) => {
+  const g = window.__game;
+  g.player.mouseDown = true;
+  g.fastForward(s);
+  g.player.mouseDown = false;
+  g.fastForward(0.05);
+}, sim);
 
 await page.goto('http://127.0.0.1:4519/');
 await page.waitForTimeout(2500);
 await shot('01-title');
 
-await page.click('#title-screen');
-await page.waitForTimeout(3500); // headless present-lag: let post-click frames actually reach the canvas
-await shot('02-spawn-vista');
+await page.evaluate(() => document.getElementById('t-new')?.click()); // pulse anim makes it "unstable" for page.click
+await page.waitForTimeout(3500);
+await shot('02-hub-gutterlight');
 
-// waves up + enemies close
-await ff(10);
+// talk to Quibb, accept quest 1
+await teleport(-3, 77, Math.PI * 0.98);
+await page.keyboard.press('e');
+await page.waitForTimeout(2200);
+await shot('03-quibb-dialogue');
+await page.click('#dlg-accept').catch(() => {});
+await page.waitForTimeout(400);
+
+// walk the road south — vista over the gully
+await teleport(0, 58, Math.PI, -0.04);
+await ff(2);
+await shot('04-road-south');
+
+// into the gully: quest 1 completes, enemies populate
+await teleport(0, 20, Math.PI, -0.03);
+await ff(6);
 await aim();
-await shot('03-enemies');
+await shot('05-gully-combat');
 
-// real-time firing for muzzle flash + tracer + damage numbers in frame
-await aim();
-await page.evaluate(() => { window.__game.player.mouseDown = true; });
-await page.evaluate(() => window.__game.fastForward(0.06));
-await page.screenshot({ path: join(OUT, '04-firing.png') });
-console.log('shot: 04-firing');
-await page.evaluate(() => { window.__game.player.mouseDown = false; });
-
-// grind kills until loot beams exist
-for (let i = 0; i < 80; i++) {
+// fight: kills, loot beams
+for (let i = 0; i < 60; i++) {
   const n = await aim();
   if (n === 0) { await ff(2); continue; }
   await burst();
   const beams = await page.evaluate(() => window.__game.loot.pickups.filter((p) => p.kind === 'item').length);
-  if (beams >= 2) break;
+  const kills = await page.evaluate(() => window.__game.state.grit.killCount);
+  if (beams >= 2 && kills >= 3) break;
 }
-// look at the beams
 await page.evaluate(() => {
   const g = window.__game;
   const items = g.loot.pickups.filter((p) => p.kind === 'item');
   if (!items.length) return;
   const t = items[0].pos;
+  g.player.position.set(t.x + 5, g.world.groundHeight(t.x + 5, t.z + 4), t.z + 4);
   const eye = g.player.camera.position;
-  // stand back 6m from the drop
-  g.player.position.set(t.x + 5, 0, t.z + 4);
-  const dx = t.x - eye.x, dz = t.z - eye.z;
-  g.player.yaw = Math.atan2(-dx, -dz);
+  g.player.yaw = Math.atan2(-(t.x - eye.x), -(t.z - eye.z));
   g.player.pitch = -0.12;
   g.fastForward(0.1);
 });
-await shot('05-loot-beams');
-
-// walk onto the item for the hover card
+await shot('06-loot-beams');
 await page.evaluate(() => {
   const g = window.__game;
   const items = g.loot.pickups.filter((p) => p.kind === 'item');
   if (!items.length) return;
-  const t = items[0].pos;
-  g.player.position.set(t.x + 0.8, 0, t.z + 0.8);
+  g.player.position.set(items[0].pos.x + 0.8, g.world.groundHeight(items[0].pos.x, items[0].pos.z), items[0].pos.z + 0.8);
   g.player.pitch = -0.5;
   g.fastForward(0.1);
 });
-await shot('06-item-card');
+await shot('07-item-card');
 
-// elemental showcase: volt SMG + ember shots at a fresh target
+// boneyard vista
+await teleport(-58, -12, Math.PI / 2 + 0.3, -0.02);
+await ff(3);
+await shot('08-boneyard');
+
+// slagflats + helix combat with a volt SMG
+await teleport(62, -18, -Math.PI / 2 - 0.4, -0.02);
 await page.evaluate(() => {
   const g = window.__game;
-  const gun = g.gen.generateWeapon({ level: 8, rarityId: 'epic', type: 'smg', makerId: 'aetheric', seed: 4242 });
+  const gun = g.gen.generateWeapon({ level: 10, rarityId: 'epic', type: 'smg', makerId: 'aetheric', seed: 4242 });
   gun.element = 'volt';
   gun.stats.elemChance = 1;
   g.equip(gun);
 });
+await ff(6);
 await aim();
-await page.evaluate(() => { window.__game.player.mouseDown = true; window.__game.fastForward(0.4); });
-await page.screenshot({ path: join(OUT, '07-volt.png') });
-console.log('shot: 07-volt');
-await page.evaluate(() => {
-  const g = window.__game;
-  g.player.mouseDown = false;
-  const gun = g.gen.generateWeapon({ level: 8, rarityId: 'rare', type: 'shotgun', makerId: 'vulkram', seed: 777 });
-  gun.element = 'ember';
-  gun.stats.elemChance = 1;
-  g.equip(gun);
-});
-await aim();
-await page.evaluate(() => { window.__game.player.mouseDown = true; window.__game.fastForward(0.2); window.__game.player.mouseDown = false; window.__game.fastForward(0.5); });
-await page.screenshot({ path: join(OUT, '08-ember-burning.png') });
-console.log('shot: 08-ember-burning');
+await burst(0.3);
+await shot('09-slagflats-helix');
 
-// action skill
-await page.evaluate(() => {
-  const g = window.__game;
-  g.player.pitch = -0.05;
-});
+// sentry rig + skill points spent
+await page.evaluate(() => { window.__game.state.skillPoints += 5; });
 await page.keyboard.press('f');
-await ff(1.2);
-await shot('09-sentry-rig');
+await ff(1);
+await shot('10-sentry-rig');
 
-// panels: give a couple skill points for the tree shot
-await page.evaluate(() => { window.__game.state.skillPoints += 3; });
+// boss: force-start Gutterball quest chain
+await page.evaluate(() => {
+  const g = window.__game;
+  for (const q of g.questSystem.quests) if (q.status !== 'complete' && q.def.id !== 'q4_regicide') { q.status = 'complete'; }
+  const q4 = g.questSystem.quests.find((q) => q.def.id === 'q4_regicide');
+  q4.status = 'available';
+  g.questSystem.accept();
+});
+await teleport(0, -78, Math.PI, -0.02);
+await ff(2);
+await aim();
+await shot('11-gutterball-boss');
+
+// panels
+await page.keyboard.press('j');
+await page.waitForTimeout(1600);
+await shot('12-quest-log');
+await page.keyboard.press('Escape');
+await page.waitForTimeout(300);
 await page.keyboard.press('k');
-await page.waitForTimeout(500);
+await page.waitForTimeout(600);
 await page.click('[data-skill="hi_racket"]').catch(() => {});
 await page.click('[data-skill="hi_trigger"]').catch(() => {});
 await page.waitForTimeout(300);
-await shot('10-skilltree');
+await shot('13-skilltree');
 await page.keyboard.press('Escape');
 await page.waitForTimeout(300);
 await page.keyboard.press('Tab');
 await page.waitForTimeout(500);
-await page.evaluate(() => {
-  // select the first backpack item so the card shows
-  document.querySelector('.inv-row')?.click();
-});
+await page.evaluate(() => document.querySelector('.inv-row')?.click());
 await page.waitForTimeout(300);
-await shot('11-inventory');
+await shot('14-inventory');
 await page.keyboard.press('Escape');
+await page.waitForTimeout(300);
 
-// sandbox page
+// sandbox
 await page.goto('http://127.0.0.1:4519/sandbox.html');
 await page.waitForTimeout(3000);
-await shot('12-sandbox');
+await shot('15-sandbox');
 
 await browser.close();
 server.close();

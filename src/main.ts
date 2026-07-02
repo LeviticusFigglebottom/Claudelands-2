@@ -1,35 +1,42 @@
-// Boot + game loop. Wires renderer, post stack, world, player, enemies,
-// loot, UI panels, and the event bus into the vertical-slice loop:
-// shoot -> kill -> loot beam -> pick up -> level -> spend point -> action skill.
+// Boot + game loop — pass 2. Wires renderer, post stack, the multi-district
+// overworld, player, enemies/bosses, quests, loot, debris, dynamic music,
+// compass, panels (inventory/skills/vendor/quest log/dialogue/pause/fast
+// travel), and the save system into one loop.
 
 import * as THREE from 'three';
 import { PostPipeline } from './render/post';
 import { World } from './game/world';
-import { GULLY_SEVEN } from './data/zone';
+import { WORLD, PLAYER_SPAWN, districtAt } from './data/world';
 import { Player } from './game/player';
-import { state, bus, xpForLevel } from './game/state';
+import { state, bus, hasSave, writeSave, readSave, clearSave } from './game/state';
 import { statsys } from './game/stats';
 import { juice } from './game/juice';
 import { fx } from './game/particles';
+import { debris } from './game/debris';
 import { loot } from './game/loot';
 import { projectiles } from './game/projectiles';
 import { enemySpawner, setEnemyHooks, type Enemy } from './game/enemies';
 import { actionSkill } from './game/actionskill';
-import { setNumberSpawner, setTargetProvider, tickCombatClock, type Damageable } from './game/combat';
+import { setNumberSpawner, setTargetProvider, setPlayerDamageRouter, tickCombatClock, type Damageable } from './game/combat';
+import { questSystem } from './game/quests';
 import { audio } from './audio/synth';
+import { music } from './audio/music';
 import { starterWeapon, generateWeapon } from './gen/weapongen';
 import { generateShield, generateGrenadeMod } from './gen/geargen';
 import { DamageNumberSystem } from './ui/damagenumbers';
 import { Hud } from './ui/hud';
+import { Compass, type CompassMarker } from './ui/compass';
 import { InventoryPanel } from './ui/inventory';
 import { SkillTreePanel } from './ui/skilltree';
 import { VendorPanel } from './ui/vendor';
+import { QuestTracker, QuestLogPanel, DialoguePanel } from './ui/quests';
+import { PausePanel } from './ui/pause';
 import { feedPickup, feedText, bark, playWireLog, showInteract, setDownedOverlay, banner, buildTitleScreen } from './ui/misc';
 import { itemCardHTML } from './ui/itemcard';
 import { pick } from './util/rng';
-import { SECOND_WIND_LINES, LEVELUP_LINES } from './data/flavor';
-import { rarityById } from './data/rarity';
+import { SECOND_WIND_LINES, LEVELUP_LINES, VICTORY_LINES } from './data/flavor';
 import type { ItemInstance } from './game/types';
+import type { QuestStatus } from './game/quests';
 
 // ---------------------------------------------------------------- renderer
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
@@ -40,7 +47,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.08, 500);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.08, 700);
 camera.layers.enable(1);
 scene.add(camera);
 
@@ -55,25 +62,32 @@ window.addEventListener('resize', () => {
 
 // ---------------------------------------------------------------- systems
 fx.attach(scene);
+debris.attach(scene);
 projectiles.attach(scene);
 loot.attach(scene);
 actionSkill.attach(scene);
 
-const world = new World(GULLY_SEVEN, scene);
+const world = new World(scene);
 loot.groundHeight = (x, z) => world.groundHeight(x, z);
 projectiles.groundHeight = (x, z) => world.groundHeight(x, z);
+projectiles.collideSphere = (pos, r) => world.collideSphere(pos, r);
+actionSkill.groundHeight = (x, z) => world.groundHeight(x, z);
 
 const player = new Player(camera);
+player.position.set(PLAYER_SPAWN.x, world.groundHeight(PLAYER_SPAWN.x, PLAYER_SPAWN.z), PLAYER_SPAWN.z);
+player.respawnPoint.copy(player.position);
 player.world = {
   groundHeight: (x, z) => world.groundHeight(x, z),
   resolveCollision: (p, r) => world.resolveCollision(p, r),
   raycastStatics: (ray) => world.raycastStatics(ray),
+  barrels: () => world.barrels,
   arenaHalf: world.arenaHalf,
 };
 player.bindInput(canvas);
+setPlayerDamageRouter((amount, element, from) => player.damage(amount, element, from));
 
 projectiles.player = player;
-projectiles.targets = () => [...enemySpawner.enemies, player] as unknown as Damageable[];
+projectiles.targets = () => [...enemySpawner.enemies, ...world.barrels, player] as unknown as Damageable[];
 projectiles.healPlayer = (amt) => {
   player.heal(amt);
   dmgNumbers.spawn(player.position.clone().add(new THREE.Vector3(0, 1.8, 0)), amt, 'kinetic', false, 'heal');
@@ -82,11 +96,11 @@ actionSkill.enemies = () => enemySpawner.enemies;
 
 const dmgNumbers = new DamageNumberSystem(camera);
 setNumberSpawner((pos, amount, element, crit, kind) => dmgNumbers.spawn(pos as THREE.Vector3, amount, element, crit, kind));
-setTargetProvider(() => [...enemySpawner.enemies, player] as unknown as Damageable[]);
+setTargetProvider(() => [...enemySpawner.enemies, ...world.barrels, player] as unknown as Damageable[]);
 
 setEnemyHooks({
   playerPos: () => player.position,
-  damagePlayer: (amount, element) => player.damage(amount, element),
+  damagePlayer: (amount, element, from) => player.damage(amount, element, from),
   groundHeight: (x, z) => world.groundHeight(x, z),
   tauntTarget: () => actionSkill.tauntTarget(),
   bark,
@@ -94,21 +108,31 @@ setEnemyHooks({
     enemySpawner.gibBurst(enemy);
     const tier = enemy.badass ? Math.max(2, enemy.def.dropTier) : enemy.def.dropTier;
     loot.dropForTier(tier, enemy.level, enemy.position.clone());
+    if (questSystem.wantsCollectDrop(enemy)) {
+      loot.spawnQuestItem(enemy.position.clone().add(new THREE.Vector3(0.5, 0.3, 0.5)), 'Helix Drive Core');
+    }
     const xp = enemy.def.xp * Math.pow(1.13, enemy.level - 1) * (enemy.badass ? 3 : 1);
     state.addXp(xp);
     state.recordGrit('kill');
+    questSystem.recordKill(enemy);
     bus.emit('kill', { xp, worldPos: enemy.position, crit: false, overkill });
     if (player.downed) player.secondWind();
     if (enemy.def.dropTier >= 3) {
-      feedText('<b style="color:#ffa21f">GRAND DUKE GUTTERBALL has been de-throned!</b>', '#ffa21f');
-      bark('GUTTERBALL', 'tell my trash... it was... load-bearing...');
+      // boss death ceremony: legendary shower
+      feedText(`<b style="color:#ffa21f">${enemy.displayName} has fallen!</b>`, '#ffa21f');
+      loot.spawnItem(generateWeapon({ level: state.level, rarityId: 'legendary' }), enemy.position.clone().add(new THREE.Vector3(1, 1, 0)), true);
+      audio.victory();
     }
   },
 });
-enemySpawner.attach(scene, GULLY_SEVEN);
+enemySpawner.attach(scene);
 
 // ---------------------------------------------------------------- UI
 const hud = new Hud();
+const compass = new Compass();
+const questTracker = new QuestTracker();
+player.onHurtFrom = (rel) => hud.hurtFrom(rel);
+
 const panelRoot = document.getElementById('panel-root')!;
 const inventoryPanel = new InventoryPanel({
   onEquipChange: () => {
@@ -117,17 +141,23 @@ const inventoryPanel = new InventoryPanel({
   },
   onDrop: (item: ItemInstance) => {
     const dropPos = player.position.clone().add(player.forward.multiplyScalar(1.5));
-    dropPos.y = 0;
+    dropPos.y = world.groundHeight(dropPos.x, dropPos.z);
     loot.spawnItem(item, dropPos, true);
   },
 });
 const skillPanel = new SkillTreePanel();
 const vendorPanel = new VendorPanel();
+const questLogPanel = new QuestLogPanel();
+const dialoguePanel = new DialoguePanel();
+const pausePanel = new PausePanel();
 
-type PanelKind = 'none' | 'inventory' | 'skills' | 'vendor_gun' | 'vendor_med';
+type PanelKind = 'none' | 'inventory' | 'skills' | 'vendor_gun' | 'vendor_med' | 'questlog' | 'dialogue' | 'pause' | 'fasttravel';
 let openPanel: PanelKind = 'none';
 
+const discoveredStations = new Set<string>(['Gutterlight Plaza']);
+
 function setPanel(kind: PanelKind): void {
+  dialoguePanel.stop();
   openPanel = kind;
   player.paused = kind !== 'none';
   panelRoot.classList.toggle('show', kind !== 'none');
@@ -142,15 +172,69 @@ function setPanel(kind: PanelKind): void {
   panel.className = 'panel';
   panelRoot.innerHTML = '';
   panelRoot.appendChild(panel);
-  if (kind === 'inventory') inventoryPanel.render(panel);
-  else if (kind === 'skills') skillPanel.render(panel, () => { player.recomputeVitals(); hud.update(player); });
-  else vendorPanel.render(panel, kind, {
-    onBuyItem: (item) => { state.inventory.push(item); feedPickup(item); },
-    onBuyAmmo: () => feedText('AMMO & GRENADES REFILLED', '#d8b028'),
-    onBuyHealth: (frac) => player.heal(player.maxFlesh * frac),
-    playerHealthFrac: () => player.flesh / player.maxFlesh,
+  switch (kind) {
+    case 'inventory': inventoryPanel.render(panel); break;
+    case 'skills': skillPanel.render(panel, () => { player.recomputeVitals(); }); break;
+    case 'questlog': questLogPanel.render(panel); break;
+    case 'pause': pausePanel.render(panel, () => setPanel('none')); break;
+    case 'dialogue':
+      dialoguePanel.render(panel,
+        () => { questSystem.accept(); autosave(); setPanel('none'); },
+        () => setPanel('none'));
+      break;
+    case 'fasttravel': renderFastTravel(panel); break;
+    default:
+      vendorPanel.render(panel, kind, {
+        onBuyItem: (item) => { state.inventory.push(item); feedPickup(item); },
+        onBuyAmmo: () => feedText('AMMO & GRENADES REFILLED', '#d8b028'),
+        onBuyHealth: (frac) => player.heal(player.maxFlesh * frac),
+        playerHealthFrac: () => player.flesh / player.maxFlesh,
+      });
+  }
+}
+
+function renderFastTravel(panel: HTMLElement): void {
+  const stations = WORLD.pois.filter((p) => p.kind === 'fast_travel');
+  const rows = stations.map((s) => {
+    const known = discoveredStations.has(s.data ?? '');
+    return `<button class="ft-row" data-station="${s.data}" ${known ? '' : 'disabled'}>
+      ${known ? '◈ ' + s.data : '◇ UNDISCOVERED STATION'}
+    </button>`;
+  }).join('');
+  panel.innerHTML = `
+    <h1>RE-CONSTRUCTOR NETWORK</h1>
+    <div class="p-sub">Matter is a suggestion. Warranty void during transit. Undiscovered nodes must be visited on foot first.</div>
+    <div class="p-body"><div style="flex:1; display:flex; flex-direction:column; gap:10px; max-width:460px;">${rows}</div></div>
+    <div class="p-hint">E / ESC to close</div>`;
+  panel.querySelectorAll<HTMLButtonElement>('.ft-row').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const name = btn.dataset.station!;
+      const poi = stations.find((s) => s.data === name);
+      if (!poi) return;
+      audio.turretDeploy();
+      player.position.set(poi.x + 2, world.groundHeight(poi.x + 2, poi.z + 2), poi.z + 2);
+      fx.burst(player.position.clone().add(new THREE.Vector3(0, 1, 0)), 0x54d4ff, 30, 5, 0.12, 0.8, 4);
+      feedText(`RE-CONSTRUCTED AT <b>${name}</b>`, '#54d4ff');
+      setPanel('none');
+    });
   });
 }
+
+// ---------------------------------------------------------------- quests
+questSystem.init({
+  openGate: (id) => {
+    world.openGate(id);
+    feedText('A gate rumbles open somewhere. Probably fine.', '#54d4ff');
+  },
+  playerPos: () => player.position,
+  toast: feedText,
+  banner,
+  onVictory: () => {
+    banner(pick(Math.random as never, VICTORY_LINES));
+    audio.victory();
+    feedText('<b style="color:#3ddc4e">MAIN CONTRACT COMPLETE.</b> The districts keep restocking — happy hunting, contractor.', '#3ddc4e');
+  },
+});
 
 // ---------------------------------------------------------------- events
 bus.on('levelup', ({ level }) => {
@@ -158,7 +242,7 @@ bus.on('levelup', ({ level }) => {
   banner(`${pick(Math.random as never, LEVELUP_LINES)} LEVEL ${level}`);
   fx.burst(player.position.clone().add(new THREE.Vector3(0, 1, 0)), 0x3ddc4e, 40, 6, 0.14, 1, 4);
   player.recomputeVitals();
-  player.heal(player.maxFlesh); // ding = full tank, classic
+  player.heal(player.maxFlesh);
 });
 bus.on('gritTick', ({ label }) => {
   if (label) feedText(`◆ GRIT RANK UP — <b>${label}</b>`, '#ffd23c');
@@ -170,8 +254,32 @@ bus.on('secondwind', () => {
 });
 document.addEventListener('player-respawned', () => {
   setDownedOverlay(false);
-  feedText('RE-CONSTRUCTED AT STATION — the Re-Constructor kept 10% for “parts”', '#54d4ff');
+  feedText('RE-CONSTRUCTED — the Re-Constructor kept 10% for “parts”', '#54d4ff');
 });
+
+// ---------------------------------------------------------------- save
+function autosave(): void {
+  if (!started) return;
+  writeSave({
+    quests: questSystem.serialize(),
+    stations: [...discoveredStations],
+  });
+}
+setInterval(autosave, 25000);
+document.addEventListener('visibilitychange', () => { if (document.hidden) autosave(); });
+bus.on('levelup', () => autosave());
+
+function restoreSave(): boolean {
+  const data = readSave();
+  if (!data) return false;
+  questSystem.load((data.quests as { i: number; s: QuestStatus; p: number }[]) ?? [], (id) => world.openGate(id));
+  for (const s of (data.stations as string[]) ?? []) discoveredStations.add(s);
+  player.recomputeVitals();
+  player.flesh = player.maxFlesh;
+  player.shield = player.maxShield;
+  player.equipWeapon(state.activeWeapon, true);
+  return true;
+}
 
 // ---------------------------------------------------------------- starting kit
 function giveStartingKit(): void {
@@ -188,9 +296,15 @@ function giveStartingKit(): void {
 
 // ---------------------------------------------------------------- input glue
 document.addEventListener('keydown', (e) => {
+  if (!started) return;
   if (e.code === 'Tab') { e.preventDefault(); setPanel(openPanel === 'inventory' ? 'none' : 'inventory'); return; }
   if (e.code === 'KeyK') { setPanel(openPanel === 'skills' ? 'none' : 'skills'); return; }
-  if (e.code === 'Escape' && openPanel !== 'none') { setPanel('none'); return; }
+  if (e.code === 'KeyJ') { setPanel(openPanel === 'questlog' ? 'none' : 'questlog'); return; }
+  if (e.code === 'Escape') {
+    if (openPanel !== 'none') setPanel('none');
+    else setPanel('pause');
+    return;
+  }
   if (openPanel !== 'none') return;
 
   if (e.code === 'KeyR') player.startReload();
@@ -208,7 +322,6 @@ document.addEventListener('keydown', (e) => {
 });
 
 function interact(): void {
-  // item pickups take priority
   const p = loot.nearestItem(player.position);
   if (p && p.item) {
     loot.take(p);
@@ -217,16 +330,14 @@ function interact(): void {
     feedPickup(p.item);
     audio.pickup();
     bus.emit('pickup', { item: p.item });
-    // auto-equip if hands are empty
     if (p.item.kind === 'weapon' && !state.activeWeapon) {
       state.equippedWeapons[state.activeSlot] = p.item;
       player.equipWeapon(p.item);
     }
     return;
   }
-  // world interactables
   for (const it of world.interactables) {
-    if (it.pos.distanceTo(player.position) > 3.2) continue;
+    if (it.pos.distanceTo(player.position) > 3.4) continue;
     switch (it.kind) {
       case 'chest':
         it.chest?.open(state.level, bark);
@@ -234,16 +345,10 @@ function interact(): void {
         return;
       case 'vendor_gun': setPanel('vendor_gun'); return;
       case 'vendor_med': setPanel('vendor_med'); return;
-      case 'fast_travel':
-        feedText('RE-CONSTRUCTOR: network offline. You are already at the only node. Story of your life.', '#54d4ff');
-        audio.uiOpen();
-        return;
+      case 'npc': setPanel('dialogue'); return;
+      case 'fast_travel': setPanel('fasttravel'); return;
       case 'wirelog':
-        if (playWireLog(it.data ?? '')) {
-          world.removeInteractable(it);
-          const spool = world.interactables.find(() => false); // spool mesh stays as dressing
-          void spool;
-        }
+        if (playWireLog(it.data ?? '')) world.removeInteractable(it);
         return;
     }
   }
@@ -261,7 +366,7 @@ function updatePrompts(): void {
   }
   hoverCard.innerHTML = '';
   for (const it of world.interactables) {
-    if (it.pos.distanceTo(player.position) < 3.2) {
+    if (it.pos.distanceTo(player.position) < 3.4) {
       showInteract(it.label);
       return;
     }
@@ -279,28 +384,36 @@ function compareFor(item: ItemInstance): ItemInstance | null {
   }
 }
 
+// ---------------------------------------------------------------- compass markers
+function compassMarkers(): CompassMarker[] {
+  const markers: CompassMarker[] = [];
+  const qm = questSystem.markerPos();
+  if (qm) markers.push({ x: qm.x, z: qm.z, icon: '◆', color: '#ffd23c', id: 'quest' });
+  for (const poi of WORLD.pois) {
+    if (poi.kind === 'fast_travel' && discoveredStations.has(poi.data ?? '')) {
+      markers.push({ x: poi.x, z: poi.z, icon: '⬡', color: '#54d4ff', id: 'ft_' + poi.id });
+    }
+  }
+  const boss = enemySpawner.boss;
+  if (boss?.alive) markers.push({ x: boss.position.x, z: boss.position.z, icon: '☠', color: '#ff5a5a', id: 'boss' });
+  return markers;
+}
+
 // ---------------------------------------------------------------- loop
 let last = performance.now();
 let started = false;
 
-function frame(): void {
-  requestAnimationFrame(frame);
-  const now = performance.now();
-  let dt = Math.min((now - last) / 1000, 0.05);
-  last = now;
-  if (!started) { post.render(dt); return; }
-
-  const timeScale = juice.update(dt);
-  dt *= timeScale;
-
+function stepSim(dt: number): void {
   tickCombatClock(dt);
   statsys.update(dt);
   player.update(dt);
   actionSkill.update(dt);
   enemySpawner.update(dt);
   projectiles.update(dt);
+  questSystem.update();
   loot.update(dt, player.position, (p) => {
     if (p.kind === 'cash') { state.money += (p.amount ?? 0) * statsys.mult('cashBonus'); audio.cash(); }
+    else if (p.kind === 'quest') { questSystem.recordCollect(); }
     else if (p.kind === 'ammo') {
       const w = state.activeWeapon;
       if (w) {
@@ -312,57 +425,88 @@ function frame(): void {
     } else if (p.kind === 'health') { player.heal(player.maxFlesh * (p.amount ?? 0.25)); audio.pickup(); }
     loot.take(p);
   });
-  world.update(dt);
+  world.update(dt, player.position);
+  debris.update(dt, player.position);
   fx.update(dt);
 
-  if (player.downed) setDownedOverlay(true, player.downedT / player.downedMax);
-  hud.update(player);
-  updatePrompts();
-
-  // downed post FX
-  post.ink.uniforms.uDesat.value = player.downed ? 0.65 : 0;
-
-  post.render(dt);
+  // station discovery + respawn point (game logic — lives in the sim step)
+  let bestD = Infinity;
+  for (const poi of WORLD.pois) {
+    if (poi.kind !== 'fast_travel') continue;
+    const dd = Math.hypot(player.position.x - poi.x, player.position.z - poi.z);
+    if (!discoveredStations.has(poi.data ?? '') && dd < 8) {
+      discoveredStations.add(poi.data ?? '');
+      feedText(`RE-CONSTRUCTOR DISCOVERED — <b>${poi.data}</b>`, '#54d4ff');
+      audio.questAccept();
+      autosave();
+    }
+    if (discoveredStations.has(poi.data ?? '') && dd < bestD) {
+      bestD = dd;
+      player.respawnPoint.set(poi.x + 2, world.groundHeight(poi.x + 2, poi.z + 2), poi.z + 2);
+    }
+  }
 }
 
+function frame(): void {
+  requestAnimationFrame(frame);
+  const now = performance.now();
+  let dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  if (!started) { post.render(dt); return; }
+
+  const timeScale = juice.update(dt);
+  dt *= timeScale;
+
+  stepSim(dt);
+  world.followSun(player.position);
+
+  // dynamic music: calm → combat → boss
+  const bossActive = enemySpawner.boss?.alive && enemySpawner.boss.position.distanceTo(player.position) < 70;
+  music.update(dt, bossActive ? 2 : enemySpawner.aggroCount() > 0 ? 1 : 0);
+
+  // district plate
+  const d = districtAt(player.position.x, player.position.z);
+  hud.setDistrict(d?.name ?? WORLD.name, d?.subtitle ?? 'The open waste.');
+
+  if (player.downed) setDownedOverlay(true, player.downedT / player.downedMax);
+  hud.update(player, dt);
+  questTracker.update();
+  compass.update(player.position, player.yaw, compassMarkers());
+  updatePrompts();
+
+  post.ink.uniforms.uDesat.value = player.downed ? 0.65 : 0;
+  post.render(dt);
+}
 frame();
 
 // ---------------------------------------------------------------- boot
-buildTitleScreen(() => {
+buildTitleScreen(hasSave(), (continueRun) => {
   audio.unlock();
-  giveStartingKit();
+  if (continueRun && restoreSave()) {
+    feedText('CONTRACT RESUMED. The paperwork missed you.', '#ffd23c');
+  } else {
+    clearSave();
+    giveStartingKit();
+    setTimeout(() => bark('WIRE SPOOL (AUTO-PLAY)', 'Welcome to the Claudelands, contractor. Foreman Quibb is waiting in Gutterlight — follow the gold diamond.'), 1200);
+  }
   started = true;
   canvas.requestPointerLock();
-  setTimeout(() => bark('WIRE SPOOL (AUTO-PLAY)', 'Welcome to Gully Seven, contractor. Kill the Duke, keep whatever falls out.'), 1200);
-  setTimeout(() => feedText('Find the <b>WIRE SPOOLS</b> — the previous contractor left notes.', '#54d4ff'), 5000);
 });
 canvas.addEventListener('click', () => {
   if (started && openPanel === 'none' && document.pointerLockElement !== canvas) canvas.requestPointerLock();
 });
 
-// keep the reference alive for future zone streaming (documented seam)
-void xpForLevel;
-
-// debug/testing seam (used by tools/screenshot.mjs and future integration tests):
-// fastForward steps the sim without rendering — headless CI runs at ~2fps,
-// so wall-clock waits alone can't reach wave timers.
-function stepSim(dt: number): void {
-  tickCombatClock(dt);
-  statsys.update(dt);
-  player.update(dt);
-  actionSkill.update(dt);
-  enemySpawner.update(dt);
-  projectiles.update(dt);
-  world.update(dt);
-  fx.update(dt);
-}
+// ---------------------------------------------------------------- debug seam
+// Used by tools/screenshot.mjs and integration tests. fastForward steps the
+// sim without rendering (headless CI runs at ~2fps).
 (window as unknown as Record<string, unknown>).__game = {
-  player, camera, state, world, enemySpawner, loot,
+  player, camera, state, world, enemySpawner, loot, questSystem,
   gen: { generateWeapon, generateShield, generateGrenadeMod },
   equip: (w: import('./game/types').WeaponInstance) => {
     state.equippedWeapons[state.activeSlot] = w;
     player.equipWeapon(w, true);
   },
+  setPanelDebug: setPanel,
   fastForward: (seconds: number) => {
     if (!started) return;
     const h = 1 / 60;

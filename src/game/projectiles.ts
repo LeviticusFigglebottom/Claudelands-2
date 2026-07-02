@@ -5,10 +5,11 @@
 
 import * as THREE from 'three';
 import { fx } from './particles';
-import { splashDamage, applyDamage, type Damageable, type HitOpts } from './combat';
+import { splashDamage, damageTarget, type Damageable, type HitOpts } from './combat';
 import { ELEMENTS } from '../data/elements';
 import { glowMat } from '../render/toon';
 import { FX_LAYER } from '../render/post';
+import { audio } from '../audio/synth';
 import type { ElementId } from './types';
 
 export interface Projectile {
@@ -39,6 +40,8 @@ export class ProjectileSystem {
   targets: () => Damageable[] = () => [];
   player!: Damageable & { position: THREE.Vector3 };
   groundHeight: (x: number, z: number) => number = () => 0;
+  /** Sphere-vs-world test (walls/props): returns outward push normal. */
+  collideSphere: (pos: THREE.Vector3, r: number) => THREE.Vector3 | null = () => null;
   healPlayer: (amount: number) => void = () => {};
 
   attach(scene: THREE.Scene): void { this.scene = scene; }
@@ -98,8 +101,35 @@ export class ProjectileSystem {
         fx.emit(p.mesh.position, new THREE.Vector3(0, 0.5, 0), ELEMENTS[p.element].colorAlt, 0.08, 0.35, 0);
       }
 
-      // timed fuse
-      if (p.fuse > 0 && p.age >= p.fuse) { this.explode(p); continue; }
+      // timed fuse: blink + beep as it runs down
+      if (p.fuse > 0) {
+        if (p.age >= p.fuse) { this.explode(p); continue; }
+        const remaining = p.fuse - p.age;
+        const blinkRate = remaining < 0.5 ? 14 : 6;
+        p.mesh.visible = Math.sin(p.age * blinkRate * Math.PI) > -0.4;
+        const beepStep = remaining < 0.5 ? 0.15 : 0.4;
+        if (Math.floor(p.age / beepStep) !== Math.floor((p.age - dt) / beepStep) && p.source === 'player') {
+          audio.fuseBeep(1 + (1 - remaining / p.fuse) * 0.8);
+        }
+      }
+
+      // wall/prop bounce
+      if (!p.stuckTo) {
+        const n = this.collideSphere(p.mesh.position, 0.16);
+        if (n) {
+          if (p.fuse > 0 || p.bounces > 0) {
+            // reflect off the wall
+            const dot = p.vel.dot(n);
+            p.vel.addScaledVector(n, -1.6 * dot).multiplyScalar(0.55);
+            p.mesh.position.addScaledVector(n, 0.2);
+            audio.bounce();
+            if (p.bounces > 0) p.bounces--;
+          } else {
+            this.explode(p);
+            continue;
+          }
+        }
+      }
 
       // ground collision
       const gy = this.groundHeight(p.mesh.position.x, p.mesh.position.z);
@@ -152,7 +182,7 @@ export class ProjectileSystem {
     }
 
     if (direct && p.splash <= 0) {
-      applyDamage(direct, p.damage, p.element, { source: p.source, elemChance: 0.5 });
+      damageTarget(direct, p.damage, p.element, { source: p.source, elemChance: 0.5 }, pos);
       fx.impact(pos, p.element, true);
     } else {
       const before = this.aliveFleshTotal();

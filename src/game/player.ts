@@ -1,8 +1,8 @@
-// The player: pointer-lock FPS controller, health/shield with gear stats,
-// weapon viewmodel (procedurally assembled from the equipped roll), firing
-// (hitscan + projectile), manufacturer gimmicks (laser_focus tightening,
-// throw_reload, crit_ricochet, always_elemental ammo draw), reload/swap
-// animation, ADS, grenades, and Fight For Your Life.
+// The player — pass 2. Pointer-lock FPS controller with terrain-aware
+// movement, footsteps/landing feel, weapon sway, manufacturer-flavored
+// reload animations (with physical mag drops + shell casings), firing
+// (hitscan + projectile) with surface decals, gimmicks, ADS, grenades,
+// damage-direction feedback, and Fight For Your Life.
 
 import * as THREE from 'three';
 import type { WeaponInstance, ElementId } from './types';
@@ -11,29 +11,38 @@ import { statsys } from './stats';
 import { juice, JUICE } from './juice';
 import { audio } from '../audio/synth';
 import { fx } from './particles';
+import { debris } from './debris';
 import { buildGunMesh } from '../gen/gunmesh';
 import { makerById } from '../data/manufacturers';
 import { applyDamage, splashDamage, combatNow, type Damageable, type StatusEffect } from './combat';
 import { projectiles } from './projectiles';
 import { enemySpawner, type Enemy } from './enemies';
 import { ELEMENTS } from '../data/elements';
-import { WEAPON_TYPES } from '../data/weapons';
 import { clamp, damp, lerp } from '../util/maff';
 import { LEGENDARIES } from '../data/legendaries';
+import type { StaticHit, ExplosiveBarrel } from './world';
 
 const EYE_HEIGHT = 1.65;
-const CROUCHLESS_RADIUS = 0.45;
+const PLAYER_RADIUS = 0.45;
 
 export interface WorldQuery {
   groundHeight: (x: number, z: number) => number;
   resolveCollision: (pos: THREE.Vector3, radius: number) => void;
-  raycastStatics: (ray: THREE.Raycaster) => THREE.Intersection | null;
+  raycastStatics: (ray: THREE.Raycaster) => StaticHit | null;
+  barrels: () => ExplosiveBarrel[];
   arenaHalf: number;
 }
 
+export interface HitscanTarget {
+  target: Damageable;
+  enemy: Enemy | null;      // set when the target is an actual enemy
+  point: THREE.Vector3;
+  isCrit: boolean;
+  distance: number;
+}
+
 export class Player implements Damageable {
-  // Damageable
-  position = new THREE.Vector3(0, 0, 30);
+  position = new THREE.Vector3(0, 0, 112);
   alive = true;
   shield = 0; maxShield = 0;
   armor = 0; maxArmor = 0;
@@ -43,12 +52,13 @@ export class Player implements Damageable {
   isPlayer = true;
 
   camera: THREE.PerspectiveCamera;
-  private yaw = 0; // spawn facing the arena, back to the vendor plaza
-  private pitch = 0;
+  yaw = 0; // spawn at the north road looking south into Gutterlight
+  pitch = 0;
   private velY = 0;
   private grounded = true;
+  private wasGrounded = true;
   private keys = new Set<string>();
-  private mouseDown = false;
+  mouseDown = false;
   private adsHeld = false;
   adsAmount = 0;
 
@@ -57,41 +67,46 @@ export class Player implements Damageable {
   private gunMesh: THREE.Group | null = null;
   private magazine = 0;
   private reloadT = -1;
+  private magDropped = false;
   private swapT = -1;
   private fireTimer = 0;
-  private focusHeat = 0;       // lumen laser_focus
-  private overkillBank = 0;    // Overkill capstone
+  private focusHeat = 0;
+  private fireHeat = 0;           // sustained-fire bloom for the crosshair
+  private overkillBank = 0;
   private shieldDelayT = 0;
   private baseFov = 75;
   private bobT = 0;
-  private lastShotElement: ElementId = 'kinetic';
+  private stepT = 0;
+  private landDip = 0;
+  private swayX = 0;
+  private swayY = 0;
+  lastSpreadDeg = 1;
 
   // fight for your life
   downed = false;
   downedT = 0;
   downedMax = 10;
 
-  paused = false; // set by UI panels
+  paused = false;
 
   world!: WorldQuery;
-  onAmmoPickup: () => void = () => {};
+  /** Set by UI: receives world-space angle of incoming damage. */
+  onHurtFrom: ((relAngle: number) => void) | null = null;
+  /** Set by main: where to respawn after bleeding out. */
+  respawnPoint = new THREE.Vector3(0, 0, 112);
 
   constructor(camera: THREE.PerspectiveCamera) {
     this.camera = camera;
     this.baseFov = camera.fov;
     camera.add(this.viewmodel);
     this.viewmodel.position.set(0.28, -0.26, -0.5);
-    // pose the camera at spawn immediately so pre-start frames (title
-    // backdrop, slow first render) already show the arena, not the origin
     camera.position.set(this.position.x, this.position.y + EYE_HEIGHT, this.position.z);
     camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
   }
 
   // ------------------------------------------------------------------ input
   bindInput(el: HTMLElement): void {
-    document.addEventListener('keydown', (e) => {
-      this.keys.add(e.code);
-    });
+    document.addEventListener('keydown', (e) => this.keys.add(e.code));
     document.addEventListener('keyup', (e) => this.keys.delete(e.code));
     el.addEventListener('mousedown', (e) => {
       if (this.paused) return;
@@ -107,14 +122,11 @@ export class Player implements Damageable {
       const sens = 0.0021 * (1 - this.adsAmount * 0.55);
       this.yaw -= e.movementX * sens;
       this.pitch = clamp(this.pitch - e.movementY * sens, -1.45, 1.45);
+      // viewmodel sway lags behind the look
+      this.swayX = clamp(this.swayX + e.movementX * 0.0004, -0.03, 0.03);
+      this.swayY = clamp(this.swayY + e.movementY * 0.0004, -0.03, 0.03);
     });
     el.addEventListener('contextmenu', (e) => e.preventDefault());
-  }
-
-  keyPressed(code: string): boolean { return this.keys.has(code); }
-  consumeKey(code: string): boolean {
-    if (this.keys.has(code)) { this.keys.delete(code); return true; }
-    return false;
   }
 
   // ------------------------------------------------------------------ gear
@@ -133,7 +145,6 @@ export class Player implements Damageable {
     if (w) {
       this.gunMesh = buildGunMesh(w);
       this.viewmodel.add(this.gunMesh);
-      this.magazine = Math.min(w.stats.magSize, this.magazine === -1 ? w.stats.magSize : w.stats.magSize);
       this.magazine = w.stats.magSize;
       this.reloadT = -1;
       if (!instant) this.swapT = 0.35;
@@ -153,18 +164,26 @@ export class Player implements Damageable {
     this.flesh = Math.min(this.maxFlesh, this.flesh + amount);
   }
 
-  damage(amount: number, element: string): void {
+  damage(amount: number, element: string, from?: THREE.Vector3): void {
     if (this.downed || !this.alive) return;
     const el = (element in ELEMENTS ? element : 'kinetic') as ElementId;
     let dmg = amount;
     const sh = state.shield;
-    if (sh?.special?.id === 'adaptive') dmg *= 0.82; // simplified adaptive
-    this.shieldDelayT = (sh?.rechargeDelay ?? 3) * 1;
+    if (sh?.special?.id === 'adaptive') dmg *= 0.82;
+    this.shieldDelayT = sh?.rechargeDelay ?? 3;
     const hadShield = this.shield > 0;
     applyDamage(this, dmg, el, { noNumbers: true, source: 'enemy', noChain: true });
     juice.addTrauma(0.32);
     document.getElementById('vignette-hurt')?.classList.add('hurt');
     setTimeout(() => document.getElementById('vignette-hurt')?.classList.remove('hurt'), 180);
+    if (from && this.onHurtFrom) {
+      const worldAngle = Math.atan2(from.x - this.position.x, from.z - this.position.z);
+      const facing = this.yaw + Math.PI;
+      let rel = worldAngle - facing;
+      while (rel > Math.PI) rel -= Math.PI * 2;
+      while (rel < -Math.PI) rel += Math.PI * 2;
+      this.onHurtFrom(rel);
+    }
     if (hadShield && this.shield <= 0 && sh?.special?.id === 'nova') {
       splashDamage(this.position.clone(), 5, sh.special.power, 'blast', { source: 'player' });
     }
@@ -172,8 +191,6 @@ export class Player implements Damageable {
   }
 
   onDeath(): void {
-    // Reached when damage lands via combat paths that skip damage() (e.g.
-    // enemy splash). Players never die outright — they go down.
     this.alive = true;
     if (!this.downed) this.enterDowned();
   }
@@ -181,7 +198,7 @@ export class Player implements Damageable {
   private enterDowned(): void {
     this.downed = true;
     this.flesh = 1;
-    this.alive = true; // stays targetable-ish but we gate enemy damage above
+    this.alive = true;
     this.downedT = 0;
     this.downedMax = 10 * statsys.mult('fflTime');
     audio.downed();
@@ -201,17 +218,17 @@ export class Player implements Damageable {
     this.downed = false;
     this.flesh = this.maxFlesh;
     this.shield = this.maxShield;
-    this.position.set(0, 0, 30);
-    state.money = Math.floor(state.money * 0.9); // the Re-Constructor's cut
+    this.position.copy(this.respawnPoint);
+    state.money = Math.floor(state.money * 0.9);
   }
 
   // ------------------------------------------------------------------ update
   update(dt: number): void {
     const speedStat = statsys.mult('moveSpeed');
     const downedFactor = this.downed ? 0.35 : 1;
-    const speed = 7.2 * speedStat * downedFactor * (this.keys.has('ShiftLeft') && !this.downed ? 1.45 : 1);
+    const sprinting = this.keys.has('ShiftLeft') && !this.downed && !this.adsHeld;
+    const speed = 7.2 * speedStat * downedFactor * (sprinting ? 1.45 : 1);
 
-    // movement
     const fwd = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
     const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
     const move = new THREE.Vector3();
@@ -234,13 +251,32 @@ export class Player implements Damageable {
     this.velY -= 24 * dt;
     this.position.y += this.velY * dt;
     if (this.position.y <= ground) {
+      // landing feel
+      if (!this.wasGrounded && this.velY < -4) {
+        audio.land(this.velY < -11);
+        this.landDip = Math.min(0.22, -this.velY * 0.014);
+        if (this.velY < -11) juice.addTrauma(0.15);
+      }
       this.position.y = ground;
       this.velY = 0;
       this.grounded = true;
+    } else if (this.position.y > ground + 0.05) {
+      this.grounded = false;
     }
+    this.wasGrounded = this.grounded;
 
-    // collide with props & arena bounds
-    this.world.resolveCollision(this.position, CROUCHLESS_RADIUS);
+    // footsteps
+    if (moving && this.grounded && !this.paused) {
+      this.stepT -= dt * (sprinting ? 1.5 : 1);
+      if (this.stepT <= 0) {
+        this.stepT = 0.38;
+        audio.footstep();
+      }
+    }
+    this.landDip = damp(this.landDip, 0, 8, dt);
+
+    // collide with props & world bounds
+    this.world.resolveCollision(this.position, PLAYER_RADIUS);
     const half = this.world.arenaHalf - 1;
     this.position.x = clamp(this.position.x, -half, half);
     this.position.z = clamp(this.position.z, -half, half);
@@ -255,7 +291,6 @@ export class Player implements Damageable {
     }
     statsys.roidBonus = sh?.special?.id === 'berserk' && this.shield <= 0 ? sh.special.power / 100 : 0;
 
-    // downed timer
     if (this.downed) {
       this.downedT += dt;
       if (this.downedT >= this.downedMax) this.respawnFromDowned();
@@ -270,33 +305,33 @@ export class Player implements Damageable {
     this.camera.updateProjectionMatrix();
 
     // camera transform
-    this.bobT += dt * (moving ? 9 : 2);
+    this.bobT += dt * (moving ? (sprinting ? 11 : 9) : 2);
     const [sx, sy, roll] = juice.sample();
     const bobY = Math.sin(this.bobT * 2) * (moving ? 0.03 : 0.006) * (1 - this.adsAmount);
     const downedDrop = this.downed ? 0.7 : 0;
-    this.camera.position.set(this.position.x + sx, this.position.y + EYE_HEIGHT - downedDrop + bobY + sy, this.position.z);
-    this.camera.rotation.set(this.pitch - juice.recoilPitch, this.yaw, roll, 'YXZ');
+    const sprintRoll = sprinting && moving ? Math.sin(this.bobT) * 0.008 : 0;
+    this.camera.position.set(
+      this.position.x + sx,
+      this.position.y + EYE_HEIGHT - downedDrop + bobY + sy - this.landDip,
+      this.position.z,
+    );
+    this.camera.rotation.set(this.pitch - juice.recoilPitch, this.yaw, roll + sprintRoll, 'YXZ');
 
-    // viewmodel pose
+    // viewmodel pose: hip/ads lerp + sway + bob + land dip
     const vmAds = new THREE.Vector3(0, -0.145, -0.4);
     const vmHip = new THREE.Vector3(0.28, -0.26, -0.5);
     this.viewmodel.position.lerpVectors(vmHip, vmAds, this.adsAmount);
     this.viewmodel.position.z += juice.recoilBack;
-    this.viewmodel.position.y += Math.sin(this.bobT) * (moving ? 0.012 : 0.004) * (1 - this.adsAmount);
-    this.viewmodel.rotation.set(-juice.recoilPitch * 2.2, 0, 0);
+    this.viewmodel.position.x += this.swayX * (1 - this.adsAmount * 0.7);
+    this.viewmodel.position.y += this.swayY * (1 - this.adsAmount * 0.7)
+      + Math.sin(this.bobT) * (moving ? 0.012 : 0.004) * (1 - this.adsAmount)
+      - this.landDip * 0.5;
+    this.viewmodel.rotation.set(-juice.recoilPitch * 2.2 + this.swayY * 1.4, this.swayX * 1.6, this.swayX * 0.8);
+    this.swayX = damp(this.swayX, 0, 7, dt);
+    this.swayY = damp(this.swayY, 0, 7, dt);
 
     // reload / swap animation
-    if (this.reloadT >= 0 && w) {
-      const total = w.stats.reloadTime * statsys.reduction('reloadSpeed');
-      this.reloadT += dt;
-      const f = clamp(this.reloadT / total, 0, 1);
-      this.viewmodel.rotation.x += Math.sin(f * Math.PI) * -0.9;
-      this.viewmodel.position.y -= Math.sin(f * Math.PI) * 0.15;
-      if (this.reloadT > total * 0.55 && this.reloadT - dt <= total * 0.55) audio.reloadClack(1);
-      if (f >= 1) {
-        this.finishReload();
-      }
-    }
+    if (this.reloadT >= 0 && w) this.animateReload(dt, w);
     if (this.swapT > 0) {
       this.swapT -= dt;
       this.viewmodel.position.y -= this.swapT * 0.9;
@@ -306,8 +341,72 @@ export class Player implements Damageable {
     // firing
     this.fireTimer -= dt;
     this.focusHeat = Math.max(0, this.focusHeat - dt * 1.4);
+    this.fireHeat = Math.max(0, this.fireHeat - dt * 3);
     if (this.mouseDown && !this.paused) this.tryFire();
     if (!this.mouseDown && w && !w.stats.auto) this.canSemiFire = true;
+
+    // crosshair spread readout
+    if (w) {
+      const acc = w.stats.accuracy;
+      this.lastSpreadDeg = (100 - acc) * 0.05 * (1 - this.adsAmount * 0.5) * (this.grounded ? 1 : 1.6) + this.fireHeat * 0.4;
+    }
+  }
+
+  /** Manufacturer-flavored reload keyframes. Phase f in [0,1]. */
+  private animateReload(dt: number, w: WeaponInstance): void {
+    const maker = makerById(w.maker);
+    const total = w.stats.reloadTime * statsys.reduction('reloadSpeed');
+    this.reloadT += dt;
+    const f = clamp(this.reloadT / total, 0, 1);
+    const vm = this.viewmodel;
+
+    // physical mag drop partway through, for mag-fed styles
+    if (!this.magDropped && f > 0.3 && (maker.reloadStyle === 'smooth_snap' || maker.reloadStyle === 'slap_rattle' || maker.reloadStyle === 'heavy_clunk')) {
+      this.magDropped = true;
+      this.camera.updateMatrixWorld(true);
+      debris.droppedMag(vm.localToWorld(new THREE.Vector3(0, -0.15, -0.25)));
+    }
+
+    switch (maker.reloadStyle) {
+      case 'heavy_clunk': { // VULKRAM: slow tilt, hard seat at the end
+        vm.rotation.x += Math.sin(f * Math.PI) * -0.7;
+        vm.position.y -= Math.sin(f * Math.PI) * 0.18;
+        if (f > 0.85) vm.position.y += Math.sin((f - 0.85) / 0.15 * Math.PI) * 0.03; // the CHUNK
+        break;
+      }
+      case 'smooth_snap': { // LUMEN: quick clean dip
+        vm.rotation.x += Math.sin(f * Math.PI) * -0.45;
+        vm.position.y -= Math.sin(f * Math.PI) * 0.1;
+        break;
+      }
+      case 'slap_rattle': { // RATWORKS: two angry dips
+        vm.rotation.x += Math.sin(f * Math.PI * 2) * -0.5;
+        vm.position.y -= Math.abs(Math.sin(f * Math.PI * 2)) * 0.12;
+        vm.rotation.z += Math.sin(f * Math.PI * 4) * 0.06;
+        break;
+      }
+      case 'hum_glow': { // ÆTHERIC: slow roll while the phial recharges
+        vm.rotation.z += Math.sin(f * Math.PI) * 0.6;
+        vm.position.y -= Math.sin(f * Math.PI) * 0.08;
+        if (Math.random() < 8 * dt) {
+          this.camera.updateMatrixWorld(true);
+          fx.emit(vm.localToWorld(new THREE.Vector3(0, 0, -0.3)), new THREE.Vector3(0, 0.4, 0), ELEMENTS[w.element].color, 0.05, 0.4, 0);
+        }
+        break;
+      }
+      case 'lever_flick': { // CORDWOOD: forward flip-cock
+        vm.rotation.x += Math.sin(f * Math.PI) * (f < 0.5 ? 1.6 : 0.4) * -1;
+        vm.position.z += Math.sin(f * Math.PI) * 0.08;
+        break;
+      }
+      default: { // toss_new handled by throwGunReload; generic dip fallback
+        vm.rotation.x += Math.sin(f * Math.PI) * -0.9;
+        vm.position.y -= Math.sin(f * Math.PI) * 0.15;
+      }
+    }
+
+    if (this.reloadT > total * 0.55 && this.reloadT - dt <= total * 0.55) audio.reloadClack(1);
+    if (f >= 1) this.finishReload();
   }
 
   private respawnFromDowned(): void {
@@ -334,32 +433,29 @@ export class Player implements Damageable {
     this.canSemiFire = false;
     this.fireTimer = 1 / (stats.fireRate * statsys.mult('fireRate') * (this.slowUntil > combatNow() ? 0.7 : 1));
 
-    // ammo draw (Ætheric pulls 2 for empowered shots)
     let ammoCost = maker.gimmick === 'always_elemental' && this.magazine >= 2 ? 2 : 1;
     if (Math.random() < statsys.bonus('freeAmmoChance')) ammoCost = 0;
     this.magazine -= ammoCost;
 
-    // muzzle world position
     this.camera.updateMatrixWorld(true);
-    const muzzleLocal = new THREE.Vector3(0, -0.05, -0.7);
-    const muzzle = this.viewmodel.localToWorld(muzzleLocal.clone());
+    const muzzle = this.viewmodel.localToWorld(new THREE.Vector3(0, -0.05, -0.7));
     const camDir = new THREE.Vector3();
     this.camera.getWorldDirection(camDir);
 
-    // accuracy -> spread cone (deg); lumen focus tightens with sustained fire
     let acc = stats.accuracy;
     if (maker.gimmick === 'laser_focus') {
       acc = Math.min(99, acc + this.focusHeat * 6);
       this.focusHeat = Math.min(4, this.focusHeat + 0.5);
     }
+    this.fireHeat = Math.min(4, this.fireHeat + 0.6);
     const spreadDeg = (100 - acc) * 0.05 * (1 - this.adsAmount * 0.5) * (this.grounded ? 1 : 1.6);
+    this.lastSpreadDeg = spreadDeg + this.fireHeat * 0.4;
 
     const dmgMult = statsys.mult('gunDamage')
       * (ELEMENTS[w.element].splash || stats.splashRadius > 0 ? statsys.mult('splashDamage') : 1)
       * (w.element !== 'kinetic' ? statsys.mult('elemDamage') : 1);
 
     let dmg = stats.damage * dmgMult;
-    // Last Word legendary: damage climbs as mag empties
     const leg = w.legendaryId ? LEGENDARIES.find((l) => l.id === w.legendaryId) : null;
     if (leg?.effect.kind === 'money_shot') {
       dmg *= 1 + (stats.magSize - this.magazine) * leg.effect.multPerMissing;
@@ -368,11 +464,9 @@ export class Player implements Damageable {
       dmg += this.overkillBank;
       this.overkillBank = 0;
     }
-    // amp shield
     const sh = state.shield;
     if (sh?.special?.id === 'amp' && this.shield >= this.maxShield * 0.98) dmg += sh.special.power;
 
-    // fire each pellet
     for (let i = 0; i < stats.pellets; i++) {
       const dir = camDir.clone();
       const s = THREE.MathUtils.degToRad(spreadDeg);
@@ -387,7 +481,7 @@ export class Player implements Damageable {
       }
     }
 
-    // feel + sound + flash
+    // feel + sound + flash + casing
     const punch = clamp(dmg / (30 * Math.pow(1.11, state.level)), 0.3, 2.2);
     const recoilScale = maker.gimmick === 'laser_focus' ? 0.1 : 1;
     juice.kickRecoil(0.02 * punch * recoilScale * (w.stats.recoil ?? 1), 0.05 * punch * recoilScale);
@@ -395,37 +489,46 @@ export class Player implements Damageable {
     juice.addTrauma(0.05 * punch);
     audio.shot(maker.shotSound, 0.95 + Math.random() * 0.1);
     fx.muzzleFlash(muzzle, camDir, w.element !== 'kinetic' ? ELEMENTS[w.element].color : 0xffd23c, punch);
+    if (maker.gimmick !== 'always_elemental') {
+      const rightDir = new THREE.Vector3(-camDir.z, 0.2, camDir.x).normalize();
+      debris.casing(muzzle.clone().addScaledVector(camDir, -0.25), rightDir);
+    }
 
     if (this.magazine <= 0) this.startReload();
   }
 
   private fireHitscan(w: WeaponInstance, muzzle: THREE.Vector3, dir: THREE.Vector3, dmg: number, leg: (typeof LEGENDARIES)[number] | null | undefined): void {
-    const ray = new THREE.Raycaster(this.camera.position.clone(), dir, 0.1, 200);
-    const { enemy, point, isCrit, distance } = this.raycastEnemies(ray);
+    const ray = new THREE.Raycaster(this.camera.position.clone(), dir, 0.1, 220);
+    const hit = this.raycastTargets(ray);
     const staticHit = this.world.raycastStatics(ray);
 
     let end: THREE.Vector3;
-    if (enemy && point && (!staticHit || distance < staticHit.distance)) {
-      end = point;
+    if (hit && (!staticHit || hit.distance < staticHit.distance)) {
+      end = hit.point;
       const critMult = this.currentCritMult;
-      const dealt = applyDamage(enemy, dmg, w.element, {
-        crit: isCrit, critMult,
+      const dealt = applyDamage(hit.target, dmg, w.element, {
+        crit: hit.isCrit, critMult,
         elemChance: w.stats.elemChance, elemDps: w.stats.elemDps * statsys.mult('elemDamage'),
         source: 'player',
       });
-      fx.impact(point, w.element);
-      this.afterHit(w, enemy, point, dmg, dealt, isCrit, leg);
+      fx.impact(hit.point, w.element);
+      if (hit.enemy) this.afterHit(w, hit.enemy, hit.point, dmg, dealt, hit.isCrit, leg);
+      else {
+        document.getElementById('hitmarker')?.classList.add('show');
+        setTimeout(() => document.getElementById('hitmarker')?.classList.remove('show'), 90);
+      }
     } else if (staticHit) {
       end = staticHit.point;
-      fx.impact(end, w.element === 'kinetic' ? 'kinetic' : w.element);
-      fx.burst(end, 0xc8b498, 5, 2.5, 0.06, 0.4, 8); // dust
+      fx.impact(end, w.element);
+      fx.burst(end, 0xc8b498, 5, 2.5, 0.06, 0.4, 8);
+      debris.decal(end, staticHit.normal, w.element === 'kinetic' ? 'hole' : 'scorch', w.element === 'kinetic' ? 0.8 : 1.4);
     } else {
       end = muzzle.clone().addScaledVector(dir, 90);
     }
 
     fx.tracer(muzzle, end, w.element !== 'kinetic' ? ELEMENTS[w.element].color : 0xffe8b0);
 
-    if (w.stats.splashRadius > 0 && (staticHit || enemy)) {
+    if (w.stats.splashRadius > 0 && (staticHit || hit)) {
       splashDamage(end, w.stats.splashRadius, dmg * 0.55, w.element === 'kinetic' ? 'blast' : w.element, { source: 'player', elemChance: w.stats.elemChance * 0.5 });
     }
   }
@@ -435,11 +538,8 @@ export class Player implements Damageable {
     setTimeout(() => document.getElementById('hitmarker')?.classList.remove('show', 'show-crit'), 90);
 
     if (isCrit) state.recordGrit('crit');
-
-    // vampire legendary
     if (leg?.effect.kind === 'vampire') this.heal(dealt * leg.effect.leech);
 
-    // echo round legendary: the hit repeats
     if (leg?.effect.kind === 'echo_round') {
       const delay = leg.effect.delay * 1000;
       setTimeout(() => {
@@ -450,7 +550,6 @@ export class Player implements Damageable {
       }, delay);
     }
 
-    // cordwood ricochet on crit
     const maker = makerById(w.maker);
     if (maker.gimmick === 'crit_ricochet' && isCrit) {
       const others = enemySpawner.enemies.filter((e) => e.alive && e !== enemy && e.position.distanceTo(enemy.position) < 14);
@@ -461,13 +560,9 @@ export class Player implements Damageable {
       }
     }
 
-    // overkill capstone: bank overflow damage
     if (!enemy.alive && statsys.bonus('overkill') > 0) {
-      this.overkillBank = Math.max(0, dealt - 0); // simplified: bank a slice of the hit
       this.overkillBank = dealt * 0.25;
     }
-
-    // jackpot capstone
     if (!enemy.alive && isCrit && statsys.bonus('jackpot') > 0) {
       this.magazine = w.stats.magSize;
       state.money += 25 + state.level * 5;
@@ -488,27 +583,30 @@ export class Player implements Damageable {
     });
   }
 
-  raycastEnemies(ray: THREE.Raycaster): { enemy: Enemy | null; point: THREE.Vector3 | null; isCrit: boolean; distance: number } {
-    let bestEnemy: Enemy | null = null;
-    let bestPoint: THREE.Vector3 | null = null;
-    let bestDist = Infinity;
-    let isCrit = false;
+  /** Raycast enemies + explosive barrels; nearest wins. */
+  raycastTargets(ray: THREE.Raycaster): HitscanTarget | null {
+    let best: HitscanTarget | null = null;
     for (const e of enemySpawner.enemies) {
       if (!e.alive) continue;
-      e.group.updateMatrixWorld(true); // enemies move before render; keep hits honest
+      e.group.updateMatrixWorld(true);
       const hits = ray.intersectObject(e.group, true);
       for (const h of hits) {
-        if ((h.object as THREE.Sprite).isSprite) continue; // ignore health bars
-        if (h.distance < bestDist) {
-          bestDist = h.distance;
-          bestEnemy = e;
-          bestPoint = h.point;
-          isCrit = h.object === e.critZone;
+        if ((h.object as THREE.Sprite).isSprite) continue;
+        if (!best || h.distance < best.distance) {
+          best = { target: e, enemy: e, point: h.point, isCrit: h.object === e.critZone, distance: h.distance };
         }
         break;
       }
     }
-    return { enemy: bestEnemy, point: bestPoint, isCrit, distance: bestDist };
+    for (const b of this.world.barrels()) {
+      if (!b.alive) continue;
+      b.group.updateMatrixWorld(true);
+      const hits = ray.intersectObject(b.group, true);
+      if (hits.length && (!best || hits[0].distance < best.distance)) {
+        best = { target: b, enemy: null, point: hits[0].point, isCrit: false, distance: hits[0].distance };
+      }
+    }
+    return best;
   }
 
   // ------------------------------------------------------------------ reload
@@ -526,6 +624,7 @@ export class Player implements Damageable {
       return;
     }
     this.reloadT = 0;
+    this.magDropped = false;
     audio.reloadClack(0);
   }
 
@@ -534,15 +633,13 @@ export class Player implements Damageable {
     this.reloadT = -1;
     if (!w) return;
     const reserve = state.ammo.get(w.type) ?? 0;
-    const magBonus = statsys.mult('magSize');
-    const magMax = Math.round(w.stats.magSize * magBonus);
+    const magMax = Math.round(w.stats.magSize * statsys.mult('magSize'));
     const need = magMax - this.magazine;
     const take = Math.min(need, reserve);
     this.magazine += take;
     state.ammo.set(w.type, reserve - take);
   }
 
-  /** BRISKCO: yeet the current gun; it explodes scaled by leftover mag. */
   private throwGunReload(w: WeaponInstance): void {
     const leftover = this.magazine;
     this.magazine = 0;
@@ -561,8 +658,8 @@ export class Player implements Damageable {
       source: 'player',
       mesh: thrownMesh,
     });
-    // digistruct a fresh copy after a beat
     this.reloadT = 0;
+    this.magDropped = true; // no mag to drop — the whole gun left
     audio.reloadClack(0);
   }
 

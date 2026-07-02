@@ -1,20 +1,23 @@
 # CLAUDELANDS 2
 
-*A rust-bitten, cel-shaded looter-shooter vertical slice.* You are **Harlan Vex,
-the Gunsmith**, contracted to de-throne Grand Duke Gutterball, self-crowned king
-of Gully Seven. Kill the Rustborn, ride the loot fountain, feed the Sentry Rig.
+*A rust-bitten, cel-shaded looter-shooter — now an open wasteland.* You are
+**Harlan Vex, the Gunsmith**, contracted by Foreman Quibb to de-throne Grand
+Duke Gutterball, trash-king of the Claudelands — and to deal with whatever
+Helix Combine buried in the Slagflat crater. Five districts, five quests, two
+bosses, bazillions of guns.
 
-Everything is procedural — meshes, textures, audio — and everything that is
-*content* (guns, parts, manufacturers, elements, skills, enemies, zones, jokes)
-is data. See `DECISIONS.md` for the why and `ROADMAP.md` for what's next.
+Everything is procedural — meshes, textures, sound, *music* — and everything
+that is content (guns, parts, manufacturers, elements, skills, enemies,
+districts, quests, jokes) is data. See `DECISIONS.md` for the why and
+`ROADMAP.md` for what's next.
 
-![Spawn vista](docs/screenshots/spawn-vista.png)
+![Gully Seven combat](docs/screenshots/gully-combat.png)
 
 | | |
 | --- | --- |
-| ![Loot beam](docs/screenshots/loot-beam.png) | ![Item card](docs/screenshots/item-card.png) |
-| ![Sentry Rig](docs/screenshots/sentry-rig.png) | ![Skill tree](docs/screenshots/skill-tree.png) |
-| ![Art sandbox](docs/screenshots/art-sandbox.png) | ![Title](docs/screenshots/title.png) |
+| ![Gutterlight hub](docs/screenshots/hub.png) | ![The Boneyard](docs/screenshots/boneyard.png) |
+| ![Boss: Gutterball](docs/screenshots/boss.png) | ![Quibb dialogue](docs/screenshots/dialogue.png) |
+| ![Skill trees](docs/screenshots/skill-tree.png) | ![Art sandbox](docs/screenshots/art-sandbox.png) |
 
 ## Run it
 
@@ -25,10 +28,16 @@ npm run dev        # http://localhost:5173
 
 - `npm run build` — typecheck + production build to `dist/`
 - `npm run preview` — serve the production build
-- Open `/sandbox.html` (dev or preview) for the **art sandbox**: manufacturer
-  gun lineup on a turntable + live sliders for ink/hatch/rim/bloom/saturation.
-- `npm run screenshot` — headless self-review: boots the game, plays the loop
-  via the `window.__game` debug seam, and drops identity screenshots in `shots/`.
+- `/sandbox.html` — art sandbox: manufacturer gun lineup + live ink/hatch/rim/bloom sliders
+- `npm run screenshot` — headless self-review: plays the real loop via the
+  `window.__game` debug seam and drops identity screenshots in `shots/`
+
+## Deploy (Vercel)
+
+Static site, no server, no env vars. Import the repo on Vercel — `vercel.json`
+pins `framework: vite`, `buildCommand: npm run build`, `outputDirectory: dist`.
+Both pages (`/` and `/sandbox.html`) ship as-is with zero functionality loss;
+saves live in the player's browser (localStorage).
 
 ## Controls
 
@@ -36,22 +45,24 @@ npm run dev        # http://localhost:5173
 | --- | --- |
 | WASD / Space / Shift | Move / jump / sprint |
 | Mouse / LMB / RMB | Aim / fire / aim-down-sights |
-| R | Reload (BRISKCO guns: throws the gun. It explodes.) |
+| R | Reload (each manufacturer reloads in its own style; BRISKCO throws the gun) |
 | F | Action skill — deploy the Sentry Rig |
-| G | Grenade (delivery + element from equipped mod) |
-| E | Interact — pick up loot, open chests, vendors, wire spools |
+| G | Grenade (delivery + element from equipped mod; it blinks and beeps) |
+| E | Interact — loot, chests, vendors, wire spools, Quibb, fast travel |
 | 1–4 | Weapon slots |
-| TAB | Backpack / equipment |
-| K | Skill trees + Grit Rank |
+| TAB / K / J | Backpack / skill trees / quest log |
+| ESC | Pause (volume, controls, abandon run) |
 
 ## The pitch, mechanically
 
-- **Part-based gun generation**: body fixes one of six manufacturers (each with a
-  gimmick, a silhouette, a palette, and a reload personality); barrel/grip/stock/
-  sight/mag/accessory each carry stat mods *and* geometry. Rarity gates part
-  grades and the accessory slot; legendaries stamp a signature effect and red text.
-- **Five elements** (Ember/Bile/Volt/Rime/Blast) with a strong/weak matrix vs
-  shield/armor/flesh, DoTs, chains, slows, and splash.
-- **One full class**: action skill + three 6-tier trees (passives, kill skills,
-  rig augments, capstones), plus account-wide **Grit Rank** meta-perks.
-- **Fight For Your Life**: get a kill while downed for a second wind.
+- **Part-based guns**: body fixes one of six manufacturers (gimmick + palette +
+  silhouette + reload style); six other part slots carry stats *and* geometry.
+  Rarity gates part grades; legendaries stamp signature effects and red text.
+- **Five elements** vs shield/armor/flesh — and it matters by geography:
+  Rustborn are meat, Helix machines are armor and shields.
+- **An inhabited world**: districts patrol and repopulate, vendors patter,
+  rats scatter, vultures circle, tumbleweeds roll, music escalates when the
+  shooting starts, and the compass points at your next bad decision.
+- **A quest chain with a gate, a crown, and a very large filing cabinet.**
+- **Progression that sticks**: XP/skill trees + account-wide Grit Rank, with
+  autosave and a Continue button.

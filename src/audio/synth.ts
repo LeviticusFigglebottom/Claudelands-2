@@ -256,6 +256,99 @@ export class AudioSystem {
     }
   }
 
+  // ---------------------------------------------------------------- movement / world
+
+  private stepFlip = false;
+  footstep(): void {
+    if (!this.ctx) return;
+    this.stepFlip = !this.stepFlip;
+    this.noise(this.now(), 0.07, 0.12, 'lowpass', this.stepFlip ? 480 : 420, 1, 120);
+  }
+
+  land(hard = false): void {
+    if (!this.ctx) return;
+    const t = this.now();
+    this.noise(t, hard ? 0.16 : 0.1, hard ? 0.35 : 0.2, 'lowpass', 380, 1, 90);
+  }
+
+  casing(): void {
+    if (!this.ctx) return;
+    const f = 2200 + Math.random() * 1200;
+    this.tone(this.now(), 0.05, 0.06, 'square', f, f * 0.7);
+  }
+
+  fuseBeep(pitch = 1): void {
+    if (!this.ctx) return;
+    this.tone(this.now(), 0.06, 0.18, 'square', 1400 * pitch);
+  }
+
+  bounce(): void {
+    if (!this.ctx) return;
+    this.noise(this.now(), 0.05, 0.15, 'bandpass', 700, 3, 300);
+  }
+
+  gateOpen(): void {
+    if (!this.ctx) return;
+    const t = this.now();
+    this.noise(t, 1.2, 0.4, 'lowpass', 300, 1, 60);
+    this.tone(t, 0.9, 0.2, 'sawtooth', 70, 45, 0.3);
+    this.tone(t + 1.0, 0.3, 0.3, 'sine', 100, 40);
+  }
+
+  questAccept(): void {
+    if (!this.ctx) return;
+    const t = this.now();
+    [523, 659, 880].forEach((f, i) => this.tone(t + i * 0.06, 0.3, 0.2, 'triangle', f));
+  }
+
+  questComplete(): void {
+    if (!this.ctx) return;
+    const t = this.now();
+    [392, 523, 659, 784, 1047].forEach((f, i) => {
+      this.tone(t + i * 0.09, 0.5, 0.22, 'triangle', f);
+      this.tone(t + i * 0.09, 0.6, 0.08, 'sine', f * 2);
+    });
+  }
+
+  victory(): void {
+    if (!this.ctx) return;
+    const t = this.now();
+    [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => {
+      this.tone(t + i * 0.14, 0.6, 0.25, 'triangle', f);
+      this.tone(t + i * 0.14, 0.7, 0.1, 'sawtooth', f / 2);
+    });
+    this.noise(t, 1.4, 0.1, 'highpass', 6000, 1);
+  }
+
+  bossRoar(mech = false): void {
+    if (!this.ctx) return;
+    const t = this.now();
+    if (mech) {
+      this.tone(t, 1.0, 0.35, 'sawtooth', 60, 140, 0.2);
+      for (let i = 0; i < 5; i++) this.tone(t + i * 0.12, 0.1, 0.2, 'square', 220 + i * 60);
+    } else {
+      this.tone(t, 0.9, 0.4, 'sawtooth', 120, 55, 0.08);
+      this.noise(t, 0.8, 0.3, 'lowpass', 500, 1, 120);
+    }
+  }
+
+  dialogBlip(): void {
+    if (!this.ctx) return;
+    const f = 300 + Math.random() * 220;
+    this.tone(this.now(), 0.05, 0.08, 'sawtooth', f, f * 1.2);
+  }
+
+  setMasterVolume(v: number): void {
+    if (this.master) this.master.gain.value = Math.max(0, Math.min(1, v));
+  }
+  getMasterVolume(): number {
+    return this.master ? this.master.gain.value : 0.5;
+  }
+  /** Music engine taps into the same output chain. */
+  getBus(): { ctx: AudioContext; out: GainNode } | null {
+    return this.ctx ? { ctx: this.ctx, out: this.master } : null;
+  }
+
   // ---------------------------------------------------------------- ambience
 
   private startAmbience(): void {

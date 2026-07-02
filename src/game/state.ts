@@ -137,6 +137,69 @@ export class GameState {
     const perk = GRIT_PERKS.find((p) => p.stat === stat);
     return perk ? (this.grit.spent[stat] ?? 0) * perk.perRank : 0;
   }
+
+  // ---------------------------------------------------------------- save/load
+  // Character save: everything but Grit (which persists separately). Items
+  // are plain data by design, so serialization is direct JSON.
+  serialize(extra: Record<string, unknown>): string {
+    return JSON.stringify({
+      v: 2,
+      level: this.level, xp: this.xp, skillPoints: this.skillPoints, money: this.money,
+      skills: [...this.skills.entries()],
+      ammo: [...this.ammo.entries()],
+      grenades: this.grenades,
+      inventory: this.inventory,
+      equippedWeapons: this.equippedWeapons,
+      activeSlot: this.activeSlot,
+      shield: this.shield, grenadeMod: this.grenadeMod, classMod: this.classMod, relic: this.relic,
+      ...extra,
+    });
+  }
+
+  /** Returns the parsed save (for callers to restore quests etc.), or null. */
+  loadFrom(raw: string): Record<string, unknown> | null {
+    try {
+      const d = JSON.parse(raw) as Record<string, unknown> & {
+        level: number; xp: number; skillPoints: number; money: number;
+        skills: [string, number][]; ammo: [string, number][]; grenades: number;
+        inventory: ItemInstance[]; equippedWeapons: (WeaponInstance | null)[];
+        activeSlot: number; shield: ShieldInstance | null; grenadeMod: GrenadeModInstance | null;
+        classMod: ClassModInstance | null; relic: RelicInstance | null;
+      };
+      if (!d || typeof d.level !== 'number') return null;
+      this.level = d.level; this.xp = d.xp; this.skillPoints = d.skillPoints; this.money = d.money;
+      this.skills = new Map(d.skills);
+      this.ammo = new Map(d.ammo as [never, number][]);
+      this.grenades = d.grenades;
+      this.inventory = d.inventory ?? [];
+      this.equippedWeapons = d.equippedWeapons ?? [null, null, null, null];
+      this.activeSlot = d.activeSlot ?? 0;
+      this.shield = d.shield ?? null;
+      this.grenadeMod = d.grenadeMod ?? null;
+      this.classMod = d.classMod ?? null;
+      this.relic = d.relic ?? null;
+      return d;
+    } catch {
+      return null;
+    }
+  }
 }
 
+export const SAVE_KEY = 'claudelands2.save';
 export const state = new GameState();
+
+export function hasSave(): boolean {
+  try { return localStorage.getItem(SAVE_KEY) !== null; } catch { return false; }
+}
+export function writeSave(extra: Record<string, unknown>): void {
+  try { localStorage.setItem(SAVE_KEY, state.serialize(extra)); } catch { /* storage full/blocked */ }
+}
+export function readSave(): Record<string, unknown> | null {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    return raw ? state.loadFrom(raw) : null;
+  } catch { return null; }
+}
+export function clearSave(): void {
+  try { localStorage.removeItem(SAVE_KEY); } catch { /* nothing to clear */ }
+}

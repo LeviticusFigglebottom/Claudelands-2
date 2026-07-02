@@ -1,91 +1,105 @@
 # DECISIONS
 
-Architecture calls for pass 1, and why. Written for the next engineer (probably
+Architecture calls, and why. Written for the next engineer (probably
 future-me) deciding whether to keep, extend, or replace something.
+Pass-2 additions marked as such.
 
 ## Stack: TypeScript + Three.js + Vite, zero binary assets
 
 - **Web-first** because the target is *fast iteration on look and feel*: sub-second
   hot reload, trivially screenshotable headless (see `tools/screenshot.mjs`), runs
-  anywhere with no install. The identity work (toon shading, ink outlines, juice)
-  is shader/feel work, and the tightest tune-render-look loop wins.
+  anywhere with no install, and deploys as a static site (see Vercel below).
 - **Three.js over a full engine (Godot/Unity/Bevy)**: the brief demands a custom
   render identity anyway (custom toon ramp + ink post-process). Three gives full
-  control of the pipeline without fighting an engine's built-in renderer, and its
-  post-processing stack (`EffectComposer`, `UnrealBloomPass`) covers bloom for free.
-  Cost: no built-in physics/nav — accepted; this game needs only capsule-vs-AABB
-  and straight-line chase AI at this scope (see ROADMAP for the upgrade path).
-- **Zero binary assets, everything procedural**: gun meshes are assembled from
-  parametric primitives (`src/gen/gunmesh.ts`), textures are canvas-painted at boot
-  (`src/render/textures.ts`), and all SFX are WebAudio synthesis
-  (`src/audio/synth.ts`). This keeps the repo pure code+data, makes every visual a
-  tunable parameter, and means part-based gun visuals *can't* drift from part data —
-  they're derived from it. Cost: fidelity ceiling; accepted for pass 1 and the seam
-  (swap a builder for a glTF loader per part) is clean.
+  control of the pipeline without fighting an engine's built-in renderer.
+- **Zero binary assets, everything procedural**: gun/enemy/world meshes are
+  parametric primitives, textures are canvas-painted at boot, all SFX *and music*
+  are WebAudio synthesis. The repo stays pure code+data, every visual is a tunable
+  parameter, and part-based gun visuals can't drift from part data.
 
-## Render identity (src/render/)
+## Rendering (src/render/)
 
-- **Toon shading**: `MeshToonMaterial` + shared hard-banded gradient ramp, with a
-  rim-light term injected via `onBeforeCompile`. Chosen over a fully custom
-  ShaderMaterial so *all* of three's light types (sun, hemisphere, barrel point
-  lights, muzzle flashes) keep working for free.
-- **Ink outlines**: full-screen post pass doing Roberts-cross edge detection on a
-  depth+normal prepass — catches silhouettes *and* interior creases, with line
-  weight fading by distance. Chosen over inverted-hull because it inks *everything*
-  (procedural meshes included) with no per-mesh work. FX (beams, particles, sky)
-  live on layer 1, which the prepass skips — glow never gets outlined.
-- **Hand-drawn shadow hatching**: screen-space cross-hatch applied below luminance
-  thresholds inside the same ink pass (thresholds evaluated in gamma space — the
-  composer chain is linear; this bit us once already, see the comment in post.ts).
-- **One tuning surface**: every look knob (ink density, hatch, rim, bloom,
-  saturation…) is a uniform reachable from the **art sandbox** (`/sandbox.html`) with
-  live sliders and a manufacturer-lineup turntable.
+- **Toon shading**: `MeshToonMaterial` + shared banded ramp + injected rim light —
+  keeps all of three's light types working (sun, barrel fires, muzzle pools).
+- **Ink outlines**: post pass with Roberts-cross edges over a depth+normal prepass;
+  FX live on layer 1 which the prepass skips, so glow never gets outlined.
+- **Hatching**: screen-space cross-hatch below *gamma-space* luminance thresholds
+  (the composer chain is linear — evaluating thresholds in linear space painted
+  hatching over the sky once; see the comment in post.ts).
+- **Pass 2**: FXAA as the final pass (smooths ink lines), a sun disc that blooms,
+  and the sun's shadow frustum follows the player — required once the world grew
+  beyond one shadow map's reach.
 
-## Data-driven everything (src/data/)
+## World as data + analytic terrain (pass 2)
 
-The rule enforced across the codebase: **systems code never contains content**.
-Manufacturers, weapon parts, rarities, elements, legendaries, shields/grenades/
-class-mods/relics, classes/skill-trees, enemies, zone layout/spawn tables, and all
-flavor text (posters, graffiti, vendor lines, wire-spool logs, barks) are plain
-data modules. Pass 2 adds content by adding rows, not editing generators. The one
-data-consumer worth naming: `weapongen.ts` aggregates part `StatMods`
-multiplicatively/additively per a declared key list, so new stats are added in one
-place (`MULT_KEYS`/`ADD_KEYS`).
+`data/world.ts` defines the whole overworld: district rows (center/radius/base
+height/faction/spawn table/level band) and a POI list. The terrain is an
+**analytic heightfield function** (`terrainHeight(x,z)`) — dunes + district
+flattening + road ruts + the boss crater — shared by the mesh builder and every
+system that asks "how high is the ground here" (player, AI, loot, projectiles,
+props, decals). No collision mesh for the ground: hitscan ray-marches the same
+function (bisection refine), which is cheaper and can never disagree with
+`groundHeight`. Roads are terrain *vertex tint*, not geometry — a draped-mesh
+attempt z-fought immediately; vertex colors can't.
 
-## Game architecture (src/game/)
+## Population, not waves (pass 2)
 
-- **Event bus** (`state.ts`): combat emits `kill`; XP, kill-skills, loot, audio, and
-  UI all react without importing each other.
-- **Stat aggregation** (`stats.ts`): every bonus source (skills, kill-skill buffs,
-  class mod, relic, grit ranks, shield gimmicks) folds into one query
-  (`statsys.mult('gunDamage')`). Systems never know where a bonus came from.
-- **Juice is centralized** (`juice.ts`): trauma-based screenshake, hit-stop,
-  FOV kick, recoil — one tunable table, consumed by the camera and viewmodel.
-- **Defense layers**: enemies (and the player) are `Damageable` with stacked
-  shield→armor→flesh pools; the element matrix lives in `data/elements.ts` and is
-  applied in exactly one function (`combat.applyDamage`), which also owns crits,
-  DoT procs, volt chaining, and rime slow/amp.
-- **Player is never "dead"**: any damage path that zeroes flesh routes into the
-  downed state (Fight For Your Life → second wind on kill, or Re-Constructor
-  respawn with a cash cut).
+Districts self-repopulate on a cadence (only when the player is near-ish, never
+on top of them). Enemies **patrol** their home district and aggro on proximity
+or damage — the world reads as inhabited rather than arena-triggered. Bosses are
+`Enemy` subclasses (`boss.ts`) with phased patterns, spawned by the quest system,
+never by population. Helix (armor/shield-heavy) vs Rustborn (flesh-heavy) makes
+the element matrix matter by geography.
+
+## Quests (pass 2)
+
+Declarative rows in `data/quests.ts` (goto / kill_faction / collect / boss);
+`game/quests.ts` owns progression, gate unlocks, boss spawns, and rewards. UI
+(tracker, log, dialogue, compass marker) only reads its state. Turn-in is
+accept-at-NPC / auto-complete-on-objective — one NPC visit per step keeps the
+loop moving without back-tracking padding.
+
+## Feel & feedback (pass 2 hardening)
+
+- **Damage routing**: anything that damages the player funnels through one
+  router (`combat.setPlayerDamageRouter`) so shield-delay reset, hurt vignette,
+  and the direction indicator can't be bypassed (enemy splash used to).
+- **Debris layer** (`debris.ts`): shell casings, dropped mags, pooled decals
+  (bullet holes / scorch / bile), tumbleweeds. Cosmetic, pooled, cheap.
+- **Reload animations are manufacturer data**: one keyframe switch per
+  `reloadStyle`, with physical mag drops. Elemental deaths likewise switch per
+  element (rime freeze, ember ash, volt arcs, bile puddle).
+- **Dynamic music** (`audio/music.ts`): a 16-step synth pattern engine with three
+  crossfaded intensities (calm/combat/boss) driven per-frame from aggro state.
+
+## Persistence (pass 2)
+
+Items are plain data by design, so the save is direct JSON: state + quests +
+discovered stations in localStorage, autosaved on a timer/quest events/tab-hide.
+Grit Rank stays in its own key and survives "Abandon run". `loadFrom` is
+versioned (`v: 2`) for future migration.
+
+## Vercel deployment (pass 2)
+
+The game is a fully static Vite build (two pages: game + art sandbox) — no
+server, no API, no env vars. `vercel.json` pins framework/build/output;
+`base: './'` keeps assets relative. Nothing about the game required
+sacrificing for this: localStorage persists per-origin, audio unlocks on the
+title click (autoplay-policy safe), and all assets are generated client-side.
 
 ## Testing/self-review harness
 
-Headless Chromium (SwiftShader) renders at ~2fps, so wall-clock waits can't drive
-gameplay. `main.ts` exposes a `window.__game` seam with `fastForward(seconds)`
-(steps the sim at 60Hz without rendering), generator access, and an equip helper.
-`tools/screenshot.mjs` uses it to play the actual loop — spawn waves, aim at crit
-zones, kill, walk to drops — and screenshot every identity moment. This doubles as
-the start of an integration-test harness.
+Headless Chromium (SwiftShader) renders at ~2fps, so `window.__game.fastForward`
+steps the sim at 60Hz without rendering. `tools/screenshot.mjs` plays the real
+loop (quests, combat, bosses, panels) and screenshots every identity moment.
+Ad-hoc functional tests drove out real bugs each pass: linear-vs-gamma hatching,
+splash bypassing the downed state, stale matrices breaking hitscan, render-loop
+game logic missing under fast-forward.
 
-## Known accepted shortcuts (see ROADMAP for the full list)
+## Known accepted shortcuts (see ROADMAP)
 
-- Collision is circle-vs-AABB on a flat ground plane; no navmesh (AI walks straight
-  lines and can hug obstacles).
-- `MeshToonMaterial` ramp applies to sunlight correctly but point lights band less
-  visibly at low intensity — acceptable at current light budget.
-- Damage numbers are DOM elements — cheap and very stylable; would need pooling
-  past a few hundred per second.
-- Saved state: only account-wide Grit Rank persists (localStorage). Character
-  save/load is a pass-2 item; item instances are already plain serializable data
-  by design.
+- No navmesh: AI steers straight and can hug props; enemies fire through thin
+  cover at long range.
+- Circle-vs-AABB collision on props; heightfield has no overhangs.
+- Damage numbers are DOM nodes (styled cheaply, capped by CSS lifetime).
+- One playable class; three more are data stubs with action-skill designs.

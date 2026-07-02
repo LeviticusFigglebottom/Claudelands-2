@@ -83,7 +83,34 @@ export const WIRE_LOGS: WireLog[] = [
       'Verse three: the Duke gets ten percent of yer teeth. Standard.',
     ],
   },
+  {
+    id: 'log_boneyard',
+    speaker: 'DR. HALLOWAY, XENO-SKELETOLOGIST — WIRE SPOOL 3',
+    lines: [
+      'Day twelve at the Boneyard. The specimen is... large. Cathedral large.',
+      'The locals bury their dead inside its ribcage. For "the upgrade," they said.',
+      'Day thirteen: the ribs HUM at dusk. I am leaving. I was never here.',
+    ],
+  },
+  {
+    id: 'log_helix',
+    speaker: 'HAULER HX-77 — BLACK BOX RECORDING',
+    lines: [
+      'MAYDAY. CARGO: ONE (1) SITE WARDEN, DEACTIVATED. MOSTLY.',
+      'IMPACT IN TEN. NINE. LEGAL SAYS WE CANNOT SAY "CRASH."',
+      'INITIATING UNSCHEDULED GROUND ENGAGEMENT. HELIX THANKS YOU.',
+    ],
+  },
 ];
+
+/** Quibb's ambient mutterings when idle near him. */
+export const QUIBB_MUTTERS = [
+  'Forms. Forms never change.',
+  '*aggressive clipboard noises*',
+  'I audited a mutt once. It ate the audit.',
+];
+
+export const VICTORY_LINES = ['THE CLAUDELANDS ARE YOURS', 'CONTRACT: FULFILLED', 'RUST NAPS TONIGHT'];
 
 // ---------------------------------------------------------------- signage
 export interface GraffitiSpec { lines: string[]; style: 'propaganda' | 'graffiti' | 'warning' | 'ad'; bg: string; fg: string; accent?: string }

@@ -51,6 +51,22 @@ let gameTime = 0;
 export function tickCombatClock(dt: number): void { gameTime += dt; }
 export function combatNow(): number { return gameTime; }
 
+/**
+ * Damage aimed at the player routes through Player.damage() (shield delay,
+ * hurt flash, direction indicator) instead of raw applyDamage.
+ */
+let playerRouter: ((amount: number, element: ElementId, from?: THREE.Vector3) => void) | null = null;
+export function setPlayerDamageRouter(fn: (amount: number, element: ElementId, from?: THREE.Vector3) => void): void {
+  playerRouter = fn;
+}
+export function damageTarget(target: Damageable, amount: number, element: ElementId, opts: HitOpts = {}, from?: THREE.Vector3): number {
+  if (target.isPlayer && playerRouter) {
+    playerRouter(amount, element, from);
+    return amount;
+  }
+  return applyDamage(target, amount, element, opts);
+}
+
 /** Returns actual damage dealt. The heart of the matrix. */
 export function applyDamage(target: Damageable, baseAmount: number, element: ElementId, opts: HitOpts = {}): number {
   if (!target.alive) return 0;
@@ -164,6 +180,6 @@ export function splashDamage(center: THREE.Vector3, radius: number, amount: numb
     const d = t.position.distanceTo(center);
     if (d > radius) continue;
     const falloff = 1 - (d / radius) * 0.6;
-    applyDamage(t, amount * falloff, element, { ...opts, crit: false });
+    damageTarget(t, amount * falloff, element, { ...opts, crit: false }, center);
   }
 }

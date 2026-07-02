@@ -111,6 +111,83 @@ body { font-family: var(--ui-font); user-select: none; }
 #hud-zone .zsub { font-size: 12px; opacity: 0.85; }
 #hud-killskill { left: 50%; top: 64px; transform: translateX(-50%); font-family: var(--title-font); color: #ff8c3b; font-size: 14px; text-shadow: 2px 2px 0 #000; letter-spacing: 0.1em; }
 
+/* ---------------------------------------------------------------- compass */
+#compass {
+  left: 50%; top: 10px; transform: translateX(-50%);
+  width: min(560px, 44vw); height: 34px; overflow: hidden;
+  background: linear-gradient(90deg, transparent, rgba(16,12,10,0.7) 18%, rgba(16,12,10,0.7) 82%, transparent);
+}
+#compass .compass-line { position: absolute; left: 8%; right: 8%; top: 26px; height: 2px; background: rgba(216,176,40,0.5); }
+#compass .compass-tick {
+  position: absolute; top: 4px; transform: translateX(-50%);
+  font-size: 11px; color: #cbbfa4; letter-spacing: 0.05em; text-shadow: 1px 1px 0 #000;
+}
+#compass .compass-tick.major { font-size: 14px; font-weight: 700; color: var(--paper); }
+#compass .compass-marker {
+  position: absolute; top: 8px; transform: translateX(-50%);
+  font-size: 15px; text-shadow: 1px 1px 0 #000; line-height: 1;
+}
+#compass .compass-marker::after {
+  content: attr(data-dist);
+  display: block; font-size: 8px; color: #cbbfa4; text-align: center; font-family: var(--ui-font);
+}
+
+/* ---------------------------------------------------------------- quest tracker */
+#quest-tracker { left: 18px; top: 86px; max-width: 300px; color: var(--paper); text-shadow: 1px 1px 0 #000; }
+#quest-tracker .qt-name { font-family: var(--title-font); font-size: 15px; color: var(--hud-edge); letter-spacing: 0.06em; }
+#quest-tracker .qt-obj { font-size: 13px; color: #e4d8bc; margin-top: 2px; }
+#quest-tracker.pulse { animation: qt-pulse 0.6s ease-out; }
+@keyframes qt-pulse { 0% { transform: scale(1.12); filter: brightness(1.8); } }
+
+/* ---------------------------------------------------------------- target plate & boss bar */
+#target-plate { left: 50%; top: 52px; transform: translateX(-50%); text-align: center; display: none; }
+#target-plate .tp-name { font-family: var(--title-font); font-size: 14px; color: #ffe8b0; text-shadow: 2px 2px 0 #000; letter-spacing: 0.06em; }
+#target-plate .tp-name.badass { color: #ff8438; }
+#target-plate .tp-lvl { font-size: 11px; color: #cbbfa4; }
+#target-plate .tp-bar { width: 180px; height: 5px; background: rgba(0,0,0,0.6); margin: 3px auto 0; border: 1px solid #553; }
+#target-plate .tp-fill { height: 100%; background: #e04040; transform-origin: left; }
+
+#boss-bar { left: 50%; top: 84px; transform: translateX(-50%); width: min(620px, 55vw); display: none; text-align: center; }
+#boss-bar .bb-name { font-family: var(--title-font); font-size: 20px; color: #ff8438; text-shadow: 3px 3px 0 #000; letter-spacing: 0.12em; }
+#boss-bar .bb-bar { height: 12px; background: rgba(0,0,0,0.65); border: 2px solid #8a2f24; clip-path: polygon(6px 0, calc(100% - 6px) 0, 100% 100%, 0 100%); margin-top: 4px; }
+#boss-bar .bb-fill { height: 100%; background: linear-gradient(180deg, #ff8438, #b43a2a); transform-origin: left; }
+
+/* ---------------------------------------------------------------- hurt direction */
+#hurt-dir {
+  left: 50%; top: 50%; width: 130px; height: 130px;
+  transform: translate(-50%, -50%);
+  opacity: 0; pointer-events: none;
+}
+#hurt-dir::before {
+  content: ''; position: absolute; left: 50%; top: -6px; transform: translateX(-50%);
+  border-left: 16px solid transparent; border-right: 16px solid transparent;
+  border-bottom: 14px solid rgba(224, 40, 40, 0.85);
+  filter: drop-shadow(0 0 6px rgba(224,40,40,0.8));
+}
+#hurt-dir.show { animation: hurt-arc 0.6s ease-out; }
+@keyframes hurt-arc { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ---------------------------------------------------------------- dialogue & quest log */
+.dialogue-box { background: rgba(0,0,0,0.4); border-left: 4px solid var(--hud-edge); padding: 14px 16px; min-height: 130px; }
+.dlg-line { font-size: 15px; color: #eee2c8; margin-bottom: 8px; line-height: 1.5; }
+.dialogue-quest { margin-top: 12px; font-size: 13px; color: #8fff3d; letter-spacing: 0.04em; }
+.quest-row { display: flex; gap: 12px; align-items: center; padding: 10px 12px; margin-bottom: 6px; background: rgba(255,255,255,0.04); border-left: 4px solid #554; }
+.quest-row.active { border-left-color: var(--hud-edge); background: rgba(216,176,40,0.1); }
+.quest-row.complete { border-left-color: #3ddc4e; opacity: 0.7; }
+.quest-row.available { border-left-color: #8fff3d; }
+.quest-row.locked { opacity: 0.4; }
+.quest-row .q-badge { font-family: var(--title-font); font-size: 20px; width: 30px; text-align: center; color: var(--hud-edge); }
+.quest-row .q-name { font-weight: 700; font-size: 15px; color: #ffe8b0; }
+.quest-row .q-obj { font-size: 12px; color: #b8ac90; }
+
+/* district plate flash on crossing borders */
+#hud-zone.district-flash { animation: district-in 1.2s ease-out; }
+@keyframes district-in { 0% { transform: scale(1.35); filter: brightness(2.2); } 30% { transform: scale(1.12); } }
+
+/* vendor sell tab */
+.vendor-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.vendor-tabs button.tab-on { background: var(--hud-edge); color: var(--ink); }
+
 /* ---------------------------------------------------------------- feeds & prompts */
 #pickup-feed { right: 18px; top: 60px; width: 320px; display: flex; flex-direction: column; gap: 5px; }
 .feed-entry {
@@ -271,7 +348,9 @@ body { font-family: var(--ui-font); user-select: none; }
 #title-screen .t-logo { font-family: var(--title-font); font-size: clamp(54px, 11vw, 120px); color: var(--paper); text-shadow: 6px 6px 0 #000, -3px -3px 0 rgba(216,176,40,0.4); transform: skew(-5deg) rotate(-1.5deg); line-height: 0.95; text-align: center; }
 #title-screen .t-logo .two { color: var(--hud-edge); }
 #title-screen .t-tag { color: #cbbfa4; font-size: 16px; margin-top: 10px; font-style: italic; }
-#title-screen .t-start { margin-top: 40px; font-family: var(--title-font); font-size: 22px; color: var(--ink); background: var(--hud-edge); padding: 12px 42px; clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%); letter-spacing: 0.1em; animation: pulse 1.6s ease-in-out infinite; }
+#title-screen .t-buttons { margin-top: 40px; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+#title-screen .t-start { font-family: var(--title-font); font-size: 22px; color: var(--ink); background: var(--hud-edge); padding: 12px 42px; clip-path: polygon(12px 0, 100% 0, calc(100% - 12px) 100%, 0 100%); letter-spacing: 0.1em; animation: pulse 1.6s ease-in-out infinite; cursor: pointer; }
+#title-screen .t-start.t-secondary { font-size: 15px; background: #6a5a34; color: var(--paper); animation: none; padding: 8px 28px; }
 #title-screen .t-controls { margin-top: 26px; color: #998a6a; font-size: 13px; text-align: center; line-height: 1.7; }
 #title-screen .t-controls b { color: var(--paper); }
 @keyframes pulse { 50% { transform: scale(1.06); } }

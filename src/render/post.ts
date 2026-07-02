@@ -13,6 +13,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import { LOOK } from './toon';
 
 export const FX_LAYER = 1; // no-outline layer
@@ -120,6 +121,7 @@ export class PostPipeline {
   composer: EffectComposer;
   bloom: UnrealBloomPass;
   ink: ShaderPass;
+  private fxaa: ShaderPass;
   private normalRT: THREE.WebGLRenderTarget;
   private normalMat = new THREE.MeshNormalMaterial();
   private time = 0;
@@ -153,12 +155,19 @@ export class PostPipeline {
     this.ink.uniforms.uSaturation.value = LOOK.saturation;
     this.composer.addPass(this.ink);
     this.composer.addPass(new OutputPass());
+    // FXAA last: smooths ink lines and geometry edges after tonemap/encode
+    this.fxaa = new ShaderPass(FXAAShader);
+    const pr = renderer.getPixelRatio();
+    this.fxaa.material.uniforms.resolution.value.set(1 / (width * pr), 1 / (height * pr));
+    this.composer.addPass(this.fxaa);
   }
 
   setSize(width: number, height: number): void {
     this.composer.setSize(width, height);
     this.normalRT.setSize(width, height);
     this.ink.uniforms.resolution.value.set(width, height);
+    const pr = this.renderer.getPixelRatio();
+    this.fxaa.material.uniforms.resolution.value.set(1 / (width * pr), 1 / (height * pr));
   }
 
   render(dt: number): void {

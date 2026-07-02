@@ -1,34 +1,39 @@
-// Enemy actors: procedural scrap-bandit bodies (with a crit-zone head),
-// a small state machine per behavior archetype (rusher/gunner/lobber/brute),
-// badass promotion, gib-burst deaths that trigger the loot fountain, barks,
-// and the wave spawner driven by zone data.
+// Enemy actors — pass 2. Procedural faction bodies with animated limbs,
+// patrol/aggro AI (the world is populated, not wave-spawned), flyers and
+// suicide bombers, hit flinches, and element-flavored deaths (rime shatter,
+// ember ash, volt arcs, bile puddle). Districts repopulate on their own
+// cadence via the spawner; bosses are subclassed in boss.ts.
 
 import * as THREE from 'three';
-import { ENEMIES, MINIBOSS, BADASS_CHANCE, BADASS_HP_MULT, BADASS_DMG_MULT, BADASS_SCALE, type EnemyDef } from '../data/enemies';
-import type { ZoneDef } from '../data/zone';
+import { ENEMIES, BADASS_CHANCE, BADASS_HP_MULT, BADASS_DMG_MULT, BADASS_SCALE, type EnemyDef } from '../data/enemies';
+import { WORLD, districtAt, type DistrictDef } from '../data/world';
 import { levelScale } from '../gen/weapongen';
-import { toonMat } from '../render/toon';
+import { toonMat, glowMat } from '../render/toon';
 import { swatch } from '../render/textures';
 import { fx } from './particles';
 import { audio } from '../audio/synth';
-import { tickStatuses, slowFactor, applyDamage, type Damageable, type StatusEffect, combatNow } from './combat';
+import { debris } from './debris';
+import { tickStatuses, slowFactor, splashDamage, type Damageable, type StatusEffect } from './combat';
 import { projectiles } from './projectiles';
-import { bus, state } from './state';
-import { weightedPick, mulberry32, freshSeed, pick, chance } from '../util/rng';
+import { state } from './state';
+import { weightedPick, pick, chance } from '../util/rng';
 import { ELEMENTS } from '../data/elements';
+import type { ElementId } from './types';
 
 export interface EnemyHooks {
   playerPos: () => THREE.Vector3;
-  damagePlayer: (amount: number, element: string) => void;
+  damagePlayer: (amount: number, element: string, from?: THREE.Vector3) => void;
   groundHeight: (x: number, z: number) => number;
-  onKilled: (enemy: Enemy, overkill: number) => void; // loot/xp hookup
+  onKilled: (enemy: Enemy, overkill: number) => void;
   bark: (name: string, line: string) => void;
-  /** Optional turret the AI may prefer to attack (Scrap Magnet augment). */
   tauntTarget: () => THREE.Vector3 | null;
 }
 
 let hooks: EnemyHooks;
 export function setEnemyHooks(h: EnemyHooks): void { hooks = h; }
+export function enemyHooks(): EnemyHooks { return hooks; }
+
+type Limb = { mesh: THREE.Mesh; baseY: number; baseX: number; swing: number };
 
 export class Enemy implements Damageable {
   def: EnemyDef;
@@ -42,31 +47,42 @@ export class Enemy implements Damageable {
   flesh = 1; maxFlesh = 1;
   statuses: StatusEffect[] = [];
   slowUntil = 0;
-  critZone: THREE.Mesh;              // headshots land here
-  bodyParts: THREE.Mesh[] = [];      // become gibs on death
-  private attackTimer = 0;
+  critZone!: THREE.Mesh;
+  bodyParts: THREE.Mesh[] = [];
+  homeDistrict: DistrictDef | null = null;
+  aggro = false;
+  killedBy: ElementId = 'kinetic';
+  protected attackTimer = 0;
   private barkTimer = 4 + Math.random() * 8;
-  private wobble = Math.random() * 10;
+  protected wobble = Math.random() * 10;
   private healthBar: THREE.Sprite;
   private healthCtx: CanvasRenderingContext2D;
   private healthTex: THREE.CanvasTexture;
+  private limbs: Limb[] = [];
+  private flinchT = 0;
+  private lastTotalHp = 0;
+  private patrolTarget = new THREE.Vector3();
+  private patrolWait = 0;
+  private flashMats: THREE.MeshToonMaterial[] = [];
+  private beepT = 0; // fusebug
 
   constructor(def: EnemyDef, level: number, pos: THREE.Vector3, badass = false) {
     this.def = def;
     this.level = level;
     this.badass = badass;
     this.position.copy(pos);
+    this.homeDistrict = districtAt(pos.x, pos.z);
 
     const hpBudget = 55 * def.hpMult * levelScale(level) * (badass ? BADASS_HP_MULT : 1);
     this.maxFlesh = Math.max(1, hpBudget * def.flesh);
     this.maxShield = hpBudget * def.shield;
     this.maxArmor = hpBudget * def.armor;
     this.flesh = this.maxFlesh; this.shield = this.maxShield; this.armor = this.maxArmor;
+    this.lastTotalHp = this.totalHp();
 
     this.buildBody();
-    this.critZone = this.bodyParts[this.bodyParts.length - 1]; // head is last
+    this.critZone = this.bodyParts[this.bodyParts.length - 1];
 
-    // floating health bar (canvas sprite)
     const c = document.createElement('canvas'); c.width = 128; c.height = 20;
     this.healthCtx = c.getContext('2d')!;
     this.healthTex = new THREE.CanvasTexture(c);
@@ -77,82 +93,269 @@ export class Enemy implements Damageable {
     this.healthBar.layers.set(1);
     this.group.add(this.healthBar);
     this.group.position.copy(pos);
+    this.pickPatrolTarget();
   }
 
-  private buildBody(): void {
-    const rng = mulberry32(freshSeed());
+  totalHp(): number { return this.flesh + this.shield + this.armor; }
+
+  protected addLimb(mesh: THREE.Mesh, swing: number): void {
+    this.limbs.push({ mesh, baseY: mesh.position.y, baseX: mesh.rotation.x, swing });
+  }
+
+  private mat(color: number, hexSwatch?: string): THREE.MeshToonMaterial {
+    const m = toonMat({ color, map: hexSwatch ? swatch(hexSwatch, 70) : null });
+    this.flashMats.push(m);
+    return m;
+  }
+
+  protected buildBody(): void {
     const scale = this.def.scale * (this.badass ? BADASS_SCALE : 1);
     const hex = '#' + this.def.tint.toString(16).padStart(6, '0');
-    const bodyMat = toonMat({ color: this.badass ? 0xffb43c : 0xffffff, map: swatch(hex, 80) });
-    const darkMat = toonMat({ color: 0x33302c });
-    const critMat = toonMat({ color: 0xc8b8a8, map: swatch('#b8a890', 40) });
+    const helix = this.def.faction === 'helix';
+    const bodyMat = this.mat(this.badass ? 0xffb43c : 0xffffff, hex);
+    const darkMat = this.mat(helix ? 0x4a5458 : 0x33302c);
+    const critMat = this.mat(helix ? 0x2ba8a0 : 0xc8b8a8, helix ? undefined : '#b8a890');
 
-    const isMutt = this.def.id === 'scrapmutt';
-    if (isMutt) {
-      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5 * scale, 0.45 * scale, 1.0 * scale), bodyMat);
-      torso.position.y = 0.5 * scale;
-      for (let i = 0; i < 4; i++) {
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1 * scale, 0.5 * scale, 0.1 * scale), darkMat);
-        leg.position.set((i % 2 === 0 ? -1 : 1) * 0.2 * scale, 0.25 * scale, (i < 2 ? -1 : 1) * 0.35 * scale);
-        this.group.add(leg); this.bodyParts.push(leg);
+    switch (this.def.behavior) {
+      case 'flyer': {
+        // hovering drone: hull disc + rotor ring + sensor eye (crit)
+        const hull = new THREE.Mesh(new THREE.CylinderGeometry(0.36 * scale, 0.5 * scale, 0.3 * scale, 8), bodyMat);
+        hull.position.y = 2.6;
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62 * scale, 0.07 * scale, 6, 14), darkMat);
+        ring.position.y = 2.72;
+        ring.rotation.x = Math.PI / 2;
+        const fins = new THREE.Mesh(new THREE.BoxGeometry(1.5 * scale, 0.04, 0.14 * scale), darkMat);
+        fins.position.y = 2.72;
+        fins.name = 'rotor';
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.16 * scale, 8, 8), critMat);
+        eye.position.set(0, 2.5, -0.4 * scale);
+        const glow = new THREE.Mesh(new THREE.SphereGeometry(0.08 * scale, 6, 6), glowMat(0xff3030, 1));
+        glow.position.copy(eye.position).z -= 0.1 * scale;
+        glow.layers.set(1);
+        this.group.add(hull, ring, fins, eye, glow);
+        this.bodyParts.push(hull, ring, fins, eye);
+        break;
       }
-      const head = new THREE.Mesh(new THREE.BoxGeometry(0.32 * scale, 0.3 * scale, 0.45 * scale), critMat);
-      head.position.set(0, 0.62 * scale, -0.62 * scale);
-      const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.26 * scale, 0.08 * scale, 0.3 * scale), darkMat);
-      jaw.position.set(0, 0.5 * scale, -0.68 * scale);
-      this.group.add(torso, jaw, head);
-      this.bodyParts.push(torso, jaw, head);
-    } else {
-      // humanoid scrapper: legs, torso, arms, spiky pauldron, head
-      const legs = new THREE.Mesh(new THREE.BoxGeometry(0.42 * scale, 0.7 * scale, 0.26 * scale), darkMat);
-      legs.position.y = 0.35 * scale;
-      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.6 * scale, 0.75 * scale, 0.34 * scale), bodyMat);
-      torso.position.y = 1.05 * scale;
-      const armL = new THREE.Mesh(new THREE.BoxGeometry(0.14 * scale, 0.62 * scale, 0.16 * scale), bodyMat);
-      armL.position.set(-0.4 * scale, 1.05 * scale, 0);
-      const armR = armL.clone();
-      armR.position.x = 0.4 * scale;
-      const pauldron = new THREE.Mesh(new THREE.ConeGeometry(0.16 * scale, 0.3 * scale, 5), darkMat);
-      pauldron.position.set(-0.42 * scale, 1.5 * scale, 0);
-      const head = new THREE.Mesh(new THREE.BoxGeometry(0.3 * scale, 0.32 * scale, 0.3 * scale), critMat);
-      head.position.y = 1.62 * scale;
-      this.group.add(legs, torso, armL, armR, pauldron, head);
-      this.bodyParts.push(legs, torso, armL, armR, pauldron, head);
-      if (this.def.behavior === 'gunner' || this.def.behavior === 'lobber') {
-        const gun = new THREE.Mesh(new THREE.BoxGeometry(0.1 * scale, 0.12 * scale, 0.5 * scale), darkMat);
-        gun.position.set(0.42 * scale, 1.0 * scale, -0.3 * scale);
-        this.group.add(gun); this.bodyParts.push(gun);
+      case 'suicide': {
+        // fusebug: round charge with legs and a blinking fuse
+        const body = new THREE.Mesh(new THREE.SphereGeometry(0.32 * scale, 8, 8), bodyMat);
+        body.position.y = 0.32 * scale;
+        for (let i = 0; i < 4; i++) {
+          const leg = new THREE.Mesh(new THREE.BoxGeometry(0.06 * scale, 0.3 * scale, 0.06 * scale), darkMat);
+          const a = (i / 4) * Math.PI * 2 + 0.4;
+          leg.position.set(Math.cos(a) * 0.3 * scale, 0.15 * scale, Math.sin(a) * 0.3 * scale);
+          leg.rotation.z = Math.cos(a) * 0.6;
+          this.group.add(leg);
+          this.bodyParts.push(leg);
+          this.addLimb(leg, 1.4);
+        }
+        const fuse = new THREE.Mesh(new THREE.SphereGeometry(0.1 * scale, 6, 6), glowMat(0xff3030, 1));
+        fuse.position.y = 0.72 * scale;
+        fuse.name = 'fuse';
+        fuse.layers.set(1);
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.2 * scale, 0.14 * scale, 0.2 * scale), critMat);
+        head.position.y = 0.62 * scale;
+        this.group.add(body, fuse, head);
+        this.bodyParts.push(body, head);
+        break;
       }
-      if (this.def.shield > 0) {
-        // visible shield bubble while shields hold
-        const bubble = new THREE.Mesh(new THREE.SphereGeometry(1.1 * scale, 10, 10),
-          new THREE.MeshBasicMaterial({ color: 0x54d4ff, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false }));
-        bubble.position.y = 1.0 * scale;
-        bubble.name = 'shield_bubble';
-        bubble.layers.set(1);
-        this.group.add(bubble);
-      }
-      if (this.def.armor > 0) {
-        const plate = new THREE.Mesh(new THREE.BoxGeometry(0.7 * scale, 0.8 * scale, 0.1 * scale), toonMat({ color: 0x8a8478, map: swatch('#7a7468', 60) }));
-        plate.position.set(0, 1.05 * scale, -0.24 * scale);
-        this.group.add(plate); this.bodyParts.push(plate);
+      default: {
+        if (this.def.id === 'scrapmutt') {
+          const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5 * scale, 0.45 * scale, 1.0 * scale), bodyMat);
+          torso.position.y = 0.5 * scale;
+          for (let i = 0; i < 4; i++) {
+            const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1 * scale, 0.5 * scale, 0.1 * scale), darkMat);
+            leg.position.set((i % 2 === 0 ? -1 : 1) * 0.2 * scale, 0.25 * scale, (i < 2 ? -1 : 1) * 0.35 * scale);
+            this.group.add(leg); this.bodyParts.push(leg);
+            this.addLimb(leg, i < 2 ? 1 : -1);
+          }
+          const head = new THREE.Mesh(new THREE.BoxGeometry(0.32 * scale, 0.3 * scale, 0.45 * scale), critMat);
+          head.position.set(0, 0.62 * scale, -0.62 * scale);
+          const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.26 * scale, 0.08 * scale, 0.3 * scale), darkMat);
+          jaw.position.set(0, 0.5 * scale, -0.68 * scale);
+          this.group.add(torso, jaw, head);
+          this.bodyParts.push(torso, jaw, head);
+        } else if (helix) {
+          // helix stinger/warden: angular white chassis, teal joints
+          const legs = new THREE.Mesh(new THREE.BoxGeometry(0.36 * scale, 0.66 * scale, 0.3 * scale), darkMat);
+          legs.position.y = 0.33 * scale;
+          const torso = new THREE.Mesh(new THREE.BoxGeometry(0.66 * scale, 0.62 * scale, 0.42 * scale), bodyMat);
+          torso.position.y = 1.0 * scale;
+          const chestLight = new THREE.Mesh(new THREE.CircleGeometry(0.09 * scale, 8), glowMat(0x2ba8a0, 0.95));
+          chestLight.position.set(0, 1.08 * scale, -0.22 * scale);
+          chestLight.rotation.y = Math.PI;
+          const armL = new THREE.Mesh(new THREE.BoxGeometry(0.13 * scale, 0.6 * scale, 0.15 * scale), darkMat);
+          armL.position.set(-0.44 * scale, 1.0 * scale, 0);
+          const armR = armL.clone();
+          armR.position.x = 0.44 * scale;
+          if (this.def.id === 'helix_stinger') {
+            const blade = new THREE.Mesh(new THREE.ConeGeometry(0.06 * scale, 0.7 * scale, 4), bodyMat);
+            blade.position.set(0.44 * scale, 0.6 * scale, -0.2 * scale);
+            blade.rotation.x = 2.4;
+            this.group.add(blade);
+            this.bodyParts.push(blade);
+          }
+          const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.5 * scale, 4), darkMat);
+          antenna.position.set(-0.2 * scale, 1.75 * scale, 0);
+          const head = new THREE.Mesh(new THREE.BoxGeometry(0.34 * scale, 0.26 * scale, 0.3 * scale), critMat);
+          head.position.y = 1.5 * scale;
+          this.group.add(legs, torso, chestLight, armL, armR, antenna, head);
+          this.bodyParts.push(legs, torso, armL, armR, antenna, head);
+          this.addLimb(armL, 1); this.addLimb(armR, -1); this.addLimb(legs, 0);
+          if (this.def.armor > 0) {
+            const plate = new THREE.Mesh(new THREE.BoxGeometry(0.8 * scale, 0.7 * scale, 0.12 * scale), this.mat(0xc8c4ba, '#b8b4aa'));
+            plate.position.set(0, 1.0 * scale, -0.28 * scale);
+            this.group.add(plate); this.bodyParts.push(plate);
+          }
+        } else {
+          // humanoid rustborn
+          const legs = new THREE.Mesh(new THREE.BoxGeometry(0.42 * scale, 0.7 * scale, 0.26 * scale), darkMat);
+          legs.position.y = 0.35 * scale;
+          const torso = new THREE.Mesh(new THREE.BoxGeometry(0.6 * scale, 0.75 * scale, 0.34 * scale), bodyMat);
+          torso.position.y = 1.05 * scale;
+          const armL = new THREE.Mesh(new THREE.BoxGeometry(0.14 * scale, 0.62 * scale, 0.16 * scale), bodyMat);
+          armL.position.set(-0.4 * scale, 1.05 * scale, 0);
+          const armR = armL.clone();
+          armR.position.x = 0.4 * scale;
+          const pauldron = new THREE.Mesh(new THREE.ConeGeometry(0.16 * scale, 0.3 * scale, 5), darkMat);
+          pauldron.position.set(-0.42 * scale, 1.5 * scale, 0);
+          const head = new THREE.Mesh(new THREE.BoxGeometry(0.3 * scale, 0.32 * scale, 0.3 * scale), critMat);
+          head.position.y = 1.62 * scale;
+          this.group.add(legs, torso, armL, armR, pauldron, head);
+          this.bodyParts.push(legs, torso, armL, armR, pauldron, head);
+          this.addLimb(armL, 1); this.addLimb(armR, -1);
+          if (this.def.behavior === 'gunner' || this.def.behavior === 'lobber') {
+            const gun = new THREE.Mesh(new THREE.BoxGeometry(0.1 * scale, 0.12 * scale, 0.5 * scale), darkMat);
+            gun.position.set(0.42 * scale, 1.0 * scale, -0.3 * scale);
+            this.group.add(gun); this.bodyParts.push(gun);
+          }
+          if (this.def.armor > 0) {
+            const plate = new THREE.Mesh(new THREE.BoxGeometry(0.7 * scale, 0.8 * scale, 0.1 * scale), this.mat(0x8a8478, '#7a7468'));
+            plate.position.set(0, 1.05 * scale, -0.24 * scale);
+            this.group.add(plate); this.bodyParts.push(plate);
+          }
+        }
+        if (this.def.shield > 0) {
+          const bubble = new THREE.Mesh(new THREE.SphereGeometry(1.1 * scale, 10, 10),
+            new THREE.MeshBasicMaterial({ color: 0x54d4ff, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false }));
+          bubble.position.y = 1.0 * scale;
+          bubble.name = 'shield_bubble';
+          bubble.layers.set(1);
+          this.group.add(bubble);
+        }
       }
     }
     this.group.traverse((o) => { o.castShadow = true; });
-    void rng;
   }
 
   get displayName(): string {
     return this.badass ? this.def.badassName : this.def.name;
   }
 
+  private pickPatrolTarget(): void {
+    const d = this.homeDistrict;
+    if (!d) { this.patrolTarget.copy(this.position); return; }
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.random() * d.radius * 0.8;
+    this.patrolTarget.set(d.cx + Math.cos(a) * r, 0, d.cz + Math.sin(a) * r);
+    this.patrolWait = 1 + Math.random() * 3;
+  }
+
   update(dt: number): void {
     if (!this.alive) return;
     tickStatuses(this, dt);
-    if (!this.alive) return; // DoT may have killed us
+    if (!this.alive) return;
+
+    // hit flinch detection: any hp drop triggers flash + stagger + aggro
+    const hp = this.totalHp();
+    if (hp < this.lastTotalHp - 0.5) {
+      this.flinchT = 0.18;
+      this.aggro = true;
+      for (const m of this.flashMats) m.emissive.setHex(0x662222);
+    }
+    this.lastTotalHp = hp;
+    if (this.flinchT > 0) {
+      this.flinchT -= dt;
+      if (this.flinchT <= 0) for (const m of this.flashMats) m.emissive.setHex(0x000000);
+    }
 
     const slow = slowFactor(this);
     const playerPos = hooks.playerPos();
+    const distToPlayer = this.position.distanceTo(playerPos);
+
+    // aggro check
+    if (!this.aggro && distToPlayer < this.def.aggroRange * (this.badass ? 1.2 : 1)) {
+      this.aggro = true;
+      if (chance(Math.random as never, 0.6)) hooks.bark(this.displayName, pick(Math.random as never, this.def.barks));
+    }
+
+    if (!this.aggro) {
+      this.patrolUpdate(dt, slow);
+    } else {
+      this.combatUpdate(dt, slow, playerPos, distToPlayer);
+    }
+
+    // limb swing driven by wobble accumulated in movement
+    for (const l of this.limbs) {
+      l.mesh.rotation.x = l.baseX + Math.sin(this.wobble) * 0.55 * l.swing;
+    }
+    const rotor = this.group.getObjectByName('rotor');
+    if (rotor) rotor.rotation.y += dt * 20;
+    // fusebug blink accelerates near the player
+    if (this.def.behavior === 'suicide') {
+      this.beepT -= dt;
+      const urgency = Math.max(0.12, Math.min(1, distToPlayer / 14));
+      if (this.beepT <= 0 && this.aggro) {
+        this.beepT = urgency * 0.55;
+        if (distToPlayer < 26) audio.fuseBeep(1.4 - urgency * 0.5);
+        const fuse = this.group.getObjectByName('fuse') as THREE.Mesh | undefined;
+        if (fuse) fuse.visible = !fuse.visible;
+      }
+    }
+
+    // ambient barks
+    this.barkTimer -= dt;
+    if (this.barkTimer <= 0 && distToPlayer < 26 && this.aggro) {
+      this.barkTimer = 8 + Math.random() * 14;
+      if (chance(Math.random as never, 0.55)) hooks.bark(this.displayName, pick(Math.random as never, this.def.barks));
+    }
+
+    const bubble = this.group.getObjectByName('shield_bubble') as THREE.Mesh | undefined;
+    if (bubble) bubble.visible = this.shield > 0;
+
+    this.drawHealthBar(distToPlayer);
+  }
+
+  private patrolUpdate(dt: number, slow: number): void {
+    if (this.patrolWait > 0) {
+      this.patrolWait -= dt;
+      this.settleToGround();
+      return;
+    }
+    const to = this.patrolTarget.clone().sub(this.position); to.y = 0;
+    if (to.length() < 1.5) { this.pickPatrolTarget(); return; }
+    const dir = to.normalize();
+    const speed = this.def.speed * 0.35 * slow;
+    this.position.addScaledVector(dir, speed * dt);
+    this.wobble += dt * 5 * slow;
+    this.group.rotation.y = Math.atan2(dir.x, dir.z) + Math.PI;
+    this.settleToGround(true);
+  }
+
+  protected settleToGround(moving = false): void {
+    const gy = hooks.groundHeight(this.position.x, this.position.z);
+    if (this.def.behavior === 'flyer') {
+      this.group.position.copy(this.position);
+      this.group.position.y = gy + Math.sin(this.wobble * 0.6) * 0.3;
+      this.position.y = this.group.position.y;
+      return;
+    }
+    this.group.position.copy(this.position);
+    this.group.position.y = gy + (moving ? Math.abs(Math.sin(this.wobble)) * 0.08 : 0);
+    this.position.y = this.group.position.y;
+  }
+
+  protected combatUpdate(dt: number, slow: number, playerPos: THREE.Vector3, distToPlayer: number): void {
     const taunt = hooks.tauntTarget();
     const targetPos = taunt ?? playerPos;
     const toTarget = targetPos.clone().sub(this.position); toTarget.y = 0;
@@ -163,62 +366,65 @@ export class Enemy implements Damageable {
     const speed = def.speed * slow * (this.badass ? 1.1 : 1);
     const engage = def.attackRange;
 
-    // face target
     this.group.rotation.y = Math.atan2(toTarget.x, toTarget.z) + Math.PI;
+
+    // suicide: detonate at range
+    if (def.behavior === 'suicide' && dist < engage) {
+      this.detonate();
+      return;
+    }
 
     if (dist > engage) {
       const dir = toTarget.normalize();
+      // flyers strafe sinusoidally while closing
+      if (def.behavior === 'flyer') {
+        const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(Math.sin(this.wobble * 0.7) * 0.6);
+        dir.add(side).normalize();
+      }
       this.position.addScaledVector(dir, speed * dt);
-      // bob while moving — cheap life
-      this.group.position.copy(this.position);
-      this.group.position.y = hooks.groundHeight(this.position.x, this.position.z) + Math.abs(Math.sin(this.wobble)) * 0.08;
+      this.wobble += dt * 2;
+      this.settleToGround(true);
     } else {
-      this.group.position.copy(this.position);
-      this.group.position.y = hooks.groundHeight(this.position.x, this.position.z);
+      this.settleToGround();
       this.attackTimer -= dt * slow;
       if (this.attackTimer <= 0) {
         this.attackTimer = 1 / def.attackRate;
         this.attack(targetPos, taunt !== null);
       }
     }
-    this.position.y = this.group.position.y;
-
-    // barks
-    this.barkTimer -= dt;
-    if (this.barkTimer <= 0 && dist < 26) {
-      this.barkTimer = 8 + Math.random() * 14;
-      if (chance(Math.random as never, 0.6)) hooks.bark(this.displayName, pick(Math.random as never, def.barks));
-    }
-
-    // shield bubble follows shield state
-    const bubble = this.group.getObjectByName('shield_bubble') as THREE.Mesh | undefined;
-    if (bubble) bubble.visible = this.shield > 0;
-
-    this.drawHealthBar();
   }
 
-  private attack(targetPos: THREE.Vector3, attackingTurret: boolean): void {
+  private detonate(): void {
+    this.alive = false;
+    splashDamage(this.position.clone().add(new THREE.Vector3(0, 0.5, 0)), 3.4,
+      9 * this.def.damageMult * levelScale(this.level), 'blast', { source: 'enemy' });
+    debris.groundDecal(this.position.x, this.position.z, 'scorch', 2.2);
+    hooks.onKilled(this, 0);
+  }
+
+  protected attack(targetPos: THREE.Vector3, attackingTurret: boolean): void {
     const def = this.def;
     const dmg = 7 * def.damageMult * levelScale(this.level) * (this.badass ? BADASS_DMG_MULT : 1);
-    const muzzle = this.position.clone().add(new THREE.Vector3(0, 1.3 * def.scale, 0));
+    const h = def.behavior === 'flyer' ? 2.6 : 1.3;
+    const muzzle = this.position.clone().add(new THREE.Vector3(0, h * def.scale, 0));
     if (def.behavior === 'rusher' || def.behavior === 'brute') {
-      // lunge visual + melee hit if still close
+      // lunge: quick forward hop + swipe flash
       fx.burst(muzzle, 0xffffff, 6, 3, 0.07, 0.25, 4);
+      this.wobble += 2;
       const d = targetPos.distanceTo(this.position);
-      if (d < def.attackRange + 0.8 && !attackingTurret) hooks.damagePlayer(dmg * 1.4, 'kinetic');
+      if (d < def.attackRange + 0.8 && !attackingTurret) hooks.damagePlayer(dmg * 1.4, 'kinetic', this.position);
     } else if (def.projectile) {
       const aim = targetPos.clone().add(new THREE.Vector3(0, attackingTurret ? 0.5 : 1.2, 0)).sub(muzzle);
-      if (def.behavior === 'lobber') {
+      if (def.projectile.arc) {
         const dist = aim.length();
         aim.normalize().multiplyScalar(def.projectile.speed);
-        aim.y += dist * 0.45; // arc it
+        aim.y += dist * 0.45;
         projectiles.spawn({
           pos: muzzle, vel: aim, damage: dmg, element: def.projectile.element,
           splash: 2.5, gravity: 14, fuse: -1, source: 'enemy',
         });
       } else {
         aim.normalize();
-        // lead-free, slightly inaccurate hitscan-ish bolt
         aim.x += (Math.random() - 0.5) * 0.08; aim.y += (Math.random() - 0.5) * 0.05;
         projectiles.spawn({
           pos: muzzle, vel: aim.multiplyScalar(def.projectile.speed), damage: dmg,
@@ -229,7 +435,10 @@ export class Enemy implements Damageable {
     }
   }
 
-  private drawHealthBar(): void {
+  private drawHealthBar(distToPlayer: number): void {
+    const visible = distToPlayer < 32 && (this.flesh < this.maxFlesh || this.shield < this.maxShield || this.armor < this.maxArmor);
+    this.healthBar.visible = visible;
+    if (!visible) return;
     const ctx = this.healthCtx;
     ctx.clearRect(0, 0, 128, 20);
     ctx.fillStyle = 'rgba(10,10,14,0.75)';
@@ -249,62 +458,71 @@ export class Enemy implements Damageable {
     seg(this.armor, this.maxArmor, '#d8b028');
     seg(this.shield, this.maxShield, '#54d4ff');
     this.healthTex.needsUpdate = true;
-    const dist = hooks.playerPos().distanceTo(this.position);
-    this.healthBar.visible = dist < 30 && (this.flesh < this.maxFlesh || this.shield < this.maxShield || this.armor < this.maxArmor);
   }
 
-  onDeath(killedBy: never, overkill: number): void {
-    // gib burst: launch body parts as physics-lite chunks (handled by spawner)
+  onDeath(killedBy: ElementId, overkill: number): void {
+    this.killedBy = killedBy;
     hooks.onKilled(this, overkill);
   }
 }
 
 // ---------------------------------------------------------------------------
 
-interface Gib { mesh: THREE.Mesh; vel: THREE.Vector3; spin: THREE.Vector3; life: number }
+interface Gib { mesh: THREE.Mesh; vel: THREE.Vector3; spin: THREE.Vector3; life: number; frozen: boolean }
+
+interface DistrictPop {
+  def: DistrictDef;
+  respawnT: number;
+}
 
 export class EnemySpawner {
   enemies: Enemy[] = [];
   private gibs: Gib[] = [];
-  private waveIdx = 0;
-  private waveTimer = 0;
-  private pendingBudget = 0;
-  private spawnTick = 0;
-  private bossSpawned = false;
+  private pops: DistrictPop[] = [];
   boss: Enemy | null = null;
   scene!: THREE.Scene;
-  zone!: ZoneDef;
 
-  attach(scene: THREE.Scene, zone: ZoneDef): void {
+  attach(scene: THREE.Scene): void {
     this.scene = scene;
-    this.zone = zone;
-    this.waveTimer = zone.waves[0]?.delay ?? 5;
+    this.pops = WORLD.districts
+      .filter((d) => d.spawnTable.length > 0)
+      .map((def) => ({ def, respawnT: 2 + Math.random() * 4 }));
   }
 
-  update(dt: number): void {
-    // wave pacing
-    if (this.waveIdx < this.zone.waves.length) {
-      this.waveTimer -= dt;
-      if (this.waveTimer <= 0) {
-        this.pendingBudget += this.zone.waves[this.waveIdx].budget;
-        this.waveIdx++;
-        if (this.waveIdx < this.zone.waves.length) this.waveTimer = this.zone.waves[this.waveIdx].delay;
-      }
-    } else if (this.pendingBudget <= 0 && this.aliveCount() === 0 && !this.bossSpawned) {
-      this.spawnBoss();
-    } else if (this.aliveCount() < 3 && this.pendingBudget <= 0 && this.bossSpawned && (!this.boss || !this.boss.alive)) {
-      // endless trickle after the boss falls — the gully never stays quiet
-      this.pendingBudget += 30;
-    }
+  /** Count of enemies currently hunting the player — drives the music. */
+  aggroCount(): number {
+    let n = 0;
+    for (const e of this.enemies) if (e.alive && e.aggro) n++;
+    return n;
+  }
 
-    // drip spawns from budget
-    this.spawnTick -= dt;
-    if (this.pendingBudget > 0 && this.spawnTick <= 0 && this.aliveCount() < this.zone.maxAlive) {
-      this.spawnTick = 1.1;
-      const entry = weightedPick(Math.random as never, this.zone.spawnTable.map((s) => ({ item: s, w: s.weight })));
+  aliveCount(): number { return this.enemies.filter((e) => e.alive).length; }
+
+  update(dt: number): void {
+    const playerPos = enemyHooks().playerPos();
+
+    // district repopulation
+    for (const pop of this.pops) {
+      pop.respawnT -= dt;
+      if (pop.respawnT > 0) continue;
+      pop.respawnT = pop.def.respawnDelay * (0.7 + Math.random() * 0.6);
+      const alive = this.enemies.filter((e) => e.alive && e.homeDistrict?.id === pop.def.id).length;
+      if (alive >= pop.def.maxAlive) continue;
+      // only populate when the player is near-ish but not on top of the spawn
+      const distToDistrict = Math.hypot(playerPos.x - pop.def.cx, playerPos.z - pop.def.cz);
+      if (distToDistrict > pop.def.radius + 70) continue;
+      const entry = weightedPick(Math.random as never, pop.def.spawnTable.map((s) => ({ item: s, w: s.weight })));
       const def = ENEMIES[entry.enemyId];
-      this.pendingBudget -= def.weight * 0.5 + 8;
-      this.spawnOne(def);
+      if (!def) continue;
+      // find a spawn point away from the player
+      for (let tries = 0; tries < 6; tries++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * pop.def.radius * 0.85;
+        const pos = new THREE.Vector3(pop.def.cx + Math.cos(a) * r, 0, pop.def.cz + Math.sin(a) * r);
+        if (pos.distanceTo(playerPos) < 20) continue;
+        this.spawnOne(def, pos, undefined, pop.def.levelOffset);
+        break;
+      }
     }
 
     for (const e of this.enemies) e.update(dt);
@@ -312,63 +530,116 @@ export class EnemySpawner {
       if (!e.alive) this.scene.remove(e.group);
       return e.alive;
     });
+    if (this.boss && !this.boss.alive) this.boss = null;
 
     // gib physics
     for (let i = this.gibs.length - 1; i >= 0; i--) {
       const g = this.gibs[i];
       g.life -= dt;
-      g.vel.y -= 22 * dt;
-      g.mesh.position.addScaledVector(g.vel, dt);
-      g.mesh.rotation.x += g.spin.x * dt; g.mesh.rotation.y += g.spin.y * dt; g.mesh.rotation.z += g.spin.z * dt;
-      if (g.mesh.position.y < 0.1) { g.mesh.position.y = 0.1; g.vel.multiplyScalar(0.4); g.vel.y = Math.abs(g.vel.y) * 0.3; }
+      if (!g.frozen) {
+        g.vel.y -= 22 * dt;
+        g.mesh.position.addScaledVector(g.vel, dt);
+        g.mesh.rotation.x += g.spin.x * dt; g.mesh.rotation.y += g.spin.y * dt; g.mesh.rotation.z += g.spin.z * dt;
+        const gy = enemyHooks().groundHeight(g.mesh.position.x, g.mesh.position.z);
+        if (g.mesh.position.y < gy + 0.1) {
+          g.mesh.position.y = gy + 0.1;
+          g.vel.multiplyScalar(0.4);
+          g.vel.y = Math.abs(g.vel.y) * 0.3;
+        }
+      }
       if (g.life <= 0) { this.scene.remove(g.mesh); this.gibs.splice(i, 1); }
     }
   }
 
-  aliveCount(): number { return this.enemies.filter((e) => e.alive).length; }
-
-  private spawnPoint(): THREE.Vector3 {
-    const spawners = this.zone.pois.filter((p) => p.kind === 'spawner');
-    const s = spawners[Math.floor(Math.random() * spawners.length)];
-    return new THREE.Vector3(s.x + (Math.random() - 0.5) * 6, 0, s.z + (Math.random() - 0.5) * 6);
-  }
-
-  spawnOne(def: EnemyDef, forcePos?: THREE.Vector3, forceBadass?: boolean): Enemy {
-    const pos = forcePos ?? this.spawnPoint();
-    const level = Math.max(1, state.level + Math.floor(Math.random() * 3) - 1);
+  spawnOne(def: EnemyDef, pos: THREE.Vector3, forceBadass?: boolean, levelOffset = 0): Enemy {
+    const level = Math.max(1, state.level + levelOffset + Math.floor(Math.random() * 2) - 1);
     const badass = forceBadass ?? Math.random() < BADASS_CHANCE;
     const e = new Enemy(def, level, pos, badass);
     this.scene.add(e.group);
     this.enemies.push(e);
-    fx.burst(pos.clone().add(new THREE.Vector3(0, 1, 0)), 0xff8438, 14, 4, 0.12, 0.5, 5); // spawn poof
-    if (badass) hooks.bark(e.displayName, 'A BADASS APPROACHES.');
+    fx.burst(pos.clone().add(new THREE.Vector3(0, 1, 0)), def.faction === 'helix' ? 0x54d4ff : 0xff8438, 14, 4, 0.12, 0.5, 5);
+    if (badass) enemyHooks().bark(e.displayName, 'A BADASS APPROACHES.');
     return e;
   }
 
-  private spawnBoss(): void {
-    this.bossSpawned = true;
-    const gate = this.zone.pois.find((p) => p.kind === 'boss_gate')!;
-    this.boss = this.spawnOne(MINIBOSS, new THREE.Vector3(gate.x, 0, gate.z), false);
-    hooks.bark(MINIBOSS.name, pick(Math.random as never, MINIBOSS.barks));
-    audio.explosion(true);
+  registerBoss(boss: Enemy): void {
+    this.scene.add(boss.group);
+    this.enemies.push(boss);
+    this.boss = boss;
   }
 
-  /** Called by the loot system after onKilled — visual send-off. */
+  /** Element-flavored death burst. */
   gibBurst(e: Enemy): void {
+    const killedBy = e.killedBy;
+    const center = e.position.clone().add(new THREE.Vector3(0, 1.2 * e.def.scale, 0));
     audio.explosion(false);
+
+    if (killedBy === 'rime') {
+      // frozen solid: gibs become pale ice chunks that hang, then shatter
+      audio.elemental('rime');
+      for (const part of e.bodyParts) {
+        const mesh = part.clone();
+        mesh.material = toonMat({ color: 0xbfe9f5 });
+        mesh.position.copy(e.group.position).add(part.position);
+        mesh.rotation.copy(part.rotation);
+        this.scene.add(mesh);
+        this.gibs.push({
+          mesh,
+          vel: new THREE.Vector3((Math.random() - 0.5) * 2, 1 + Math.random() * 2, (Math.random() - 0.5) * 2),
+          spin: new THREE.Vector3(Math.random() * 3, Math.random() * 3, Math.random() * 3),
+          life: 0.8 + Math.random() * 0.5,
+          frozen: false,
+        });
+      }
+      fx.burst(center, 0xe4f7ff, 30, 5, 0.1, 0.9, 4);
+      fx.burst(center, 0xffffff, 12, 2, 0.06, 1.1, 2);
+      return;
+    }
+    if (killedBy === 'ember') {
+      // burns to ash: fewer gibs, big ash/ember plume, smolder decal
+      fx.burst(center, 0xff6a1a, 30, 5, 0.14, 0.8, 3, 0.9);
+      fx.burst(center, 0x3a3230, 24, 3, 0.18, 1.4, 1.5, 1);
+      debris.groundDecal(e.position.x, e.position.z, 'scorch', 1.6);
+      audio.elemental('ember');
+      this.launchGibs(e, 0.4, 4);
+      return;
+    }
+    if (killedBy === 'bile') {
+      fx.burst(center, 0x7dff2a, 26, 4.5, 0.14, 0.8, 10);
+      debris.groundDecal(e.position.x, e.position.z, 'bile', 2);
+      audio.elemental('bile');
+      this.launchGibs(e, 0.6, 6);
+      return;
+    }
+    if (killedBy === 'volt') {
+      for (let i = 0; i < 4; i++) {
+        const off = new THREE.Vector3((Math.random() - 0.5) * 3, Math.random() * 2.5, (Math.random() - 0.5) * 3);
+        fx.lightningArc(center, center.clone().add(off));
+      }
+      audio.elemental('volt');
+      this.launchGibs(e, 1, 10);
+      return;
+    }
+    // kinetic / blast: the full gib fountain
+    this.launchGibs(e, 1, 8);
+    fx.burst(center, 0xe04040, 22, 6, 0.14, 0.7, 9);
+  }
+
+  private launchGibs(e: Enemy, keepFraction: number, force: number): void {
     for (const part of e.bodyParts) {
+      if (Math.random() > keepFraction) continue;
       const mesh = part.clone();
       mesh.position.copy(e.group.position).add(part.position);
       mesh.rotation.copy(part.rotation);
       this.scene.add(mesh);
       this.gibs.push({
         mesh,
-        vel: new THREE.Vector3((Math.random() - 0.5) * 8, 4 + Math.random() * 6, (Math.random() - 0.5) * 8),
+        vel: new THREE.Vector3((Math.random() - 0.5) * force, force * 0.6 + Math.random() * force * 0.6, (Math.random() - 0.5) * force),
         spin: new THREE.Vector3(Math.random() * 12, Math.random() * 12, Math.random() * 12),
         life: 1.6 + Math.random(),
+        frozen: false,
       });
     }
-    fx.burst(e.position.clone().add(new THREE.Vector3(0, 1.2, 0)), 0xe04040, 22, 6, 0.14, 0.7, 9);
   }
 }
 

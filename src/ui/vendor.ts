@@ -21,10 +21,13 @@ export interface VendorCallbacks {
   playerHealthFrac: () => number;
 }
 
+const SELL_RATE = 0.4;
+
 export class VendorPanel {
   private stock: ItemInstance[] = [];
   private stockLevel = -1;
   private selected: ItemInstance | null = null;
+  private mode: 'buy' | 'sell' = 'buy';
 
   private restock(): void {
     if (this.stockLevel === state.level && this.stock.length > 0) return;
@@ -47,38 +50,70 @@ export class VendorPanel {
     this.restock();
     const line = pick(Math.random as never, VENDOR_LINES.gunveda);
     const ammoCost = 20 + state.level * 4;
-    const rows = this.stock.map((item, i) => {
+    const selling = this.mode === 'sell';
+
+    const list = selling ? state.inventory : this.stock;
+    const rows = list.map((item, i) => {
       const r = rarityById(item.rarity);
-      const dayTag = i === 2 ? ' <b style="color:#ffd23c">★ ITEM OF THE DAY</b>' : '';
+      const dayTag = !selling && i === 2 ? ' <b style="color:#ffd23c">★ ITEM OF THE DAY</b>' : '';
+      const price = selling ? Math.round(item.value * SELL_RATE) : item.value;
       return `<div class="inv-row ${item === this.selected ? 'sel' : ''}" data-idx="${i}" style="--rarity:${r.css}">
         <div class="r-name">${item.name}${dayTag}</div>
-        <div class="r-lvl" style="color:#8fff3d">$${fmtNum(item.value)}</div>
+        <div class="r-lvl" style="color:#8fff3d">$${fmtNum(price)}</div>
       </div>`;
     }).join('');
+
+    const emptyMsg = selling
+      ? '<div style="opacity:0.5; padding:16px;">Nothing to sell. Go un-alive someone rich.</div>'
+      : '';
 
     root.innerHTML = `
       <h1>MADAME ZAZA’S BANG-BANG EMPORIUM</h1>
       <div class="p-sub vendor-line">“${line}”</div>
       <div class="p-body">
         <div style="flex:1.2; display:flex; flex-direction:column; min-height:0;">
-          <div class="vendor-stock">${rows}</div>
+          <div class="vendor-tabs">
+            <button id="v-tab-buy" class="${selling ? '' : 'tab-on'}">BUY</button>
+            <button id="v-tab-sell" class="${selling ? 'tab-on' : ''}">SELL (40¢ on the $)</button>
+          </div>
+          <div class="vendor-stock">${rows || emptyMsg}</div>
           <div style="margin-top:10px; display:flex; gap:8px;">
             <button id="v-ammo">REFILL ALL AMMO — $${ammoCost}</button>
           </div>
           <div class="p-hint">Your wallet: <b style="color:#8fff3d">$${fmtNum(state.money)}</b></div>
         </div>
         <div class="inv-detail">
-          ${this.selected ? itemCardHTML(this.selected) + `<div style="margin-top:10px"><button id="v-buy">BUY — $${fmtNum(this.selected.value)}</button></div>` : '<div style="opacity:0.6; padding:30px 10px;">Point at something shiny, sugar.</div>'}
+          ${this.selected
+            ? itemCardHTML(this.selected) + `<div style="margin-top:10px"><button id="v-act">${selling ? `SELL — $${fmtNum(Math.round(this.selected.value * SELL_RATE))}` : `BUY — $${fmtNum(this.selected.value)}`}</button></div>`
+            : '<div style="opacity:0.6; padding:30px 10px;">Point at something shiny, sugar.</div>'}
         </div>
       </div>
       <div class="p-hint">E / ESC to close · stock refreshes when you level</div>`;
 
+    root.querySelector('#v-tab-buy')?.addEventListener('click', () => { this.mode = 'buy'; this.selected = null; audio.uiClick(); this.renderGuns(root, cb); });
+    root.querySelector('#v-tab-sell')?.addEventListener('click', () => { this.mode = 'sell'; this.selected = null; audio.uiClick(); this.renderGuns(root, cb); });
+
     root.querySelectorAll<HTMLElement>('.inv-row').forEach((row) => {
-      row.addEventListener('click', () => { this.selected = this.stock[Number(row.dataset.idx)]; audio.uiClick(); this.renderGuns(root, cb); });
+      row.addEventListener('click', () => {
+        this.selected = (selling ? state.inventory : this.stock)[Number(row.dataset.idx)];
+        audio.uiClick();
+        this.renderGuns(root, cb);
+      });
     });
-    root.querySelector('#v-buy')?.addEventListener('click', () => {
+    root.querySelector('#v-act')?.addEventListener('click', () => {
       const item = this.selected;
-      if (!item || state.money < item.value) { audio.uiError(); return; }
+      if (!item) return;
+      if (selling) {
+        const i = state.inventory.indexOf(item);
+        if (i < 0) return;
+        state.inventory.splice(i, 1);
+        state.money += Math.round(item.value * SELL_RATE);
+        this.selected = null;
+        audio.cash();
+        this.renderGuns(root, cb);
+        return;
+      }
+      if (state.money < item.value) { audio.uiError(); return; }
       state.money -= item.value;
       this.stock.splice(this.stock.indexOf(item), 1);
       this.selected = null;
