@@ -15,6 +15,7 @@
 import { audio } from './synth';
 import { prefs } from '../game/prefs';
 import { clamp } from '../util/maff';
+import { voClip } from './vo';
 
 export interface VoiceProfile {
   id: string;
@@ -71,6 +72,10 @@ class VoiceSystem {
   private live: Scheduled[] = [];
   private endsAt = 0;
   private echoBus: { delay: DelayNode; gain: GainNode } | null = null;
+  /** Single reusable element for recorded VO clips. */
+  private voEl: HTMLAudioElement | null = null;
+  /** Debug: where the last line came from ('vo' | 'synth' | 'muted'). */
+  lastSource = 'synth';
 
   get speaking(): boolean {
     const bus = audio.getBus();
@@ -78,6 +83,7 @@ class VoiceSystem {
   }
 
   cancel(): void {
+    if (this.voEl && !this.voEl.paused) this.voEl.pause();
     const bus = audio.getBus();
     if (!bus) return;
     for (const s of this.live) { try { s.stop(bus.ctx.currentTime); } catch { /* already ended */ } }
@@ -87,10 +93,23 @@ class VoiceSystem {
 
   /** Speak one line. Returns its rough duration in seconds (0 if muted). */
   speak(text: string, profile: VoiceProfile): number {
-    if (!prefs().characterVoices) return 0;
+    if (!prefs().characterVoices) { this.lastSource = 'muted'; return 0; }
     const bus = audio.getBus();
-    if (!bus) return 0;
+    if (!bus) { this.lastSource = 'muted'; return 0; }
     this.cancel();
+
+    // a real recording wins; the synth voice covers everything unrecorded
+    const clip = voClip(profile.id, text);
+    if (clip) {
+      this.voEl ??= new Audio();
+      this.voEl.src = clip.url;
+      this.voEl.volume = 0.9;
+      void this.voEl.play().catch(() => { /* decode/user-gesture hiccup: subtitle carries it */ });
+      this.endsAt = bus.ctx.currentTime + clip.dur;
+      this.lastSource = 'vo';
+      return clip.dur;
+    }
+    this.lastSource = 'synth';
     const { ctx, out } = bus;
 
     // announcer echo bus, built once

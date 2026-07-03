@@ -16,6 +16,13 @@ Pass-2 additions marked as such.
   parametric primitives, textures are canvas-painted at boot, all SFX *and music*
   are WebAudio synthesis. The repo stays pure code+data, every visual is a tunable
   parameter, and part-based gun visuals can't drift from part data.
+- **Exception (pass 21): recorded voice-over.** Character dialogue is baked
+  neural TTS committed under `public/vo/` (~15MB of MP3s + manifest) because
+  no amount of formant synthesis reads as an actual performance. The pipeline
+  stays code-first: `tools/collect-vo.ts` derives the line list FROM the data
+  files, `tools/bake-vo.mjs` renders it (ElevenLabs, key via XI_KEY env only),
+  and the synth voice remains the always-available fallback for any
+  unrecorded line — the game never *requires* the recordings.
 
 ## Rendering (src/render/)
 

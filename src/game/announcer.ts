@@ -8,35 +8,13 @@
 import { voice, VOICES } from '../audio/voice';
 import { bus } from './state';
 import { pick } from '../util/rng';
+import {
+  ANNOUNCER_WAVE_START as WAVE_START, ANNOUNCER_BOSS_WAVE as BOSS_WAVE,
+  ANNOUNCER_WAVE_CLEAR as WAVE_CLEAR, ANNOUNCER_PLAYER_DOWN as PLAYER_DOWN,
+  ANNOUNCER_SECOND_WIND as SECOND_WIND, ANNOUNCER_STREAK as STREAK,
+  ANNOUNCER_WELCOME,
+} from '../data/announcerlines';
 
-const WAVE_START = [
-  'WAVE {n}! Release the regrets!',
-  'Wave {n}, folks! The floor is lava-ADJACENT!',
-  'HERE COMES WAVE {n}! Somebody hide the medics!',
-  'Wave {n}! Betting window is CLOSED. Morally it was never open!',
-];
-const BOSS_WAVE = [
-  'OHHH it’s a BOSS WAVE! {boss} has entered the pit and the insurance has LEFT!',
-  'WAVE {n}! Main event! {boss}! The crowd goes appropriately concerned!',
-];
-const WAVE_CLEAR = [
-  'WAVE {n} CLEARED! The pit is briefly a floor again!',
-  'CLEAR! Somebody hose that down before wave {next}!',
-  'And that’s wave {n}! Shop fast, bleed slower!',
-  'CLEANUP ON WAVE {n}! Purse is paid! The vultures send compliments!',
-];
-const PLAYER_DOWN = [
-  'DOWN GOES THE CONTRACTOR! Get up, the paperwork isn’t done!',
-  'OHHH! Right in the everything! Fight for it, kid!',
-];
-const SECOND_WIND = [
-  'AND THEY’RE BACK UP! The pit LOVES a comeback!',
-  'SECOND WIND! Refunds cancelled!',
-];
-const STREAK = [
-  '{k} in a row! Someone check the scoreboard for smoke!',
-  'A {k}-STREAK! The house is legally impressed!',
-];
 
 class Announcer {
   /** Only the pit gets a commentator. */
@@ -81,7 +59,7 @@ class Announcer {
 
   welcome(): void {
     if (!this.enabled) return;
-    this.say('LADIES, GENTLEFOLK, AND VULTURES! Fresh meat in the CRUCIBLE!');
+    this.say(ANNOUNCER_WELCOME);
   }
 
   private say(line: string): void {

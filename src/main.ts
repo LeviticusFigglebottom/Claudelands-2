@@ -40,6 +40,7 @@ import { QuestTracker, QuestLogPanel, DialoguePanel } from './ui/quests';
 import { PausePanel } from './ui/pause';
 import { MainMenu, type StartMode } from './ui/mainmenu';
 import { IntroOverlay, INTRO_PATH } from './ui/intro';
+import { loadVoManifest, voStats } from './audio/vo';
 import { endless } from './game/endless';
 import { vehicles } from './game/vehicle';
 import { race, formatRaceTime } from './game/race';
@@ -1466,6 +1467,7 @@ canvas.addEventListener('click', () => {
   interactDebug: () => interact(),
   holocall, announcer, voice, playerVoice, audio, music,
   speakDebug: (text: string, who: string) => voice.speak(text, voiceOf(who)),
+  voStats,
   switchMapDebug: switchMap,
   skipIntro: () => { if (cinematicT >= 0) intro.end(); },
   cinema, seenCines, shipTravel,
@@ -1497,6 +1499,10 @@ canvas.addEventListener('click', () => {
 document.addEventListener('intro-finished', () => {
   if (cinematicT >= 0) endCinematic();
 });
+
+// recorded voice-over manifest: fire-and-forget — synth voices carry
+// every line until (and unless) it lands
+void loadVoManifest();
 
 // kick the loop off last — everything above (attract shots, menu, seam) must exist first
 frame();

@@ -1,5 +1,38 @@
 # ROADMAP
 
+## Pass 21 status — everybody gets a real voice
+
+**Full recorded voice-over**: all 384 fixed character lines (~25.6k
+characters) are now performed by real neural TTS (ElevenLabs
+multilingual v2) — quest briefings/accepts/completes for every giver,
+all 64 wire-spool logs, Rita's race commentary, BIG NAZDA's entire
+announcer book, and the four playable characters' combat chatter.
+Fifteen cast voices with per-character delivery settings (the announcer
+runs stability 0.22 / style 0.85; Brother Okto chants at 0.6/0.25).
+
+**How it plugs in**: `tools/collect-vo.ts` walks the data files and
+emits every voiced line; `tools/bake-vo.mjs` renders them to
+`public/vo/<voice>/<hash>.mp3` (64kbps mono, ~15MB total) plus a
+manifest with clip durations. At runtime `voice.speak()` asks the
+manifest first — recordings play through one reusable audio element —
+and falls back to the procedural synth for anything unrecorded
+(dynamic interpolated strings, missing manifest, future lines). The
+key is a digit-stripping normalization hash, which is how "WAVE 12!"
+finds the number-free "WAVE!" recording.
+
+**Ground rules**: the API key lives ONLY in the XI_KEY env var at bake
+time — never in the repo. Retakes = delete the clip file(s) and re-run
+the bake (existing files are skipped). This pass deliberately relaxes
+the zero-binary-assets rule for voice audio; everything else stays
+procedural.
+
+Headless suite: `verify22.mjs` — 10 checks, all passing (asset
+integrity + duration sanity, manifest load, recorded-vs-synth routing,
+numbered announcer lookups, per-voice fetchability).
+
+Also fixed: new-game sky spawn (the attract-mode menu parks the player
+at y=220 over its beauty shots; campaign start never reset it).
+
 ## Pass 20 status — the feel pass: drift, sentry, and hands
 
 **Drift, retuned for sustained turns**: the boost charge builds MUCH
