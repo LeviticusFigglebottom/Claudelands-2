@@ -263,12 +263,20 @@ class QuestSystem {
     const next = idx + 1 < this.quests.length ? this.quests[idx + 1] : null;
     if (next && next.status === 'locked') {
       next.status = 'available';
-      if (next.def.giver === q.def.giver) {
-        // same giver: the turn-in AND the next briefing happen over the ECHO —
-        // no walking back across two maps to hear "good job, now go back"
+      // holocall auto-chaining is for "you're already out here" sequences:
+      // same giver AND the next objective lives in the same area (arrive →
+      // kill → boss). Anything that moves the story to a new map is a real
+      // trip, so it's accepted in person.
+      const sameArea = (next.def.objective.mapId ?? 'claudelands') === (q.def.objective.mapId ?? 'claudelands');
+      if (next.def.giver === q.def.giver && sameArea) {
         this.hooks?.holocall(q.def.giver, [q.def.completeLine], `✔ ${q.def.name} — TURNED IN REMOTELY`);
         this.acceptQuest(next, true);
         this.hooks?.holocall(next.def.giver, [...next.def.briefing, next.def.acceptLine], `NEW CONTRACT — ${next.def.name}`);
+      } else if (next.def.giver === q.def.giver) {
+        // same boss, new territory: they call the job in, you take it at the desk
+        const g = GIVERS[q.def.giver];
+        this.hooks?.holocall(q.def.giver, [q.def.completeLine, `Come see me ${g.where} when you’re ready. The next one’s bigger.`], `✔ ${q.def.name} — TURNED IN REMOTELY`);
+        this.hooks?.toast(`New work waiting: <b>${g.name}</b> (${g.where.replace(/^(in|at) /, '')})`, '#ffd23c');
       } else {
         // a new face: the old giver signs off remotely, but you go MEET them
         const g = GIVERS[next.def.giver];

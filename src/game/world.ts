@@ -1484,6 +1484,9 @@ export class World {
       this.water(lake.x, lake.z, lake.r, { lilies: WORLD.biome.trees === 'palm', level: lake.level + 0.2 });
     }
 
+    // the gulch dresses its racing circuit
+    if (WORLD.id === 'rustgulch') this.buildGulchTrackDecor();
+
     // palm biomes: the wilds between districts stay jungle, not lawn
     if (WORLD.biome.trees === 'palm') {
       const rng = mulberry32(90210);
@@ -1700,7 +1703,7 @@ export class World {
     this.group.add(g);
     this.registerNpcRig(g, head, armR);
     this.addCollider(poi.x, poi.z, 0.5, 0.5);
-    this.interactables.push({ kind: 'racer', pos: new THREE.Vector3(poi.x, y, poi.z), label: 'TALK RACING WITH REDLINE RITA', data: poi.data });
+    this.interactables.push({ kind: 'racer', pos: new THREE.Vector3(poi.x, y, poi.z), label: 'TALK RACING WITH REDLINE RITA', data: poi.data, range: 5 });
   }
 
   /** Pit-row pad where the Junkstallion parks. The buggy itself is owned by
@@ -1850,11 +1853,11 @@ export class World {
     line.position.set(archX, gy + 0.06, archZ);
     this.group.add(line);
 
-    // Rita's garage: lean-to + workbench + billboard
+    // Rita's garage: lean-to + workbench + a work lamp so the inside reads
     const gx = d.cx + 10, gz = d.cz + 28;
     const gyy = terrainHeight(gx, gz);
     const shack = new THREE.Group();
-    const wallMat = toonMat({ color: 0x8a6a4a, map: corrugatedTexture('#7a5a3e') });
+    const wallMat = toonMat({ color: 0x9a7a58, map: corrugatedTexture('#8a6a4c') });
     const back = new THREE.Mesh(new THREE.BoxGeometry(7, 3.4, 0.3), wallMat);
     back.position.set(0, 1.7, -2.4);
     const sideW = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.4, 4.8), wallMat);
@@ -1864,13 +1867,31 @@ export class World {
     roof.rotation.x = 0.1;
     const bench = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.0, 0.9), toonMat({ color: 0x4a4a52 }));
     bench.position.set(-1.8, 0.5, -1.6);
-    shack.add(back, sideW, roof, bench);
+    const toolbox = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.4, 0.4), toonMat({ color: 0xb43a2a }));
+    toolbox.position.set(-1.6, 1.2, -1.6);
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), glowMat(0xffe8b0, 0.95));
+    lamp.position.set(0, 3.1, -0.6);
+    const lampCord = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.4, 4), toonMat({ color: 0x2a2622 }));
+    lampCord.position.set(0, 3.34, -0.6);
+    const pinup = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.0),
+      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['11:40', 'FLAT'], style: 'graffiti', bg: '#2a2622', fg: '#ffd23c', accent: '#ff5a86' }, 1.4) }));
+    pinup.position.set(1.6, 1.9, -2.2);
+    shack.add(back, sideW, roof, bench, toolbox, lamp, lampCord, pinup);
     shack.position.set(gx, gyy, gz);
     shack.rotation.y = -0.5;
     shack.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
     this.group.add(shack);
     this.staticTargets.push(shack);
-    this.addCollider(gx, gz, 3.6, 2.6);
+    // colliders hug the actual walls (the old whole-shack AABB read as an
+    // invisible wall and boxed Rita in) — the open side stays walkable
+    const cos = Math.cos(-0.5), sin = Math.sin(-0.5);
+    const wallSpot = (lx: number, lz: number): [number, number] => [gx + lx * cos + lz * sin, gz - lx * sin + lz * cos];
+    const [bwx, bwz] = wallSpot(0, -2.4);
+    this.addCollider(bwx, bwz, 3.3, 0.6);        // back wall
+    const [swx, swz] = wallSpot(-3.4, 0);
+    this.addCollider(swx, swz, 0.6, 2.2);        // side wall
+    const [bx2, bz2] = wallSpot(-1.8, -1.6);
+    this.addCollider(bx2, bz2, 1.4, 0.6);        // bench
 
     // tire stacks + oil drums scattered around pit row
     const tireMat = toonMat({ color: 0x22221f, map: swatch('#1d1d1a', 40) });
@@ -1908,6 +1929,115 @@ export class World {
       const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), glowMat([0xffd23c, 0xff5a86, 0x54d4ff][i % 3], 0.9));
       bulb.position.set(lx, terrainHeight(lx, lz) + 4.6 - Math.sin(t * Math.PI) * 0.7, lz);
       this.group.add(bulb);
+    }
+  }
+
+  /** Race-day set dressing along REDLINE'S RUN — all of it OFF the racing
+   *  line: billboards on the outfield, flag bunting strung high over two
+   *  checkpoints, a windsock, and pit-row clutter. */
+  private buildGulchTrackDecor(): void {
+    const legMat = toonMat({ color: 0x4a4a52, map: swatch('#3f3f47', 50) });
+
+    const billboard = (x: number, z: number, rot: number, lines: string[], bg: string, fg: string): void => {
+      const y = terrainHeight(x, z);
+      const g = new THREE.Group();
+      for (const side of [-1, 1]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4.6, 0.3), legMat);
+        leg.position.set(side * 2.6, 2.3, 0);
+        g.add(leg);
+      }
+      const board = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 3.0),
+        new THREE.MeshBasicMaterial({ map: posterTexture({ lines, style: 'ad', bg, fg, accent: '#ff5a86' }, 6.4 / 3.0) }));
+      board.position.set(0, 5.6, 0.06);
+      const boardBack = new THREE.Mesh(new THREE.BoxGeometry(6.5, 3.1, 0.12), legMat);
+      boardBack.position.set(0, 5.6, -0.05);
+      g.add(board, boardBack);
+      g.position.set(x, y, z);
+      g.rotation.y = rot;
+      g.traverse((o) => { o.castShadow = true; });
+      this.group.add(g);
+      this.staticTargets.push(g);
+      const cos = Math.cos(rot), sin = Math.sin(rot);
+      for (const side of [-1, 1]) {
+        this.addCollider(x + side * 2.6 * cos, z - side * 2.6 * sin, 0.4, 0.4);
+      }
+    };
+    billboard(-168, 64, 1.1, ['EAT MY', 'DUST', '— R. (ret.)'], '#2a2622', '#ffd23c');
+    billboard(36, 168, Math.PI + 0.15, ['BOOST', 'RESPONSIBLY'], '#5a2a6a', '#7dffef');
+    billboard(178, -16, -1.3, ['SHIPBREAK', 'SALVAGE CO.'], '#7a5030', '#f0e8d8');
+    billboard(-14, -172, 0.15, ['LAST DRINK', 'BEFORE', 'THE JUMP'], '#2a4a5a', '#ffd23c');
+
+    // flag bunting strung high across the line at two checkpoints
+    const bunting = (cx: number, cz: number, dirX: number, dirZ: number): void => {
+      const len = Math.hypot(dirX, dirZ);
+      const px = -dirZ / len, pz = dirX / len; // perpendicular to the road
+      const flagColors = [0xffd23c, 0xff5a86, 0x54d4ff, 0x7dff2a];
+      for (const side of [-1, 1]) {
+        const x = cx + px * 12 * side, z = cz + pz * 12 * side;
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 7.4, 6), legMat);
+        pole.position.set(x, terrainHeight(x, z) + 3.7, z);
+        pole.castShadow = true;
+        this.group.add(pole);
+        this.addCollider(x, z, 0.35, 0.35);
+      }
+      const yTop = Math.max(terrainHeight(cx + px * 12, cz + pz * 12), terrainHeight(cx - px * 12, cz - pz * 12)) + 7;
+      for (let i = 0; i < 11; i++) {
+        const t = i / 10;
+        const x = cx + px * 12 * (t * 2 - 1);
+        const z = cz + pz * 12 * (t * 2 - 1);
+        const sag = Math.sin(t * Math.PI) * 0.9;
+        const flag = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.55, 3), toonMat({ color: flagColors[i % flagColors.length] }));
+        flag.position.set(x, yTop - sag, z);
+        flag.rotation.x = Math.PI; // pennant points down
+        this.group.add(flag);
+      }
+    };
+    bunting(-40, 145, 180, 55);   // north-west sweep (gate 2)
+    bunting(140, -60, 0, -1);     // fork-1 rejoin (gate 4)
+
+    // windsock at pit row — race day has weather opinions
+    const wx = -158, wz = 16;
+    const wy = terrainHeight(wx, wz);
+    const wPole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 5.2, 6), legMat);
+    wPole.position.set(wx, wy + 2.6, wz);
+    const sock = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.6, 8, 1, true), toonMat({ color: 0xff8c2a }));
+    sock.position.set(wx + 0.9, wy + 5.0, wz);
+    sock.rotation.z = Math.PI / 2 + 0.25;
+    sock.name = 'windsock';
+    this.group.add(wPole, sock);
+    this.addCollider(wx, wz, 0.3, 0.3);
+
+    // a stripped kart husk parked behind the garage, picked clean
+    const kx = -134, kz = 36;
+    const ky = terrainHeight(kx, kz);
+    const husk = new THREE.Group();
+    const tub = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 2.4), toonMat({ color: 0x6a5a4a, map: swatch('#5e5040', 60) }));
+    tub.position.y = 0.55;
+    husk.add(tub);
+    for (const [sx, sz] of [[-0.8, -1], [0.8, 0.9]] as const) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.3, 10), toonMat({ color: 0x22221f }));
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(sx, 0.45, sz);
+      husk.add(wheel); // the other two wheels are, of course, gone
+    }
+    const cactusNote = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.5),
+      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['4 SALE', 'RAN WNCE'], style: 'graffiti', bg: '#e8dcc0', fg: '#181818' }, 1.6) }));
+    cactusNote.position.set(0, 1.05, -1.21);
+    husk.add(cactusNote);
+    husk.position.set(kx, ky, kz);
+    husk.rotation.y = 0.7;
+    husk.traverse((o) => { o.castShadow = true; });
+    this.group.add(husk);
+    this.staticTargets.push(husk);
+    this.addCollider(kx, kz, 1.1, 1.4);
+
+    // pit-row oil stains — every garage has a story
+    for (const [ox, oz, r] of [[-138, 12, 1.3], [-133, 8, 0.9], [-142, 18, 1.1]] as const) {
+      const stain = new THREE.Mesh(new THREE.CircleGeometry(r, 12),
+        new THREE.MeshBasicMaterial({ color: 0x1a1512, transparent: true, opacity: 0.55 }));
+      stain.rotation.x = -Math.PI / 2;
+      stain.position.set(ox, terrainHeight(ox, oz) + 0.03, oz);
+      this.group.add(stain);
     }
   }
 
@@ -2769,6 +2899,7 @@ export class World {
       else if (o.name === 'quest_marker') o.position.y = 2.35 + Math.sin(this.blinkT * 2.5) * 0.12;
       else if (o.name === 'ft_ring') o.rotation.z += dt * 0.8;
       else if (o.name === 'npc_orb') o.position.y = 1.35 + Math.sin(this.blinkT * 1.8) * 0.08;
+      else if (o.name === 'windsock') o.rotation.y = Math.sin(this.blinkT * 0.7) * 0.5;
     });
     if (this.zaza) {
       const d = this.zaza.position.distanceTo(playerPos);

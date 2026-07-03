@@ -286,7 +286,7 @@ export const QUESTS: QuestDef[] = [
       'Strip me FIVE drive plates off the wrecks out there. Mind the scavvers. And if something in that gulch has wheels \u2014 it\u2019s faster than you are.',
     ],
     acceptLine: 'East of the Slagflats! Through the gulch gate! Five plates, and DRIVE, don\u2019t walk!',
-    objective: { kind: 'collect', label: 'Hull plates salvaged from the wrecks', count: 5, markerX: 125, markerZ: 175, mapId: 'rustgulch' },
+    objective: { kind: 'collect', label: 'Hull plates salvaged from the wrecks', count: 5, markerX: 112, markerZ: 156, mapId: 'rustgulch' },
     rewardCash: 8000, rewardXp: 8000, rewardItem: 'legendary',
     completeLine: 'The scrapship has a hull, a name (THE PAPERWEIGHT), and a heading: Veldt Minor. Wheels up soon, contractor.',
     unlocksStation: 'Gulch Gate',

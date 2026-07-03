@@ -198,7 +198,7 @@ class RaceSystem {
   get frozen(): boolean { return this.phase === 'countdown'; }
 
   // ------------------------------------------------------------------ AI
-  private aiInput = { throttle: 0, steer: 0, drift: false, boost: false };
+  private aiInput = { throttle: 0, steer: 0, drift: false, hop: false, boost: false };
 
   private driveAi(dt: number): void {
     void dt;

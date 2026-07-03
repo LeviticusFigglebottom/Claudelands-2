@@ -101,6 +101,35 @@ cover), and grenades exist to break the player's own cover camping. All the
 "organic" reads — flank a covered enemy and it bails, hurt one and it runs,
 peek cycles vary — fall out of those queries, not scripted animations.
 
+## Kart physics, not sim physics (pass 13)
+
+The buggy's drift is Mario Kart's grammar on top of the steer-first slip
+model: hop (SPACE) locks a slide direction, charge ticks by held time
+(steering into the slide charges faster), release pays a tiered mini-turbo
+that raises the speed cap without touching the meter. Two tuning rules
+proved load-bearing. First, `driftGrip` must stay in the same league as
+the drift yaw rate (~3.4 rad/s) — at 1.7 the slip angle grew unbounded
+and every drift decayed into a spin-out below the auto-release floor; 4.2
+holds a readable ~50° slide. Second, drifts REDIRECT momentum instead of
+burning it: most of the lateral speed the grip scrubs off is fed back
+into the nose (capped near the soft cap), because a slide that bleeds
+34 → 6 m/s is a punishment, not a mechanic. Airtime got the same
+arcade treatment — crest launches peak-hold the ground's rise rate
+(smooth bump tops have zero slope exactly where you leave them, so the
+instantaneous read was always ~0), gravity relaxes 0.72× while rising,
+and the ground-snap tolerance only applies while descending so the hop
+can't be re-glued on frame one.
+
+## Holocall chains are about geography (pass 13)
+
+Auto-progression (remote turn-in + auto-accept over holocall) keys on
+same giver AND same objective map. The point of the mechanic is "you're
+already out here, keep moving" — arrive → cull → boss chains. If the next
+quest moves the story to a new map, auto-accepting it would teleport the
+narrative: instead the old quest completes over holocall and the next
+waits at the giver's desk. Same rule, one line:
+`(next.objective.mapId ?? base) === (q.objective.mapId ?? base)`.
+
 ## Quests (pass 2)
 
 Declarative rows in `data/quests.ts` (goto / kill_faction / collect / boss);

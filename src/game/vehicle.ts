@@ -22,7 +22,10 @@ const GRAV = 26;
 export interface VehicleInput {
   throttle: number;   // -1..1
   steer: number;      // -1..1 (positive = left)
+  /** Held = drift (Mario Kart style: hop, land turning, slide). */
   drift: boolean;
+  /** Edge-triggered on the same key: a small jump. */
+  hop: boolean;
   boost: boolean;
 }
 
@@ -47,7 +50,9 @@ export const BUGGY_STATS: VehicleStats = {
   boostAccel: 34,
   turnRate: 2.3,
   grip: 7.5,
-  driftGrip: 1.7,
+  // must stay in the same league as the drift yaw rate (~3.4 rad/s) or the
+  // slip angle grows unbounded and every drift decays into a spin-out
+  driftGrip: 4.2,
   drag: 0.65,   // engine braking, off-throttle only
   radius: 1.7,
 };
@@ -56,7 +61,7 @@ export type BuggyScheme = 'player' | 'rival';
 
 /** Procedural dune buggy: tube frame, roll cage, fat rear tires, engine
  *  block with twin exhausts that flame under boost. */
-export function buildBuggy(scheme: BuggyScheme): { group: THREE.Group; body: THREE.Group; wheels: THREE.Object3D[]; frontPivots: THREE.Object3D[]; exhausts: THREE.Vector3[] } {
+export function buildBuggy(scheme: BuggyScheme): { group: THREE.Group; body: THREE.Group; wheels: THREE.Object3D[]; frontPivots: THREE.Object3D[]; exhausts: THREE.Vector3[]; flames: THREE.Mesh[]; sparks: THREE.Mesh[] } {
   const g = new THREE.Group();
   const body = new THREE.Group();
   g.add(body);
@@ -103,12 +108,23 @@ export function buildBuggy(scheme: BuggyScheme): { group: THREE.Group; body: THR
   engine.position.set(0, 0.88, 1.25);
   body.add(engine);
   const exhausts: THREE.Vector3[] = [];
+  const flames: THREE.Mesh[] = [];
   for (const side of [-1, 1]) {
     const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.09, 0.7, 8), hubMat);
     pipe.position.set(side * 0.3, 1.1, 1.62);
     pipe.rotation.x = Math.PI / 2 - 0.35;
     body.add(pipe);
     exhausts.push(new THREE.Vector3(side * 0.3, 1.2, 1.95));
+    // afterburner cones — invisible until the boost lights them
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.16, 1.2, 8), glowMat(0xff8c2a, 0.85));
+    flame.position.set(side * 0.3, 1.24, 2.1);
+    flame.rotation.x = -Math.PI / 2;
+    flame.scale.setScalar(0.001);
+    const core = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.8, 8), glowMat(0x54d4ff, 0.95));
+    core.position.y = -0.1;
+    flame.add(core);
+    body.add(flame);
+    flames.push(flame);
   }
   const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.08, 0.42), paintMat);
   spoiler.position.set(0, 1.55, 1.45);
@@ -145,6 +161,7 @@ export function buildBuggy(scheme: BuggyScheme): { group: THREE.Group; body: THR
     wheel.add(hub);
     return wheel;
   };
+  const sparks: THREE.Mesh[] = [];
   for (const side of [-1, 1]) {
     const pivot = new THREE.Group();
     pivot.position.set(side * 0.92, 0.5, -1.5);
@@ -158,10 +175,17 @@ export function buildBuggy(scheme: BuggyScheme): { group: THREE.Group; body: THR
     rear.position.set(side * 0.98, 0.62, 1.25);
     g.add(rear);
     wheels.push(rear);
+
+    // drift sparks trailing the rear tires — tier-colored while charging
+    const spark = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 6), glowMat(0x54d4ff, 0.95));
+    spark.position.set(side * 1.05, 0.22, 1.6);
+    spark.visible = false;
+    g.add(spark);
+    sparks.push(spark);
   }
 
   g.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
-  return { group: g, body, wheels, frontPivots, exhausts };
+  return { group: g, body, wheels, frontPivots, exhausts, flames, sparks };
 }
 
 export class Vehicle {
@@ -180,6 +204,8 @@ export class Vehicle {
   private wheels: THREE.Object3D[];
   private frontPivots: THREE.Object3D[];
   private exhausts: THREE.Vector3[];
+  private flames: THREE.Mesh[];
+  private sparks: THREE.Mesh[];
   private wheelSpin = 0;
   private visSteer = 0;
   private visPitch = 0;
@@ -189,6 +215,19 @@ export class Vehicle {
   private lastImpactT = 0;
   private prevPos = new THREE.Vector3();
 
+  // ---- Mario-Kart drift/boost + hop + launch state ----
+  /** Smoothed steering — inputs have mass now. */
+  private steerSmooth = 0;
+  /** Locked slide direction while drifting (±1). */
+  driftDir = 0;
+  /** Seconds of charged slide; tiers pay out on release. */
+  driftCharge = 0;
+  /** Mini-turbo burn remaining (drift payout — doesn't touch the meter). */
+  miniTurboT = 0;
+  private squashT = 0;
+  private lastGroundY: number | null = null;
+  private lastGroundVy = 0;
+
   constructor(scheme: BuggyScheme, stats: VehicleStats = BUGGY_STATS) {
     this.stats = stats;
     const built = buildBuggy(scheme);
@@ -197,6 +236,13 @@ export class Vehicle {
     this.wheels = built.wheels;
     this.frontPivots = built.frontPivots;
     this.exhausts = built.exhausts;
+    this.flames = built.flames;
+    this.sparks = built.sparks;
+  }
+
+  /** Current drift tier (0–3) for HUD + spark color. */
+  get driftTier(): number {
+    return this.driftCharge > 2.3 ? 3 : this.driftCharge > 1.35 ? 2 : this.driftCharge > 0.65 ? 1 : 0;
   }
 
   get forward(): THREE.Vector3 {
@@ -223,18 +269,57 @@ export class Vehicle {
     const S = this.stats;
     const planarSpeed = Math.hypot(this.vel.x, this.vel.z);
 
-    // ---- drift & boost bookkeeping
-    this.drifting = this.grounded && input.drift && planarSpeed > 9;
-    this.boosting = input.boost && this.boostMeter > 0.02;
-    if (this.boosting) this.boostMeter = clamp(this.boostMeter - dt / 2.6, 0, 1);
+    // ---- inputs have mass: steering eases in and out instead of snapping
+    this.steerSmooth = damp(this.steerSmooth, input.steer, 8.5, dt);
+
+    // ---- hop: same button as the drift, Mario Kart rules
+    if (input.hop && this.grounded) {
+      this.vel.y = 6.8;
+      this.grounded = false;
+      this.squashT = 0.22;
+      fx.burst(this.pos.clone().add(new THREE.Vector3(0, 0.2, 0)), 0xc8a878, 6, 3, 0.08, 0.4, 2);
+    }
+
+    // ---- drift lifecycle: engage while held + turning at speed; charge
+    // while sliding; RELEASE pays out a tiered mini-turbo
+    const wantDrift = input.drift && planarSpeed > 9 && (this.drifting || Math.abs(this.steerSmooth) > 0.12);
+    if (wantDrift && this.grounded && !this.drifting) {
+      this.drifting = true;
+      this.driftDir = this.steerSmooth >= 0 ? 1 : -1;
+      this.driftCharge = 0;
+    }
+    if (this.drifting && (!input.drift || planarSpeed < 6)) {
+      // payout: blue → orange → violet, like the go-kart gods intended
+      const tier = this.driftTier;
+      if (tier > 0) {
+        this.miniTurboT = [0, 0.55, 0.95, 1.45][tier];
+        if (isPlayer) { audio.boostIgnite(); juice.kickFov(3 + tier * 2); }
+        fx.burst(this.pos.clone().add(new THREE.Vector3(0, 0.5, 0)),
+          [0, 0x54d4ff, 0xff8c2a, 0xc06bff][tier], 14 + tier * 8, 6, 0.12, 0.6, 3);
+      }
+      this.drifting = false;
+      this.driftCharge = 0;
+      this.driftDir = 0;
+    }
+    this.miniTurboT = Math.max(0, this.miniTurboT - dt);
+
+    const meterBoost = input.boost && this.boostMeter > 0.02;
+    this.boosting = meterBoost || this.miniTurboT > 0;
+    if (meterBoost) this.boostMeter = clamp(this.boostMeter - dt / 2.6, 0, 1);
 
     if (this.grounded) {
-      // ---- steering FIRST: rotating the nose out from under the velocity
-      // is what creates slip. Grip below decides how much of it sticks.
+      // ---- steering: drift locks the slide direction; stick input tightens
+      // or widens the arc (counter-steer to run shallow)
       const steerAuth = clamp(planarSpeed / 7, 0, 1) * (1 - clamp((planarSpeed - 24) / 46, 0, 0.4));
-      const rate = S.turnRate * (this.drifting ? 1.65 : 1) * steerAuth;
+      let steerCmd = this.steerSmooth;
+      if (this.drifting) {
+        const trim = clamp(this.steerSmooth * this.driftDir, -1, 1); // 1 = into the slide
+        steerCmd = this.driftDir * (0.72 + 0.5 * trim);
+        this.driftCharge += dt * (0.75 + 0.5 * Math.max(0, trim));
+      }
+      const rate = S.turnRate * (this.drifting ? 1.5 : 1) * steerAuth;
       const reversing = this.vel.dot(this.forward) < -0.5;
-      this.yaw += input.steer * rate * dt * (reversing ? -1 : 1);
+      this.yaw += steerCmd * rate * dt * (reversing ? -1 : 1);
 
       // decompose the WORLD velocity against the NEW heading: the angle the
       // nose just swung through shows up here as lateral slip
@@ -251,22 +336,32 @@ export class Vehicle {
         if (fSpeed > 0.5) fSpeed -= 34 * -input.throttle * dt;              // brake
         else fSpeed += (S.reverseMax - fSpeed) * 2.2 * -input.throttle * dt; // ease into reverse
         fSpeed = Math.max(fSpeed, S.reverseMax);
+      } else if (this.miniTurboT > 0) {
+        // a mini-turbo shoves even off-throttle
+        fSpeed += S.boostAccel * 0.6 * clamp(1 - fSpeed / cap, 0, 1) * dt;
       }
       // engine braking only when off-throttle — the soft cap above is the
       // real speed limit, drag would otherwise fight it to a crawl
-      if (Math.abs(input.throttle) < 0.05) fSpeed -= fSpeed * S.drag * dt;
+      if (Math.abs(input.throttle) < 0.05 && this.miniTurboT <= 0) fSpeed -= fSpeed * S.drag * dt;
       const n = terrainNormal(this.pos.x, this.pos.z);
       const slope = fwd.x * n.x + fwd.z * n.z; // >0 when the nose points downhill
       fSpeed += slope * GRAV * 0.55 * dt;
 
       // ---- grip: lateral slip bleeds off fast (or lingers, mid-drift)
       const grip = this.drifting ? S.driftGrip : S.grip;
-      // drifting cleanly feeds the boost meter — sliding IS the boost economy
+      // drifting cleanly still feeds the meter — sliding IS the boost economy
       if (this.drifting) this.boostMeter = clamp(this.boostMeter + Math.abs(lat) * 0.0075 * dt * 60, 0, 1);
       else if (!this.boosting) this.boostMeter = clamp(this.boostMeter + dt * 0.045, 0, 1);
+      const latBefore = Math.abs(lat);
       lat *= Math.exp(-grip * dt);
+      // kart rules: a drift redirects momentum instead of burning it — most
+      // of the scrubbed slip feeds back into the nose, so a held slide stays
+      // fast instead of decaying to a crawl
+      if (this.drifting && fSpeed > 0) {
+        fSpeed = Math.min(fSpeed + (latBefore - Math.abs(lat)) * 0.8, Math.max(fSpeed, cap * 0.92));
+      }
       // handbrake without speed = a scrub, not a slide
-      if (input.drift && planarSpeed <= 9) fSpeed *= Math.exp(-2.2 * dt);
+      if (input.drift && planarSpeed <= 6) fSpeed *= Math.exp(-2.2 * dt);
 
       this.vel.set(
         fwd.x * fSpeed + right.x * lat,
@@ -275,7 +370,7 @@ export class Vehicle {
       );
 
       // drift dust + skid audio
-      if (this.drifting && Math.abs(lat) > 3) {
+      if (this.drifting && Math.abs(lat) > 2.2) {
         this.skidT -= dt;
         if (this.skidT <= 0) {
           this.skidT = 0.14;
@@ -284,9 +379,13 @@ export class Vehicle {
         }
       }
     } else {
-      // ---- airborne: tiny air control, hold the drift line
-      this.yaw += input.steer * 0.55 * dt;
+      // ---- airborne: real air control — steer the nose, pitch with W/S
+      this.yaw += this.steerSmooth * 0.95 * dt;
       this.airT += dt;
+      // feathering the throttle stretches or shortens the arc a touch
+      const fwd = this.forward;
+      this.vel.x += fwd.x * input.throttle * 2.4 * dt;
+      this.vel.z += fwd.z * input.throttle * 2.4 * dt;
     }
 
     // ---- boost flames
@@ -299,27 +398,54 @@ export class Vehicle {
       }
     }
 
-    // ---- integrate + ground
-    this.vel.y -= GRAV * dt;
+    // ---- integrate + ground (floatier while rising: big-air jumps hang)
+    this.vel.y -= GRAV * (this.vel.y > 0 && !this.grounded ? 0.72 : 1) * dt;
     this.prevPos.copy(this.pos);
     this.pos.addScaledVector(this.vel, dt);
     const g = terrainHeight(this.pos.x, this.pos.z);
+    const wasGrounded = this.grounded;
     if (this.pos.y <= g) {
       if (!this.grounded && this.vel.y < -7) {
-        // landing: crunch scaled to fall speed
+        // landing: crunch + suspension squash scaled to fall speed
         if (isPlayer) {
           audio.land(this.vel.y < -14);
-          juice.addTrauma(clamp(-this.vel.y * 0.015, 0, 0.35));
+          juice.addTrauma(clamp(-this.vel.y * 0.018, 0, 0.4));
         }
         fx.burst(this.pos.clone().add(new THREE.Vector3(0, 0.3, 0)), 0xc8a878, 12, 5, 0.12, 0.6, 3);
         this.visPitch += clamp(-this.vel.y * 0.012, 0, 0.2);
+        this.squashT = Math.max(this.squashT, clamp(-this.vel.y * 0.02, 0.1, 0.35));
       }
       this.pos.y = g;
       if (this.vel.y < 0) this.vel.y = 0;
       this.grounded = true;
       this.airT = 0;
+      // peak-hold how fast the ground rose under the wheels: on a smooth
+      // bump the slope is ZERO right at the top, so the launch has to
+      // inherit the rise from a few frames back, decaying slowly
+      if (this.lastGroundY !== null && dt > 0) {
+        this.lastGroundVy = Math.max((g - this.lastGroundY) / dt, this.lastGroundVy - 30 * dt);
+      }
+      this.lastGroundY = g;
+    } else if (wasGrounded && this.lastGroundVy > 1.5) {
+      // crest launch: the frame the ground falls away after a rising slope
+      // inherits the slope's vertical momentum — hills throw you instead of
+      // dropping you
+      this.vel.y = Math.max(this.vel.y, Math.min(this.lastGroundVy * 0.9, 13));
+      this.grounded = false;
+      this.lastGroundY = null;
+      this.lastGroundVy = 0;
     } else {
-      this.grounded = this.pos.y - g < 0.35;
+      // snap tolerance only applies while descending — an ascending buggy
+      // (hop, launch) must NOT get glued back down on frame one
+      this.grounded = this.vel.y <= 0 && this.pos.y - g < 0.35;
+      if (this.grounded) {
+        // hover-snap frame: keep the height base fresh but never let the
+        // falling backside overwrite the rise peak
+        this.lastGroundY = g;
+      } else {
+        this.lastGroundY = null;
+        this.lastGroundVy = 0;
+      }
     }
 
     // ---- collide with props: push-out + bounce + clank
@@ -369,15 +495,42 @@ export class Vehicle {
     // wheel spin + front steer
     this.wheelSpin += fSpeed * dt / 0.55;
     for (const w of this.wheels) w.rotation.x = this.wheelSpin;
-    this.visSteer = damp(this.visSteer, input.steer * 0.42, 10, dt);
+    this.visSteer = damp(this.visSteer, this.steerSmooth * 0.42, 10, dt);
     for (const p of this.frontPivots) p.rotation.y = this.visSteer;
 
-    // body lean: pitch under throttle, roll into corners, drift kick
-    const targetPitch = clamp(-input.throttle * 0.05 + (this.grounded ? 0 : 0.1), -0.12, 0.14);
-    const targetRoll = clamp(-input.steer * Math.abs(fSpeed) * 0.004, -0.16, 0.16);
+    // body lean: pitch under throttle, roll HARD into corners, drift kick
+    const targetPitch = clamp(-input.throttle * 0.06 + (this.grounded ? 0 : 0.1), -0.14, 0.16);
+    const targetRoll = clamp(-this.steerSmooth * Math.abs(fSpeed) * 0.006, -0.22, 0.22);
     this.visPitch = damp(this.visPitch, targetPitch, 5, dt);
     this.visRoll = damp(this.visRoll, targetRoll, 5, dt);
-    this.driftYawVis = damp(this.driftYawVis, this.drifting ? input.steer * 0.35 : 0, 4.5, dt);
+    this.driftYawVis = damp(this.driftYawVis, this.drifting ? this.driftDir * 0.42 : 0, 4.5, dt);
+
+    // hop/landing squash — suspension you can see
+    this.squashT = Math.max(0, this.squashT - dt * 2.2);
+    const squash = Math.sin(Math.min(1, this.squashT / 0.35) * Math.PI) * 0.16;
+    this.bodyGroup.scale.y = 1 - squash;
+
+    // afterburners: cones flare while boosting, flicker while mini-turboing
+    const flameOn = this.boosting;
+    for (const f of this.flames) {
+      const target = flameOn ? 0.9 + Math.sin(this.wheelSpin * 3) * 0.25 : 0.001;
+      f.scale.setScalar(damp(f.scale.x, target, 12, dt));
+    }
+
+    // drift sparks: tier-colored, growing with the charge
+    const tier = this.driftTier;
+    const sparkColor = [0x54d4ff, 0x54d4ff, 0xff8c2a, 0xc06bff][tier];
+    for (const s of this.sparks) {
+      s.visible = this.drifting && this.driftCharge > 0.2;
+      if (s.visible) {
+        (s.material as THREE.MeshBasicMaterial).color.setHex(sparkColor);
+        s.scale.setScalar(0.7 + tier * 0.35 + Math.random() * 0.3);
+      }
+    }
+    if (this.drifting && tier > 0 && Math.random() < 14 * dt) {
+      const back = this.forward.multiplyScalar(-1.8).add(this.pos).add(new THREE.Vector3(0, 0.3, 0));
+      fx.burst(back, sparkColor, 3, 2.5, 0.07, 0.35, 2);
+    }
 
     // terrain alignment (grounded) or held attitude (air)
     let alignPitch = 0, alignRoll = 0;
@@ -458,18 +611,24 @@ class VehicleSystem {
     return side;
   }
 
+  private prevSpace = false;
+
   input(): VehicleInput {
+    const space = this.keys.has('Space');
+    const hop = space && !this.prevSpace;
+    this.prevSpace = space;
     return {
       throttle: (this.keys.has('KeyW') ? 1 : 0) + (this.keys.has('KeyS') ? -1 : 0),
       steer: (this.keys.has('KeyA') ? 1 : 0) + (this.keys.has('KeyD') ? -1 : 0),
-      drift: this.keys.has('Space'),
+      drift: space,
+      hop,
       boost: this.keys.has('ShiftLeft') || this.keys.has('ShiftRight'),
     };
   }
 
   update(dt: number, world: { resolveCollision: (p: THREE.Vector3, r: number) => void; arenaHalf: number }, frozen: boolean): void {
     if (!this.buggy || !this.driving) return;
-    const inp = frozen ? { throttle: 0, steer: 0, drift: false, boost: false } : this.input();
+    const inp = frozen ? { throttle: 0, steer: 0, drift: false, hop: false, boost: false } : this.input();
     const wasBoosting = this.buggy.boosting;
     this.buggy.update(dt, inp, world, true);
     if (this.buggy.boosting && !wasBoosting) {
@@ -514,7 +673,7 @@ class VehicleSystem {
         <div style="width:150px; height:9px; border:2px solid rgba(244,234,216,0.6); margin-top:6px; margin-left:auto;">
           <div id="drv-boost" style="height:100%; width:100%; background:#54d4ff;"></div>
         </div>
-        <div style="font-size:10px; opacity:0.75; margin-top:2px;">BOOST — drift to refill · SHIFT to burn</div>`;
+        <div style="font-size:10px; opacity:0.75; margin-top:2px;">SPACE hop/drift — release for turbo · SHIFT burns the tank</div>`;
       document.getElementById('ui-root')?.appendChild(this.hud);
     }
     this.hud.style.display = v ? 'block' : 'none';
@@ -526,8 +685,15 @@ class VehicleSystem {
     if (s) s.textContent = String(Math.round(speed * 3.1));
     const b = document.getElementById('drv-boost');
     if (b) {
-      b.style.width = `${Math.round(this.buggy.boostMeter * 100)}%`;
-      b.style.background = this.buggy.boosting ? '#ff8c2a' : '#54d4ff';
+      const v = this.buggy;
+      if (v.drifting) {
+        // the bar becomes the drift charge, colored by tier
+        b.style.width = `${Math.round(Math.min(1, v.driftCharge / 2.3) * 100)}%`;
+        b.style.background = ['#8a949e', '#54d4ff', '#ff8c2a', '#c06bff'][v.driftTier];
+      } else {
+        b.style.width = `${Math.round(v.boostMeter * 100)}%`;
+        b.style.background = v.boosting ? '#ff8c2a' : '#54d4ff';
+      }
     }
   }
 }

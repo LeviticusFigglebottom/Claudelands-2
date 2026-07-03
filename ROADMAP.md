@@ -1,5 +1,59 @@
 # ROADMAP
 
+## Pass 13 status — the gulch playtest fixes
+
+Direct response to gulch playtest feedback, plus a full Mario-Kart-style
+rework of the buggy's handling.
+
+**Rita unboxed** (`game/world.ts`): the Gulch Gate garage used one huge
+AABB collider that fenced Rita in — replaced with wall-hugging colliders
+(back wall, one side wall, workbench) transformed through the garage's
+rotation, so the open bay is genuinely walkable. Rita stepped out front
+(`npc_rita` moved), her interact range grew to 5m, and the garage got a
+toolbox, a hanging work lamp, and a questionable pinup ("11:40 FLAT").
+
+**Holocall chaining is location-aware** (`game/quests.ts`): remote
+turn-in + auto-accept now happens ONLY when the next quest has the same
+giver AND lives on the same map — the "you're already out here" arcs
+(reach the Throat → cull twelve → rake out the Saint). Anything that
+moves the story to a new map completes over holocall but waits at the
+giver's desk ("Come see me in Gutterlight — the next one's bigger"), and
+new-giver handoffs still point you at the meet.
+
+**Vehicle 2.0** (`game/vehicle.ts`): the Junkstallion drives like a kart
+now. SPACE is a real jump (hop off the ground anytime, grounded) and the
+drift trigger: hop + hold + steer locks a slide direction, sparks tick
+through tiers (blue → orange → violet), and RELEASING pays a mini-turbo
+that ignores the boost meter and raises the speed cap. Steering has
+inertia (eased input, body roll follows), engine-braking is off-throttle
+only, drifts redirect momentum instead of burning it (kart rules — a held
+slide stays fast). Hills genuinely throw you: crests inherit the slope's
+vertical momentum with peak-hold (so smooth bump tops still launch),
+gravity relaxes to 0.72× while rising, and airtime is steerable (yaw +
+throttle nudge). Boost finally LOOKS like boost — flame cones + cyan
+cores flicker at the exhausts, drift sparks color by tier, hop/landing
+squash-and-stretch. Fixed two real physics bugs along the way: the ground
+snap tolerance was eating the hop on frame one (now only applies while
+descending), and the crest launch read the ground's rise at the exact top
+of the bump, where the slope is zero (now peak-held with decay).
+
+**Shipbreak Fields moved off the wall** (`data/world.ts`): the wreck
+district sat against the map-edge clamp and a mesa — pulled inward to
+(112,156) r36, all four quest wrecks + chest/log/sign repositioned, q14
+marker updated. Verified: every wreck reachable, no mesa burial, ~32m
+clear of the racing line.
+
+**Gulch livelihood** (`game/world.ts` buildGulchTrackDecor): four lit
+billboards ("EAT MY DUST — R. (ret.)", "BOOST RESPONSIBLY", "SHIPBREAK
+SALVAGE CO.", "LAST DRINK BEFORE THE JUMP"), pennant bunting strung over
+two gates (pole colliders only — the line itself is flyover), a swaying
+windsock, a scrapped kart husk ("4 SALE RAN WNCE"), and pit-row oil
+stains. Verified track-safe: the race AI still clears all seven gates.
+
+Headless suite: `verify14.mjs` — 26 checks, all passing (Rita approach
+from 8 angles + panel open, wreck placement, hop/drift/turbo/launch/FX
+physics, AI lap regression, chain rules q10→q11 vs q11→q12 vs q13→q14).
+
 ## Pass 12 status — enemies got smart, loot got personal
 
 **AI overhaul** (`game/enemies.ts`): ranged humanoids run a tactical brain.
