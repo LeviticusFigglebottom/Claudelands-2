@@ -1,5 +1,49 @@
 # ROADMAP
 
+## Pass 15 status — quality of life sweep
+
+**Arrivals face the place**: walking a zone exit, fast-travelling, or
+landing the ship now turns you toward the nearest landmark (people
+first, then vendors/pads, then stations and signage) instead of leaving
+you staring back the way you came (`faceArrival()` in main.ts).
+
+**Fast travel is walk-first**: a Re-Constructor answers only after
+you've stood at it once. Story beats no longer auto-bind stations —
+they just report the node ("visit it on foot to bind it"). The network
+panel keeps unvisited nodes visibly locked.
+
+**Quest markers show the walking route**: when the objective lives on
+another map, the compass/map diamond points at the first hop of the
+actual walking route — the right zone exit, or the ship pad for
+off-world jobs — via BFS over the map graph (exits + ship pads), not at
+the nearest teleporter.
+
+**Bullets respect collision now**: `raycastStatics` slab-tests every
+collider box in addition to the visual meshes, so whatever blocks your
+feet blocks hitscan, enemy sightlines, and the AI's cover logic —
+consistently. Colliders gained real vertical extents: buildings carry
+their full height, crates stay crate-height (arcs and shots clear low
+props, projectiles no longer clip invisible ceilings above them).
+Brasshaven houses snap to quarter-turn rotations with footprint-true
+colliders (they used to rotate freely inside a fixed axis-aligned box —
+corners poked out, air blocked).
+
+**In-person quests are in person**: accepting at the giver's desk no
+longer plays a holocall bust — the giver says the send-off to your
+face (voiced, toast-captioned). Holocalls remain for what they're for:
+remote updates on a chain you're already out working.
+
+**Dialog clarity**: the Mayor now plainly asks you to help ONE citizen
+(purple marks, in the city) instead of gesturing at "reputation"; the
+q14 objective reads "Drive plates for the scrapship's hull".
+
+**Alignment fixes**: signposts hold their boards by the ENDS (the old
+center post sat exactly over the text); the Gutterlight station can't
+be buried by junk piles anymore (junk keeps 5m clear of every POI);
+fast-travel pillars are solid.
+
+Headless suite: `verify16.mjs` — 13 checks, all passing.
+
 ## Pass 14 status — the lagoon and the cave
 
 Veldt Minor's two sealed exits are OPEN. Both zones are fully dressed:

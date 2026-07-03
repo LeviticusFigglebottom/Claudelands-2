@@ -13,6 +13,7 @@ import { spawnBoss, type BossId } from './boss';
 import { enemySpawner } from './enemies';
 import { levelScale } from '../gen/weapongen';
 import { activeMap } from '../data/world';
+import { voice, voiceOf } from '../audio/voice';
 import type { Enemy } from './enemies';
 
 export type QuestStatus = 'locked' | 'available' | 'active' | 'complete';
@@ -128,7 +129,13 @@ class QuestSystem {
     q.status = 'active';
     audio.questAccept();
     this.hooks?.toast(`QUEST ACCEPTED — <b>${q.def.name}</b>`, '#ffd23c');
-    if (!viaHolocall) this.hooks?.holocall(q.def.giver, [q.def.acceptLine]);
+    // in-person accepts are IN PERSON: the giver says the send-off to your
+    // face (no holocall bust — those are for remote updates only)
+    if (!viaHolocall) {
+      voice.cancel();
+      voice.speak(q.def.acceptLine, voiceOf(q.def.giver));
+      this.hooks?.toast(`<b>${GIVERS[q.def.giver].name}:</b> ${q.def.acceptLine}`, '#d8c8a8');
+    }
     if (q.def.unlocksGate) this.hooks?.openGate(q.def.unlocksGate);
     if (q.def.unlocksStation) this.hooks?.discoverStation(q.def.unlocksStation);
     if (q.def.objective.kind === 'boss' && q.def.objective.bossId) {

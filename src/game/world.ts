@@ -18,7 +18,11 @@ import { mulberry32, type Rng } from '../util/rng';
 import { splashDamage, type Damageable, type StatusEffect } from './combat';
 import { audio } from '../audio/synth';
 
-interface AABB { minX: number; maxX: number; minZ: number; maxZ: number }
+interface AABB {
+  minX: number; maxX: number; minZ: number; maxZ: number;
+  /** Vertical extent (absolute Y) — bullets/arcs clear a crate but not a wall. */
+  bottom: number; top: number;
+}
 
 export interface Interactable {
   kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'ship' | 'wreck' | 'racer' | 'pit';
@@ -309,8 +313,9 @@ export class World {
   }
 
   // ------------------------------------------------------------------ districts
-  private addCollider(x: number, z: number, hw: number, hd: number): void {
-    this.colliders.push({ minX: x - hw, maxX: x + hw, minZ: z - hd, maxZ: z + hd });
+  private addCollider(x: number, z: number, hw: number, hd: number, height = 2.4): void {
+    const g = terrainHeight(x, z);
+    this.colliders.push({ minX: x - hw, maxX: x + hw, minZ: z - hd, maxZ: z + hd, bottom: g - 1, top: g + height });
   }
 
   private registerNpcRig(group: THREE.Group, head: THREE.Object3D | null, armR: THREE.Object3D | null): void {
@@ -606,6 +611,7 @@ export class World {
     const floors = 2 + Math.floor(rng() * 3);
     let hgt = 0;
     let w = 6 + rng() * 4, d = 5 + rng() * 3;
+    const w0 = w, d0 = d;
     for (let f = 0; f < floors; f++) {
       const fh = 3 + rng() * 1.4;
       const box = new THREE.Mesh(new THREE.BoxGeometry(w, fh, d),
@@ -643,11 +649,16 @@ export class World {
       b.add(neon);
     }
     b.position.set(x, y, z);
-    b.rotation.y = rng() * Math.PI * 2;
+    // quarter-turn snaps only: the collider box is axis-aligned, so a freely
+    // rotated house left corners poking through it and blocked thin air
+    const quarter = Math.floor(rng() * 4);
+    b.rotation.y = (quarter * Math.PI) / 2 + (rng() - 0.5) * 0.05;
     b.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
     this.group.add(b);
     this.staticTargets.push(b);
-    this.addCollider(x, z, 4.2, 3.6);
+    const hw = (quarter % 2 === 0 ? w0 : d0) / 2 + 0.15;
+    const hd = (quarter % 2 === 0 ? d0 : w0) / 2 + 0.15;
+    this.addCollider(x, z, hw, hd, hgt);
   }
 
   private buildBrassPlaza(d: DistrictDef): void {
@@ -669,7 +680,7 @@ export class World {
     hull.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
     this.group.add(hull);
     this.staticTargets.push(hull);
-    this.addCollider(0, -52, 46, 18);
+    this.addCollider(0, -52, 46, 18, 22);
 
     // city blocks around the plaza
     const spots: [number, number][] = [
@@ -1036,6 +1047,8 @@ export class World {
       const r = rng() * radius * 0.85;
       const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
       if (!this.clearOfExits(x, z)) continue;
+      // junk must not bury stations, vendors, or anyone's front door
+      if (WORLD.pois.some((p) => Math.hypot(x - p.x, z - p.z) < 5)) continue;
       const y = terrainHeight(x, z);
       const pile = new THREE.Group();
       const kind = rng();
@@ -1669,6 +1682,7 @@ export class World {
     ft.traverse((o) => (o.castShadow = true));
     this.group.add(ft);
     this.staticTargets.push(ft);
+    this.addCollider(poi.x - 1.1, poi.z, 0.35, 0.35, 2.8); // the pillar is solid
     this.interactables.push({
       kind: 'fast_travel',
       pos: new THREE.Vector3(poi.x, y, poi.z),
@@ -2438,7 +2452,7 @@ export class World {
       g.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
       this.group.add(g);
       this.staticTargets.push(g);
-      this.addCollider(hx, hz, 8.5, 4.5);
+      this.addCollider(hx, hz, 8.5, 4.5, 7);
     };
     half(d.cx - 12, d.cz + 6, 0.5, true);    // bow
     half(d.cx + 14, d.cz - 12, -0.9, false); // stern
@@ -2614,7 +2628,7 @@ export class World {
     mon.traverse((o) => (o.castShadow = true));
     this.group.add(mon);
     this.staticTargets.push(mon);
-    this.addCollider(ax, az, 1.2, 1.2);
+    this.addCollider(ax, az, 1.2, 1.2, 9);
 
     // lantern buoys bobbing in the shallows around the arena
     for (let i = 0; i < 6; i++) {
@@ -3057,7 +3071,7 @@ export class World {
     g.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
     this.group.add(g);
     this.staticTargets.push(cliff);
-    this.addCollider(x, z, (width + 5) / 2, 2.4);
+    this.addCollider(x, z, (width + 5) / 2, 2.4, height);
   }
 
   /** Toon palm: curved trunk segments + a burst of leaf blades + coconuts. */
@@ -3543,7 +3557,7 @@ export class World {
     g.traverse((o) => (o.castShadow = true));
     this.group.add(g);
     this.staticTargets.push(g);
-    const collider: AABB = { minX: poi.x - 6.8, maxX: poi.x + 6.8, minZ: poi.z - 1, maxZ: poi.z + 1 };
+    const collider: AABB = { minX: poi.x - 6.8, maxX: poi.x + 6.8, minZ: poi.z - 1, maxZ: poi.z + 1, bottom: y - 1, top: y + 6 };
     this.colliders.push(collider);
     this.gate = { group: g, collider, open: false, openT: 0, id: poi.data ?? 'gate' };
   }
@@ -3551,14 +3565,21 @@ export class World {
   private buildSign(poi: WorldPoi): void {
     const y = terrainHeight(poi.x, poi.z);
     const woodMat = toonMat({ color: 0x8a6a42, map: swatch('#7a5a36', 80) });
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.4, 0.16), woodMat);
-    post.position.set(poi.x, y + 1.2, poi.z);
+    const a = poi.rot ?? 0;
+    // two posts at the board's ENDS — a center post reads as a censor bar
+    const ex = Math.cos(a) * 1.62, ez = -Math.sin(a) * 1.62;
+    for (const side of [-1, 1]) {
+      const px = poi.x + side * ex, pz = poi.z + side * ez;
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.5, 0.16), woodMat);
+      post.position.set(px, terrainHeight(px, pz) + 1.25, pz);
+      this.group.add(post);
+      this.staticTargets.push(post);
+    }
     const board = World.textSign(3.4, 0.8, { lines: [poi.data ?? '???'], style: 'graffiti', bg: '#4a3a26', fg: '#f2e4c4', accent: '#241a10' }, { twoSided: true });
     board.position.set(poi.x, y + 2.1, poi.z);
-    board.rotation.y = poi.rot ?? 0;
+    board.rotation.y = a;
     board.rotation.z = 0.03;
-    this.group.add(post, board);
-    this.staticTargets.push(post);
+    this.group.add(board);
   }
 
   /** Opens the quest gate with a rumble. */
@@ -3635,6 +3656,8 @@ export class World {
   /** Sphere-vs-collider test for projectiles: returns outward push normal. */
   collideSphere(pos: THREE.Vector3, radius: number): THREE.Vector3 | null {
     for (const c of this.colliders) {
+      // arcs clear low props: no collision when the sphere flies above the top
+      if (pos.y - radius > c.top) continue;
       const nx = Math.max(c.minX, Math.min(pos.x, c.maxX));
       const nz = Math.max(c.minZ, Math.min(pos.z, c.maxZ));
       const dx = pos.x - nx, dz = pos.z - nz;
@@ -3648,6 +3671,47 @@ export class World {
     return null;
   }
 
+  /** Ray vs collider boxes: whatever blocks feet blocks bullets. Guarantees
+   *  hitscan, enemy sightlines, and cover checks agree with movement even for
+   *  props whose visual mesh is thinner than its collision. */
+  private raycastColliders(ray: THREE.Raycaster, maxDist: number): StaticHit | null {
+    const o = ray.ray.origin, d = ray.ray.direction;
+    let best: StaticHit | null = null;
+    let bestT = maxDist;
+    for (const c of this.colliders) {
+      let tmin = 0.02, tmax = bestT;
+      let nAxis: 'x' | 'y' | 'z' = 'x';
+      let nSign = 1;
+      let ok = true;
+      const slabs: [number, number, number, number, 'x' | 'y' | 'z'][] = [
+        [o.x, d.x, c.minX, c.maxX, 'x'],
+        [o.y, d.y, c.bottom, c.top, 'y'],
+        [o.z, d.z, c.minZ, c.maxZ, 'z'],
+      ];
+      for (const [op, dp, lo, hi, axis] of slabs) {
+        if (Math.abs(dp) < 1e-8) {
+          if (op < lo || op > hi) { ok = false; break; }
+          continue;
+        }
+        let t1 = (lo - op) / dp, t2 = (hi - op) / dp;
+        let sign = -1;
+        if (t1 > t2) { const tt = t1; t1 = t2; t2 = tt; sign = 1; }
+        if (t1 > tmin) { tmin = t1; nAxis = axis; nSign = sign; }
+        if (t2 < tmax) tmax = t2;
+        if (tmin > tmax) { ok = false; break; }
+      }
+      if (!ok || tmin >= bestT || tmin <= 0.02) continue;
+      bestT = tmin;
+      const normal = new THREE.Vector3(
+        nAxis === 'x' ? nSign : 0,
+        nAxis === 'y' ? nSign : 0,
+        nAxis === 'z' ? nSign : 0,
+      );
+      best = { point: o.clone().addScaledVector(d, tmin), distance: tmin, normal };
+    }
+    return best;
+  }
+
   /** Raycast props + ray-march the terrain heightfield; nearest hit wins. */
   raycastStatics(ray: THREE.Raycaster): StaticHit | null {
     const hits = ray.intersectObjects(this.staticTargets, true);
@@ -3659,6 +3723,10 @@ export class World {
         : new THREE.Vector3(0, 1, 0);
       best = { point: propHit.point, distance: propHit.distance, normal };
     }
+    // collider boxes: catches props whose visuals are thinner than their
+    // collision (and anything not registered as a raycast mesh)
+    const boxHit = this.raycastColliders(ray, best?.distance ?? 220);
+    if (boxHit && (!best || boxHit.distance < best.distance)) best = boxHit;
     // terrain march
     const o = ray.ray.origin, d = ray.ray.direction;
     const maxDist = Math.min(best?.distance ?? 220, 220);

@@ -219,6 +219,25 @@ function discoverStation(name: string): void {
   autosave();
 }
 
+/** Arrivals should look INTO the place, not back where they came from:
+ *  face the nearest landmark (people first, then services, then signage). */
+function faceArrival(): void {
+  const p = player.position;
+  const prio: Record<string, number> = { npc: 0, racer: 0, vendor_gun: 1, vendor_med: 1, ship: 1, fast_travel: 2, sign: 3, gate: 3 };
+  let bx = 0, bz = 0, bestScore = Infinity;
+  for (const poi of WORLD.pois) {
+    const pr = prio[poi.kind];
+    if (pr === undefined) continue;
+    const d = Math.hypot(poi.x - p.x, poi.z - p.z);
+    if (d < 2.5 || d > 110) continue;
+    const score = pr * 200 + d;
+    if (score < bestScore) { bestScore = score; bx = poi.x; bz = poi.z; }
+  }
+  // nothing notable in range: face the map centre
+  player.yaw = Math.atan2(p.x - bx, p.z - bz);
+  player.pitch = 0;
+}
+
 function switchMap(mapId: string, toX?: number, toZ?: number): void {
   if (activeMap().id === mapId) return;
   race.cancel(false);
@@ -236,6 +255,7 @@ function switchMap(mapId: string, toX?: number, toZ?: number): void {
   const x = toX ?? WORLD.spawn.x, z = toZ ?? WORLD.spawn.z;
   player.position.set(x, world.groundHeight(x, z), z);
   player.respawnPoint.copy(player.position);
+  faceArrival();
   world.followSun(player.position);
   mapFadeT = 1; // fade-in from the reconstruction flash
   fx.burst(player.position.clone().add(new THREE.Vector3(0, 1, 0)), 0x54d4ff, 40, 6, 0.14, 1, 4);
@@ -393,7 +413,7 @@ function renderFastTravel(panel: HTMLElement): void {
     <h1>RE-CONSTRUCTOR NETWORK</h1>
     <div class="p-sub">Matter is a suggestion. Cross-world transit voids most warranties and one or two laws of physics.</div>
     <div class="p-body"><div style="flex:1; display:flex; flex-direction:column; gap:8px; max-width:480px;">${groups}</div></div>
-    <div class="p-hint">T / E / ESC to close · undiscovered nodes must be visited on foot (or unlocked by story) · uplink refuses mid-combat</div>`;
+    <div class="p-hint">T / E / ESC to close · every node must be visited ON FOOT once before it answers · uplink refuses mid-combat</div>`;
   panel.querySelectorAll<HTMLButtonElement>('.ft-row').forEach((btn) => {
     btn.addEventListener('click', () => {
       const name = btn.dataset.station!;
@@ -406,6 +426,7 @@ function renderFastTravel(panel: HTMLElement): void {
         switchMap(mapId, target.poi.x + 2, target.poi.z + 2);
       } else {
         player.position.set(target.poi.x + 2, world.groundHeight(target.poi.x + 2, target.poi.z + 2), target.poi.z + 2);
+        faceArrival();
         fx.burst(player.position.clone().add(new THREE.Vector3(0, 1, 0)), 0x54d4ff, 30, 5, 0.12, 0.8, 4);
       }
       feedText(`RE-CONSTRUCTED AT <b>${name}</b>`, '#54d4ff');
@@ -614,7 +635,10 @@ questSystem.init({
     world.openGate(id);
     feedText('A gate rumbles open somewhere. Probably fine.', '#54d4ff');
   },
-  discoverStation,
+  // stations bind by WALKING there — story beats only hint at the node
+  discoverStation: (name) => {
+    if (!discoveredStations.has(name)) feedText(`Re-Constructor node reported at <b>${name}</b> — visit it on foot to bind it.`, '#54d4ff');
+  },
   playerPos: () => player.position,
   toast: feedText,
   banner,
@@ -724,7 +748,7 @@ function restoreSave(): boolean {
   questSystem.load(
     (data.quests as { i: number; s: QuestStatus; p: number }[]) ?? [],
     (id) => world.openGate(id),
-    (name) => discoveredStations.add(name),
+    () => { /* stations persist in the save's own list — walking binds them */ },
   );
   questSystem.loadSides((data.sidequests as { id: string; s: QuestStatus; p: number }[]) ?? []);
   const cines = data.cines as string[] | undefined;
@@ -985,20 +1009,44 @@ function compareFor(item: ItemInstance): ItemInstance | null {
 }
 
 // ---------------------------------------------------------------- map/compass markers
-/** Active-map quest point: real objective here, else nearest discovered station. */
+/** First hop of the WALKING route from the current map toward a target map:
+ *  the zone exit (or ship pad) that starts the path. BFS over the map graph. */
+function routeHopTo(targetMapId: string): { x: number; z: number } | null {
+  const start = activeMap().id;
+  if (start === targetMapId) return null;
+  const shipMaps = Object.values(MAPS).filter((m) => m.pois.some((p) => p.kind === 'ship')).map((m) => m.id);
+  const firstHop = new Map<string, { x: number; z: number } | null>([[start, null]]);
+  const queue = [start];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    if (cur === targetMapId) return firstHop.get(cur) ?? null;
+    const def = MAPS[cur];
+    if (!def) continue;
+    const inherit = firstHop.get(cur);
+    const visit = (next: string, via: { x: number; z: number }): void => {
+      if (firstHop.has(next)) return;
+      firstHop.set(next, cur === start ? via : inherit ?? via);
+      queue.push(next);
+    };
+    for (const ex of def.exits ?? []) {
+      if (!ex.sealed) visit(ex.targetMap, { x: ex.x, z: ex.z });
+    }
+    if (shipMaps.includes(cur)) {
+      const pad = def.pois.find((p) => p.kind === 'ship')!;
+      for (const other of shipMaps) if (other !== cur) visit(other, { x: pad.x, z: pad.z });
+    }
+  }
+  return null;
+}
+
+/** Active-map quest point: the objective if it's here, otherwise the first
+ *  hop of the walking route toward its map (zone exit / ship pad). */
 function questPointOnMap(): { x: number; z: number } | null {
   if (gameMode === 'endless') return null;
   const qm = questSystem.markerPos();
   if (!qm) return null;
   if (qm.mapId === activeMap().id) return { x: qm.x, z: qm.z };
-  let best: { x: number; z: number } | null = null;
-  let bestD = Infinity;
-  for (const poi of WORLD.pois) {
-    if (poi.kind !== 'fast_travel' || !discoveredStations.has(poi.data ?? '')) continue;
-    const d = Math.hypot(player.position.x - poi.x, player.position.z - poi.z);
-    if (d < bestD) { bestD = d; best = { x: poi.x, z: poi.z }; }
-  }
-  return best;
+  return routeHopTo(qm.mapId);
 }
 
 function fullmapExtras() {
@@ -1355,6 +1403,17 @@ canvas.addEventListener('click', () => {
     const h = 1 / 60;
     for (let t = 0; t < seconds; t += h) stepSim(h);
   },
+  losDebug: (x1: number, y1: number, z1: number, x2: number, y2: number, z2: number) => {
+    const from = new THREE.Vector3(x1, y1, z1);
+    const dir = new THREE.Vector3(x2, y2, z2).sub(from);
+    const dist = dir.length();
+    dir.normalize();
+    const ray = new THREE.Raycaster(from, dir, 0.1, dist - 0.1);
+    return world.raycastStatics(ray) === null;
+  },
+  routeHopDebug: (mapId: string) => routeHopTo(mapId),
+  faceArrivalDebug: () => faceArrival(),
+  get stations() { return discoveredStations; },
 };
 
 // intro end handler (skip or natural finish)
