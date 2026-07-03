@@ -44,6 +44,7 @@ const CAST = {
   sable:     { id: 'Xb7hH8MSUJpSbSDYk0k2', name: 'Alice',   stability: 0.5 }, // cool, charged stormcaller
   kez:       { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah',   stability: 0.0 }, // quick bright hound-handler
   tovah:     { id: 'SAz9YHcvj6GT2YYXdXww', name: 'River',   stability: 0.0 }, // low gravel avalanche
+  faro:      { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel',  stability: 0.5 }, // two centuries of lamp duty
   wirelog:   { id: 'CwhRBWXzGAHq8TQ4Fs17', name: 'Roger',   stability: 0.5 }, // the wire remembers the dead
 };
 

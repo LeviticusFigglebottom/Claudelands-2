@@ -24,12 +24,15 @@ import { actionSkill } from './actionskill';
 import { playerVoice } from './playervoice';
 import { difficulty } from './settings';
 import type { StaticHit, ExplosiveBarrel } from './world';
+import { WORLD } from '../data/world';
 
 const EYE_HEIGHT = 1.65;
 const PLAYER_RADIUS = 0.45;
 
 export interface WorldQuery {
   groundHeight: (x: number, z: number) => number;
+  /** Shimmer vents (Vitra Null): standing in one rides the exhale. */
+  updrafts?: () => { x: number; z: number; r: number; power: number }[];
   resolveCollision: (pos: THREE.Vector3, radius: number) => void;
   raycastStatics: (ray: THREE.Raycaster) => StaticHit | null;
   barrels: () => ExplosiveBarrel[];
@@ -288,7 +291,14 @@ export class Player implements Damageable {
       this.velY = 8.2;
       this.grounded = false;
     }
-    this.velY -= 24 * dt;
+    this.velY -= (WORLD.gravity ?? 24) * dt; // Vitra Null runs light
+    // shimmer vents: the ground exhales and you go with it
+    for (const u of this.world.updrafts?.() ?? []) {
+      if (Math.hypot(this.position.x - u.x, this.position.z - u.z) < u.r) {
+        this.velY = Math.min(this.velY + u.power * dt, 21);
+        this.grounded = false;
+      }
+    }
     this.position.y += this.velY * dt;
     if (this.position.y <= ground) {
       // landing feel

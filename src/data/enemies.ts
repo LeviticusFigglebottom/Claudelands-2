@@ -7,7 +7,7 @@
 import type { ElementId } from '../game/types';
 
 export type EnemyBehavior = 'rusher' | 'gunner' | 'lobber' | 'brute' | 'flyer' | 'suicide';
-export type Faction = 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'brine' | 'hollow';
+export type Faction = 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'brine' | 'hollow' | 'vitrified';
 
 export interface EnemyDef {
   id: string;
@@ -498,3 +498,37 @@ export const BADASS_CHANCE = 0.06;
 export const BADASS_HP_MULT = 4;
 export const BADASS_DMG_MULT = 1.7;
 export const BADASS_SCALE = 1.45;
+
+// ---------------------------------------------------------------------------
+// VITRA NULL — the VITRIFIED. The glass here grew opinions. Shardlings are
+// shrapnel with legs, Prism Sentinels refract light into arguments, and
+// Glasswings are windows that learned to dive.
+ENEMIES.shardling = {
+  id: 'shardling', name: 'Shardling', badassName: 'Big Damn Shard',
+  faction: 'vitrified', behavior: 'rusher',
+  flesh: 0.4, shield: 0, armor: 0.6,
+  hpMult: 0.85, damageMult: 1.0, speed: 8.4, attackRange: 1.9, attackRate: 1.2, aggroRange: 30,
+  scale: 0.7, tint: 0x7af0ff, dropTier: 0, xp: 16,
+  barks: ['*a chandelier losing its temper*', '*tink tink TINK*', '*the sound of stepping on a wine glass, weaponized*'],
+  weight: 24,
+};
+ENEMIES.prism_sentinel = {
+  id: 'prism_sentinel', name: 'Prism Sentinel', badassName: 'Big Damn Prism',
+  faction: 'vitrified', behavior: 'gunner',
+  flesh: 0.3, shield: 0.7, armor: 0,
+  hpMult: 1.05, damageMult: 1.1, speed: 4.6, attackRange: 26, attackRate: 0.9, aggroRange: 34,
+  scale: 1.05, tint: 0xc06bff, dropTier: 1, xp: 24,
+  barks: ['REFRACTING.', 'The light BENDS for us.', 'ANGLE OF INCIDENCE: you.'],
+  projectile: { speed: 30, element: 'volt' },
+  weight: 14,
+};
+ENEMIES.glasswing = {
+  id: 'glasswing', name: 'Glasswing', badassName: 'Big Damn Pane',
+  faction: 'vitrified', behavior: 'flyer',
+  flesh: 0.8, shield: 0.2, armor: 0,
+  hpMult: 0.8, damageMult: 0.95, speed: 7.8, attackRange: 13, attackRate: 0.8, aggroRange: 32,
+  scale: 0.9, tint: 0xbfe0ff, dropTier: 0, xp: 18,
+  barks: ['*a stained-glass window with a grudge*', '*shhhhing*', '*the sky, chiming*'],
+  projectile: { speed: 27, element: 'rime' },
+  weight: 15,
+};

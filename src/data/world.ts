@@ -7,7 +7,7 @@
 
 import { clamp01, lerp } from '../util/maff';
 
-export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle' | 'gulchgate' | 'shipbreak' | 'castaway' | 'hullgrave' | 'brinepans' | 'anchorage' | 'cavemouth' | 'gloomgrove' | 'cryptworks' | 'lodecourt';
+export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle' | 'gulchgate' | 'shipbreak' | 'castaway' | 'hullgrave' | 'brinepans' | 'anchorage' | 'cavemouth' | 'gloomgrove' | 'cryptworks' | 'lodecourt' | 'lastlight' | 'chimefield' | 'shardsea' | 'nullbasin';
 
 export interface DistrictDef {
   id: string;
@@ -16,7 +16,7 @@ export interface DistrictDef {
   dress: DistrictDress;
   cx: number; cz: number; radius: number;
   baseHeight: number;
-  faction: 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'brine' | 'hollow' | 'none';
+  faction: 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'brine' | 'hollow' | 'vitrified' | 'none';
   spawnTable: { enemyId: string; weight: number }[];
   maxAlive: number;
   respawnDelay: number;
@@ -25,7 +25,7 @@ export interface DistrictDef {
 
 export interface WorldPoi {
   id: string;
-  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'gate' | 'sign' | 'ship' | 'wreck' | 'racer' | 'buggy' | 'pit' | 'cargo';
+  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'gate' | 'sign' | 'ship' | 'wreck' | 'racer' | 'buggy' | 'pit' | 'cargo' | 'vent';
   x: number; z: number; rot?: number;
   data?: string;
 }
@@ -35,7 +35,7 @@ export interface BiomeDef {
   rock: string;
   scrub: number;               // scrub tuft color
   ambientParticle: 'dust' | 'snow' | 'ash' | 'spore';
-  trees: 'cactus' | 'pine' | 'burnt' | 'palm' | 'mushroom';
+  trees: 'cactus' | 'pine' | 'burnt' | 'palm' | 'mushroom' | 'shard';
   aurora: boolean;
   weeds: boolean;              // tumbleweeds roam
 }
@@ -45,6 +45,8 @@ export interface WorldDef {
   name: string;
   tagline: string;             // biome-entry title card subtext
   size: number;
+  /** m/s² pulling the player down — Vitra Null runs light (default 24). */
+  gravity?: number;
   skyTop: number; skyHorizon: number;
   sun: { color: number; intensity: number; dirX: number; dirY: number; dirZ: number };
   ambient: { sky: number; ground: number; intensity: number };
@@ -679,12 +681,12 @@ export const RUSTGULCH: WorldDef = {
     },
   ],
   pois: [
-    { id: 'ft_gulch', kind: 'fast_travel', x: -148, z: 6, data: 'Gulch Gate' },
-    { id: 'npc_rita', kind: 'racer', x: -147, z: 31, rot: 2.5, data: 'rita' },
-    { id: 'buggy_pad', kind: 'buggy', x: -134, z: 10, rot: 0.4 },
-    { id: 'sign_g1', kind: 'sign', x: -152, z: 22, rot: 0.2, data: 'REDLINE’S RUN — RACE DAY IS EVERY DAY' },
-    { id: 'sign_g2', kind: 'sign', x: -160, z: -8, rot: -0.3, data: '← CLAUDELANDS · WRECKS → · TRACK EVERYWHERE ELSE' },
-    { id: 'log_g1', kind: 'wirelog', x: -138, z: 20, data: 'log_gulch1' },
+    { id: 'ft_gulch', kind: 'fast_travel', x: -112, z: 2, data: 'Gulch Gate' },
+    { id: 'npc_rita', kind: 'racer', x: -108, z: 24, rot: 2.1, data: 'rita' },
+    { id: 'buggy_pad', kind: 'buggy', x: -96, z: 8, rot: 0.4 },
+    { id: 'sign_g1', kind: 'sign', x: -114, z: 32, rot: 0.2, data: 'REDLINE’S RUN — RACE DAY IS EVERY DAY' },
+    { id: 'sign_g2', kind: 'sign', x: -118, z: -14, rot: -0.3, data: '← CLAUDELANDS · WRECKS → · TRACK EVERYWHERE ELSE' },
+    { id: 'log_g1', kind: 'wirelog', x: -102, z: 14, data: 'log_gulch1' },
     { id: 'wreck1', kind: 'wreck', x: 20, z: 80, rot: 0.6 },
     { id: 'wreck2', kind: 'wreck', x: 42, z: 100, rot: -1.2 },
     { id: 'wreck3', kind: 'wreck', x: 24, z: 104, rot: 2.1 },
@@ -1081,6 +1083,102 @@ export const VELDT_GP: WorldDef = {
   exits: [],
 };
 
+
+// ===========================================================================
+// PLANET 3 — VITRA NULL. A moon-dark glass waste under a permanent aurora:
+// obsidian ground veined with light, monolithic shard fields, chiming glass
+// flora, and gravity too polite to hold you down. Functionally different:
+// low-g floaty jumps + shimmer vents that launch you across the mesas.
+const VITRA: WorldDef = {
+  id: 'vitra',
+  name: 'VITRA NULL',
+  tagline: 'the night the glass dreams about.',
+  size: 240,
+  gravity: 11,
+  skyTop: 0x060312,
+  skyHorizon: 0x241a4e,
+  sun: { color: 0xb0a0ff, intensity: 1.5, dirX: -0.3, dirY: 0.8, dirZ: 0.35 },
+  ambient: { sky: 0x5a48a8, ground: 0x241c40, intensity: 1.5 },
+  fog: { color: 0x0d0a24, near: 70, far: 320 },
+  biome: {
+    ground: { base: '#181228', light: '#2c2148', dark: '#0b0716', crack: 'rgba(122,240,255,0.55)' },
+    rock: '#2e2652',
+    scrub: 0x6a5adf,
+    ambientParticle: 'spore',
+    trees: 'shard',
+    aurora: true,
+    weeds: false,
+  },
+  terrain: {
+    duneAmp: 1.7,
+    roughAmp: 1.1,
+    roads: [
+      { x0: 0, z0: 100, x1: 0, z1: -92 },
+      { x0: 0, z0: 30, x1: -70, z1: -10 },
+      { x0: 0, z0: 10, x1: 72, z1: -20 },
+    ],
+  },
+  districts: [
+    {
+      id: 'lastlight', name: 'LAST LIGHT', subtitle: 'The Keeper Is In. The Dark Is Out. Mostly.', dress: 'lastlight',
+      cx: 0, cz: 88, radius: 30, baseHeight: 0.4,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 8,
+    },
+    {
+      id: 'chimefield', name: 'THE CHIMEFIELD', subtitle: 'Wind Through Glass. It Knows Your Name.', dress: 'chimefield',
+      cx: -70, cz: -10, radius: 46, baseHeight: 0.8,
+      faction: 'vitrified',
+      spawnTable: [
+        { enemyId: 'shardling', weight: 28 },
+        { enemyId: 'glasswing', weight: 16 },
+        { enemyId: 'prism_sentinel', weight: 12 },
+      ],
+      maxAlive: 7, respawnDelay: 16, levelOffset: 9,
+    },
+    {
+      id: 'shardsea', name: 'THE SHARDSEA', subtitle: 'A Storm, Paused Mid-Shatter.', dress: 'shardsea',
+      cx: 72, cz: -20, radius: 48, baseHeight: 1.2,
+      faction: 'vitrified',
+      spawnTable: [
+        { enemyId: 'prism_sentinel', weight: 22 },
+        { enemyId: 'shardling', weight: 20 },
+        { enemyId: 'glasswing', weight: 14 },
+      ],
+      maxAlive: 7, respawnDelay: 18, levelOffset: 10,
+    },
+    {
+      id: 'nullbasin', name: 'THE NULL BASIN', subtitle: 'Where the Light Files Its Complaints.', dress: 'nullbasin',
+      cx: 0, cz: -92, radius: 34, baseHeight: -0.6,
+      faction: 'vitrified',
+      spawnTable: [
+        { enemyId: 'shardling', weight: 20 },
+        { enemyId: 'prism_sentinel', weight: 16 },
+      ],
+      maxAlive: 6, respawnDelay: 20, levelOffset: 11,
+    },
+  ],
+  pois: [
+    { id: 'ft_vitra', kind: 'fast_travel', x: 8, z: 96, data: 'Last Light' },
+    { id: 'ship_vitra', kind: 'ship', x: -18, z: 100 },
+    { id: 'npc_faro', kind: 'npc', x: -6, z: 80, rot: 2.8, data: 'faro' },
+    { id: 'vg_v', kind: 'vendor_gun', x: 12, z: 80, rot: -1.4 },
+    { id: 'vm_v', kind: 'vendor_med', x: -16, z: 88, rot: 1.2 },
+    { id: 'sign_v1', kind: 'sign', x: -2, z: 70, rot: 0.1, data: 'LAST LIGHT — KEEP LANTERNS LIT. KEEP OPINIONS QUIET.' },
+    { id: 'sign_v2', kind: 'sign', x: -50, z: 8, rot: 0.6, data: '← CHIMEFIELD · SHARDSEA → · BASIN ↓ · GLASS: EVERYWHERE' },
+    { id: 'chest_v1', kind: 'chest', x: -62, z: -34, rot: 0.8 },
+    { id: 'chest_v2', kind: 'chest', x: 84, z: -40, rot: -1.2 },
+    { id: 'chest_v3', kind: 'chest', x: 10, z: -100, rot: 2.0 },
+    { id: 'vent1', kind: 'vent', x: -34, z: 40 },
+    { id: 'vent2', kind: 'vent', x: 42, z: 26 },
+    { id: 'vent3', kind: 'vent', x: -84, z: -44 },
+    { id: 'vent4', kind: 'vent', x: 92, z: -52 },
+    { id: 'vent5', kind: 'vent', x: -12, z: -58 },
+    { id: 'vent6', kind: 'vent', x: 30, z: -84 },
+  ],
+  spawn: { x: 0, z: 108 },
+  exits: [],
+};
+
 export const MAPS: Record<string, WorldDef> = {
   claudelands: CLAUDELANDS,
   frosthollow: FROSTHOLLOW,
@@ -1093,6 +1191,7 @@ export const MAPS: Record<string, WorldDef> = {
   veldt_shallows: VELDT_SHALLOWS,
   veldt_caves: VELDT_CAVES,
   veldt_gp: VELDT_GP,
+  vitra: VITRA,
 };
 
 let active: WorldDef = CLAUDELANDS;

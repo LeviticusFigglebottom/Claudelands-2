@@ -286,6 +286,10 @@ class QuestSystem {
       loot.spawnItem(item, p.clone().add(new THREE.Vector3(1.2, 0.5, 1.2)), true);
     }
 
+    // the story ends where the STORY ends — the frontier quests after it
+    // are post-game and never replay the credits
+    if (q.def.finale) this.hooks?.onVictory();
+
     if (q.def.id === 'q12_city') {
       this.unlockSides();
       this.hooks?.toast('Brasshaven\u2019s citizens have <b>side jobs</b> for you — look for the purple marks.', '#c06bff');
@@ -303,7 +307,7 @@ class QuestSystem {
       if (next && next.status === 'locked') {
         next.status = 'available';
         this.hooks?.toast(`New work waiting: <b>${g.name}</b> has more for you.`, '#ffd23c');
-      } else if (this.allDone) this.hooks?.onVictory();
+      }
       return;
     }
 
@@ -331,7 +335,6 @@ class QuestSystem {
       }
     } else {
       this.hooks?.holocall(q.def.giver, [q.def.completeLine], `✔ ${q.def.name}`);
-      if (this.allDone) this.hooks?.onVictory();
     }
   }
 

@@ -398,6 +398,10 @@ export class World {
         case 'gloomgrove': this.buildGloomgrove(d); break;
         case 'cryptworks': this.buildCryptworks(d); break;
         case 'lodecourt': this.buildLodecourt(d); break;
+        case 'lastlight': this.buildLastLight(d); break;
+        case 'chimefield': this.buildChimefield(d); break;
+        case 'shardsea': this.buildShardsea(d); break;
+        case 'nullbasin': this.buildNullBasin(d); break;
       }
     }
   }
@@ -1496,6 +1500,7 @@ export class World {
         case 'buggy': this.buildBuggyPad(poi); break;
         case 'pit': this.buildPitDoor(poi); break;
         case 'cargo': this.buildCargo(poi); break;
+        case 'vent': this.buildVent(poi); break;
       }
     }
     this.buildZoneExits();
@@ -1529,6 +1534,25 @@ export class World {
 
     // mushroom biomes (the Hollowdeep): glow-shrooms and stalagmites along
     // the corridor floor — the cave grows its own light
+    if (WORLD.biome.trees === 'shard') {
+      const rng = mulberry32(555777);
+      let placed = 0;
+      for (let i = 0; i < 400 && placed < 48; i++) {
+        const x = (rng() - 0.5) * WORLD.size * 1.05;
+        const z = (rng() - 0.5) * WORLD.size * 1.05;
+        const d = districtAt(x, z);
+        if (d && (d.dress === 'lastlight' || d.dress === 'shardsea')) continue;
+        if (!this.clearOfAssets(x, z, 2) || !this.clearOfExits(x, z)) continue;
+        const h = 2 + rng() * 5;
+        const shard = this.glassShard(h, rng() > 0.6 ? 0xb0a0ff : 0x7af0ff, rng);
+        shard.position.set(x, terrainHeight(x, z) + h * 0.42, z);
+        this.group.add(shard);
+        this.staticTargets.push(shard);
+        if (h > 3.4) this.addCollider(x, z, h * 0.15 + 0.4, h * 0.15 + 0.4, h * 0.8);
+        placed++;
+      }
+    }
+
     if (WORLD.biome.trees === 'mushroom') {
       const rng = mulberry32(60660);
       let placed = 0;
@@ -3549,6 +3573,179 @@ export class World {
     }
   }
 
+
+  // ------------------------------------------------------------ VITRA NULL
+  /** Shimmer vents — the planet exhales and you ride it. Player physics
+   *  reads this list every frame; the visual is a glowing throat + motes. */
+  updrafts: { x: number; z: number; r: number; power: number }[] = [];
+  private ventMotes: THREE.Vector3[] = [];
+
+  private buildVent(poi: WorldPoi): void {
+    const y = terrainHeight(poi.x, poi.z);
+    const g = new THREE.Group();
+    const rockMat = toonMat({ map: rockTexture(WORLD.biome.rock) });
+    const rng = mulberry32((poi.x * 73 + poi.z * 31) | 0);
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + rng() * 0.4;
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.7 + rng() * 0.7, 0), rockMat);
+      rock.position.set(Math.cos(a) * 2.6, 0.3, Math.sin(a) * 2.6);
+      rock.rotation.set(rng() * 3, rng() * 3, rng() * 3);
+      g.add(rock);
+    }
+    const throat = new THREE.Mesh(new THREE.CircleGeometry(2.0, 14), glowMat(0x7af0ff, 0.75));
+    throat.rotation.x = -Math.PI / 2;
+    throat.position.y = 0.12;
+    g.add(throat);
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.1, 6, 20), glowMat(0xb0a0ff, 0.6));
+    halo.rotation.x = Math.PI / 2;
+    halo.position.y = 0.35;
+    halo.name = 'blinker';
+    g.add(halo);
+    g.position.set(poi.x, y, poi.z);
+    this.group.add(g);
+    this.updrafts.push({ x: poi.x, z: poi.z, r: 2.4, power: 46 });
+    this.ventMotes.push(new THREE.Vector3(poi.x, y + 0.4, poi.z));
+  }
+
+  /** LAST LIGHT — the lighthouse town. One stubborn beam, a ring of huts
+   *  with lit windows, and lamp posts holding back two centuries of night. */
+  private buildLastLight(d: DistrictDef): void {
+    const y = terrainHeight(d.cx, d.cz);
+    const stoneMat = toonMat({ color: 0x3a3260, map: rockTexture('#332b56') });
+    const bandMat = toonMat({ color: 0xd8c56a, map: swatch('#c9b45a', 60) });
+    // the lighthouse: tapered tower, gold bands, glow lamp room
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 2.2, 17, 10), stoneMat);
+    tower.position.set(d.cx, y + 8.5, d.cz);
+    this.group.add(tower);
+    this.staticTargets.push(tower);
+    this.addCollider(d.cx, d.cz, 2.3, 2.3, 18);
+    for (const bandY of [4.5, 9.5, 14.5]) {
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(1.55 + (14.5 - bandY) * 0.055, 1.6 + (14.5 - bandY) * 0.055, 0.5, 10), bandMat);
+      band.position.set(d.cx, y + bandY, d.cz);
+      this.group.add(band);
+    }
+    const lampRoom = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.7, 2.2, 8), bandMat);
+    lampRoom.position.set(d.cx, y + 18.2, d.cz);
+    this.group.add(lampRoom);
+    const beacon = new THREE.Mesh(new THREE.SphereGeometry(1.05, 12, 12), glowMat(0xfff2b0, 1));
+    beacon.position.set(d.cx, y + 18.3, d.cz);
+    this.group.add(beacon);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(2.0, 1.6, 8), stoneMat);
+    cap.position.set(d.cx, y + 20.1, d.cz);
+    this.group.add(cap);
+    // the keeper's huts: squat stone drums with warm windows
+    const rng = mulberry32(777001);
+    for (let i = 0; i < 5; i++) {
+      const a = Math.PI * 0.25 + (i / 5) * Math.PI * 1.5;
+      const hx = d.cx + Math.cos(a) * (12 + rng() * 6);
+      const hz = d.cz + Math.sin(a) * (12 + rng() * 6);
+      const hy = terrainHeight(hx, hz);
+      const hut = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.7, 2.6, 8), stoneMat);
+      hut.position.set(hx, hy + 1.3, hz);
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(3.0, 1.6, 8), toonMat({ color: 0x241c40 }));
+      roof.position.set(hx, hy + 3.3, hz);
+      const win = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.1), glowMat(0xffd88a, 0.95));
+      win.position.set(hx + Math.cos(a + Math.PI) * 2.45, hy + 1.4, hz + Math.sin(a + Math.PI) * 2.45);
+      win.lookAt(d.cx, hy + 1.4, d.cz);
+      this.group.add(hut, roof, win);
+      this.staticTargets.push(hut);
+      this.addCollider(hx, hz, 2.6, 2.6, 3.4);
+    }
+    // lamp posts along the walk
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const lx = d.cx + Math.cos(a) * 22, lz = d.cz + Math.sin(a) * 22;
+      const ly = terrainHeight(lx, lz);
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 3.4, 6), stoneMat);
+      post.position.set(lx, ly + 1.7, lz);
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), glowMat(0xffd88a, 0.95));
+      lamp.position.set(lx, ly + 3.5, lz);
+      this.group.add(post, lamp);
+      this.addCollider(lx, lz, 0.25, 0.25, 3.4);
+    }
+  }
+
+  /** Translucent glass shard — the planet's signature prop. */
+  private glassShard(h: number, tint: number, rng: () => number): THREE.Mesh {
+    const geo = new THREE.ConeGeometry(h * 0.16, h, 5);
+    const mat = new THREE.MeshToonMaterial({ color: tint, transparent: true, opacity: 0.55 });
+    const shard = new THREE.Mesh(geo, mat);
+    shard.rotation.set((rng() - 0.5) * 0.35, rng() * Math.PI, (rng() - 0.5) * 0.35);
+    return shard;
+  }
+
+  /** THE CHIMEFIELD — glass flora that rings when the wind argues with it. */
+  private buildChimefield(d: DistrictDef): void {
+    const rng = mulberry32(424242);
+    for (let i = 0; i < 34; i++) {
+      const a = rng() * Math.PI * 2, r = rng() * d.radius * 0.9;
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 1.6)) continue;
+      const y = terrainHeight(x, z);
+      const cluster = new THREE.Group();
+      const n = 2 + Math.floor(rng() * 3);
+      for (let k = 0; k < n; k++) {
+        const h = 1.6 + rng() * 3.2;
+        const stalk = this.glassShard(h, k % 2 ? 0x7af0ff : 0xb0a0ff, rng);
+        stalk.position.set((rng() - 0.5) * 1.6, h * 0.45, (rng() - 0.5) * 1.6);
+        cluster.add(stalk);
+        const bead = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), glowMat(0x7af0ff, 0.9));
+        bead.position.set(stalk.position.x, h * 0.95, stalk.position.z);
+        cluster.add(bead);
+      }
+      cluster.position.set(x, y, z);
+      this.group.add(cluster);
+      this.staticTargets.push(cluster);
+      if (n >= 3) this.addCollider(x, z, 0.9, 0.9, 2.4);
+    }
+  }
+
+  /** THE SHARDSEA — a storm of glass monoliths, paused mid-shatter. */
+  private buildShardsea(d: DistrictDef): void {
+    const rng = mulberry32(90909);
+    for (let i = 0; i < 16; i++) {
+      const a = rng() * Math.PI * 2, r = 8 + rng() * d.radius * 0.85;
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 3)) continue;
+      const y = terrainHeight(x, z);
+      const h = 7 + rng() * 15;
+      const mono = this.glassShard(h, rng() > 0.5 ? 0x8ab8ff : 0xc0a8ff, rng);
+      mono.position.set(x, y + h * 0.42, z);
+      this.group.add(mono);
+      this.staticTargets.push(mono);
+      this.addCollider(x, z, h * 0.14 + 0.6, h * 0.14 + 0.6, h * 0.8);
+      // a glow vein up the face
+      const vein = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, h * 0.7, 5), glowMat(0x7af0ff, 0.8));
+      vein.position.set(x + 0.2, y + h * 0.4, z);
+      vein.rotation.copy(mono.rotation);
+      this.group.add(vein);
+    }
+  }
+
+  /** THE NULL BASIN — a sunken ring of dead obelisks around a dark eye. */
+  private buildNullBasin(d: DistrictDef): void {
+    const stoneMat = toonMat({ color: 0x241c40, map: rockTexture('#1d1636') });
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      const x = d.cx + Math.cos(a) * 16, z = d.cz + Math.sin(a) * 16;
+      const y = terrainHeight(x, z);
+      const ob = new THREE.Mesh(new THREE.BoxGeometry(1.6, 7 + (i % 3) * 2, 1.2), stoneMat);
+      ob.position.set(x, y + 3.2 + (i % 3), z);
+      ob.rotation.y = a;
+      this.group.add(ob);
+      this.staticTargets.push(ob);
+      this.addCollider(x, z, 1.2, 1.0, 8);
+      const rune = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.6, 0.06), glowMat(0xc06bff, 0.7));
+      rune.position.set(x + Math.cos(a + Math.PI) * 0.85, y + 3.4, z + Math.sin(a + Math.PI) * 0.85);
+      rune.rotation.y = a;
+      this.group.add(rune);
+    }
+    const eye = new THREE.Mesh(new THREE.CircleGeometry(6, 20), new THREE.MeshBasicMaterial({ color: 0x050310 }));
+    eye.rotation.x = -Math.PI / 2;
+    eye.position.set(d.cx, terrainHeight(d.cx, d.cz) + 0.08, d.cz);
+    this.group.add(eye);
+  }
+
   private buildQuibb(poi: WorldPoi): void {
     const y = terrainHeight(poi.x, poi.z);
     const q = new THREE.Group();
@@ -3822,6 +4019,12 @@ export class World {
     for (const s of this.scrollTex) s.tex.offset.y += s.vy * dt;
     for (const b of this.barrelFlames) {
       if (b.distanceTo(playerPos) < 60 && Math.random() < 20 * dt) fx.fireColumn(b);
+    }
+    for (const v of this.ventMotes) {
+      if (v.distanceTo(playerPos) < 80 && Math.random() < 26 * dt) {
+        fx.emit(v.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2.6, Math.random() * 1.5, (Math.random() - 0.5) * 2.6)),
+          new THREE.Vector3(0, 9 + Math.random() * 6, 0), 0x7af0ff, 0.09, 0.9, -2);
+      }
     }
     // clean up exploded barrels
     for (let i = this.barrels.length - 1; i >= 0; i--) {

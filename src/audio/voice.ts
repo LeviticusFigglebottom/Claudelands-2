@@ -58,6 +58,8 @@ export const VOICES: Record<string, VoiceProfile> = {
   sable: { id: 'sable', basePitch: 172, range: 0.3, rate: 5.2, wave: 'triangle', formantShift: 1.04, breath: 0.12, vibrato: 3, drawl: 1.12, gain: 0.15 },     // Stormcaller: cool, charged
   kez: { id: 'kez', basePitch: 205, range: 0.42, rate: 7.4, wave: 'sawtooth', formantShift: 1.12, breath: 0.1, vibrato: 2, drawl: 0.8, gain: 0.14 },          // Houndmaster: quick, bright
   tovah: { id: 'tovah', basePitch: 96, range: 0.28, rate: 4.4, wave: 'square', formantShift: 0.86, breath: 0.22, vibrato: 0, drawl: 1.3, gain: 0.16 },        // Ravager: gravel avalanche
+  // two hundred years of lamp oil and patience: low, level, quietly amused
+  faro: { id: 'faro', basePitch: 108, range: 0.18, rate: 4.6, wave: 'sawtooth', formantShift: 0.9, breath: 0.2, vibrato: 0, drawl: 1.25, gain: 0.15 },
   // dead miners, drowned sailors, salvage foremen — the wire remembers them
   wirelog: { id: 'wirelog', basePitch: 138, range: 0.3, rate: 4.9, wave: 'sawtooth', formantShift: 0.95, breath: 0.28, vibrato: 2, drawl: 1.18, gain: 0.13 },
 };

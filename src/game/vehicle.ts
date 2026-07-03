@@ -372,7 +372,9 @@ export class Vehicle {
       // speed — control now, the burst on release pays the speed back
       if (this.drifting && fSpeed > 0) {
         fSpeed = Math.min(fSpeed + (latBefore - Math.abs(lat)) * 0.35, Math.max(fSpeed, cap * 0.9));
-        if (fSpeed > S.maxSpeed * 0.5) fSpeed -= (fSpeed - S.maxSpeed * 0.5) * 2.4 * dt;
+        // keep the pace in the slide: only trim the very top end, slowly —
+        // the arc/steering feel is untouched, you just don't shed speed
+        if (fSpeed > S.maxSpeed * 0.82) fSpeed -= (fSpeed - S.maxSpeed * 0.82) * 1.1 * dt;
       }
       // handbrake without speed = a scrub, not a slide
       if (input.drift && planarSpeed <= 6) fSpeed *= Math.exp(-2.2 * dt);

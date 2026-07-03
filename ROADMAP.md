@@ -1,5 +1,41 @@
 # ROADMAP
 
+## Pass 24 status — the finale, and what answers it
+
+**The story ENDS on Veldt Minor**: cracking the Mother Lode (q26) now
+rolls the victory — the finale flag fires the credits right there
+instead of waiting for every future quest. What follows is post-game.
+
+**VITRA NULL, the third planet** (`vitra`): a moon-dark glass waste
+under a permanent aurora — obsidian ground veined with glowing cracks,
+translucent shard monoliths, chiming glass flora, and one stubborn
+lighthouse. FUNCTIONALLY different: gravity runs at 11 (vs 24)
+planet-wide, so every jump floats, and six SHIMMER VENTS launch you
+~20m skyward for traversal. Four districts (Last Light, the
+Chimefield, the Shardsea, the Null Basin), a new faction (the
+VITRIFIED: shardlings, prism sentinels, glasswings), Keeper Faro —
+two hundred years on lamp duty, voiced (ElevenLabs cast: calm,
+weathered, quietly amused) — a crystalline weightless soundtrack loop,
+and the frontier chain: q27 The Answering Light (Juno sends you at the
+lighthouse signal) and q28 The Glass Is Walking (Faro's first sweep).
+The Paperweight flies a loop once the finale lands: brasshaven → veldt
+→ vitra → brasshaven (before it, veldt still hops straight home).
+
+**Racetrack cleared**: the Gulch pit row (teleporter, Rita + garage,
+buggy pad, signs, wire spool) sat ON the start/finish straight — all
+of it moved infield, off the racing line and away from every
+checkpoint.
+
+**Drift keeps its speed**: the slide's speed bleed now only trims
+above 82% of top speed (was: dragged toward 50%), same gentle arc and
+hold-to-sharpen steering — you carry pace through the corner instead
+of scrubbing it.
+
+Headless suite: `verify24.mjs` — 16 checks, all passing (track-clear
+audit, 2s-slide speed floor, finale victory + frontier unlock, ship
+loop gating, low-g, vent launch, vitrified spawns, q27/q28 end-to-end,
+Faro recorded voice, soundtrack coverage).
+
 ## Pass 23 status — the score
 
 **Every area has its own soundtrack**: eleven 90-second instrumental

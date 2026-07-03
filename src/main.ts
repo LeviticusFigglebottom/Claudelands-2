@@ -122,6 +122,7 @@ player.world = {
   resolveCollision: (p, r) => world.resolveCollision(p, r),
   raycastStatics: (ray) => world.raycastStatics(ray),
   barrels: () => world.barrels,
+  updrafts: () => world.updrafts,
   arenaHalf: WORLD.size / 2,
 };
 player.bindInput(canvas);
@@ -610,7 +611,19 @@ function checkZoneExits(dt: number): void {
 const SHIP_PADS: Record<string, { x: number; z: number; to: string; planet: string }> = {
   brasshaven: { x: -26, z: 40, to: 'veldt', planet: 'claudeprime' },
   veldt: { x: -16, z: 94, to: 'brasshaven', planet: 'veldtminor' },
+  vitra: { x: -18, z: 100, to: 'brasshaven', planet: 'vitranull' },
 };
+
+/** The Paperweight flies a LOOP once the third rock answers: brasshaven →
+ *  veldt → vitra → brasshaven. Before the finale, veldt hops straight home. */
+function shipDestFrom(mapId: string): string {
+  const pad = SHIP_PADS[mapId];
+  if (mapId === 'veldt') {
+    const q26 = questSystem.quests.find((q) => q.def.id === 'q26_motherlode');
+    return q26?.status === 'complete' ? 'vitra' : 'brasshaven';
+  }
+  return pad.to;
+}
 
 function setPadShipsVisible(v: boolean): void {
   world.group.traverse((o) => { if (o.name === 'pad_ship') o.visible = v; });
@@ -619,8 +632,9 @@ function setPadShipsVisible(v: boolean): void {
 function startShipTravel(): void {
   const here = SHIP_PADS[activeMap().id];
   if (!here) return;
-  const destPad = SHIP_PADS[here.to];
-  seenCines.add('map_' + here.to); // the docking shot IS the arrival cinematic
+  const dest = shipDestFrom(activeMap().id);
+  const destPad = SHIP_PADS[dest];
+  seenCines.add('map_' + dest); // the docking shot IS the arrival cinematic
   player.paused = true;
   player.viewmodel.visible = false;
   setPadShipsVisible(false);
@@ -631,13 +645,13 @@ function startShipTravel(): void {
     toPlanet: PLANET_LOOKS[destPad.planet],
     padPos: () => {
       const pad = SHIP_PADS[activeMap().id];
-      const src2 = activeMap().id === here.to ? destPad : here;
+      const src2 = activeMap().id === dest ? destPad : here;
       void pad;
       return new THREE.Vector3(src2.x, world.groundHeight(src2.x, src2.z), src2.z);
     },
     setWorldVisible: (v) => { world.group.visible = v; },
     onSwitch: () => {
-      switchMap(here.to, destPad.x + 6, destPad.z + 6);
+      switchMap(dest, destPad.x + 6, destPad.z + 6);
       setPadShipsVisible(false); // the cine ship is still coming down
     },
     onDone: () => {
@@ -666,7 +680,7 @@ questSystem.init({
   onVictory: () => {
     banner(pick(Math.random as never, VICTORY_LINES));
     audio.victory();
-    feedText('<b style="color:#3ddc4e">ALL CONTRACTS COMPLETE.</b> Two worlds, restocking themselves. Happy hunting.', '#3ddc4e');
+    feedText('<b style="color:#3ddc4e">THE HUM IS DEAD. THE STORY IS PAID.</b> And out in the dark, a lighthouse just started calling... The frontier is open.', '#3ddc4e');
   },
   spawnElites: (enemyId, count, x, z, levelOffset, tag) => {
     const def = ENEMIES[enemyId];
@@ -1473,6 +1487,7 @@ canvas.addEventListener('click', () => {
   skipIntro: () => { if (cinematicT >= 0) intro.end(); },
   cinema, seenCines, shipTravel,
   startShipTravelDebug: startShipTravel,
+  shipDestDebug: shipDestFrom,
   skipCine: () => { if (cinema.active) cinema.skip(); },
   enemyDefs: ENEMIES,
   applyDamageDebug: applyDamage,

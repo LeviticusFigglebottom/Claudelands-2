@@ -34,6 +34,7 @@ const EXPLORE = {
   veldt_caves: 'Bioluminescent cavern score: deep subterranean hum, glassy crystal bell tones echoing in the dark, slow dripping-water percussion, cavernous reverb, wondrous and uneasy.',
   crucible: 'Gladiator pit between rounds: tense pulsing electronic bass, muffled crowd-stomp rhythm, gritty synth arpeggios coiling and uncoiling, anticipation held on a knife edge.',
   veldt_gp: 'Jungle raceway paddock: upbeat tropical surf-rock, bright ukulele chops over driving-but-easy drums, carefree checkered-flag energy at idle throttle.',
+  vitra: 'Nocturnal glass-planet score: crystalline bell tones ringing in vast dark space, slow aurora synth pads, deep sub-bass hum, delicate icy plucks like starlight on glass, serene and alien and weightless.',
 };
 
 const COMBAT = {

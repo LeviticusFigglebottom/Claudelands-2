@@ -3,7 +3,7 @@
 // progression. All dialogue is original and lives here for the writers.
 
 export type ObjectiveKind = 'goto' | 'kill_faction' | 'collect' | 'boss' | 'kill_elites' | 'notoriety';
-export type QuestGiver = 'quibb' | 'zaza' | 'mayor' | 'brann' | 'mirelle' | 'okto' | 'juno' | 'peg';
+export type QuestGiver = 'quibb' | 'zaza' | 'mayor' | 'brann' | 'mirelle' | 'okto' | 'juno' | 'peg' | 'faro';
 
 /** Everyone who hands out work: display name, where they stand, greetings. */
 export const GIVERS: Record<QuestGiver, { name: string; where: string; mapId: string; x: number; z: number; greetings: string[] }> = {
@@ -63,6 +63,13 @@ export const GIVERS: Record<QuestGiver, { name: string; where: string; mapId: st
       'Welcome to Driftwood Rest. Occupancy: me, four crabs, and whatever you are. Wipe your feet.',
     ],
   },
+  faro: {
+    name: 'Keeper Faro', where: 'at the Last Light', mapId: 'vitra', x: -6, z: 80,
+    greetings: [
+      'Faro. I keep the light. The light keeps everything else.',
+      'Welcome back to the bright side of nowhere.',
+    ],
+  },
 };
 
 export interface QuestDef {
@@ -77,7 +84,7 @@ export interface QuestDef {
     label: string;
     count: number;
     districtId?: string;
-    faction?: 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'brine' | 'hollow';
+    faction?: 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'brine' | 'hollow' | 'vitrified';
     bossId?: string;
     markerX?: number; markerZ?: number;
     mapId?: string;                // which map the marker/boss lives on (default claudelands)
@@ -96,6 +103,9 @@ export interface QuestDef {
   /** Fetch quests: collecting fills the bag, but the quest only completes
    *  standing in front of the giver — a real return trip, no holocall. */
   returnToGiver?: boolean;
+  /** Completing this quest IS the story's ending — roll victory here; later
+   *  quests are the post-game frontier and never re-trigger it. */
+  finale?: boolean;
 }
 
 export const QUESTS: QuestDef[] = [
@@ -471,8 +481,37 @@ export const QUESTS: QuestDef[] = [
     ],
     acceptLine: 'The Lode Court! Bottom of the deep! Shoot the crown and do NOT sing along!',
     objective: { kind: 'boss', label: 'The Mother Lode closed out', count: 1, bossId: 'mother_lode', markerX: 0, markerZ: -112, mapId: 'veldt_caves' },
+    finale: true,
     rewardCash: 14000, rewardXp: 16000, rewardItem: 'legendary',
     completeLine: 'The Mother Lode cracked like a geode and the hum STOPPED \u2014 planet-wide, mid-note. Juno logged the silence. Peg\u2019s tide came in clean. Somewhere under all that quiet, sixty years of shift-work finally ended.',
+  },
+  {
+    id: 'q27_landfall',
+    name: 'The Answering Light',
+    giver: 'juno',
+    briefing: [
+      'Contractor. The night the hum stopped, every dish on this planet caught the same thing: a lighthouse. Not a metaphor — an actual, sweeping, STUBBORN lighthouse beam, from the third rock out. Vitra Null. The charts call it uninhabitable. The beam calls the charts LIARS.',
+      'It’s been dark out there for two hundred years. Something kept one light burning through all of it, and the second this system went quiet, it started SIGNALING.',
+      'The Paperweight’s fueled. Go knock on the lighthouse. Politely. Whatever kept that light alive has outlasted everything else on that glass.',
+    ],
+    acceptLine: 'Vitra Null, contractor! Land at the light! And bring a coat — the readings say the NIGHT there has opinions!',
+    objective: { kind: 'goto', label: 'Make landfall at the Last Light', count: 1, markerX: 0, markerZ: 88, mapId: 'vitra' },
+    rewardCash: 8000, rewardXp: 10000,
+    completeLine: 'You’re down. That beam overhead — that’s two centuries of somebody REFUSING to let it end. Go say hello.',
+  },
+  {
+    id: 'q28_glasswalk',
+    name: 'The Glass Is Walking',
+    giver: 'faro',
+    briefing: [
+      'So the sky finally sent somebody. Two hundred years I’ve kept this lamp lit, and you’re the first thing it’s pulled in that isn’t made of GLASS.',
+      'Here’s your welcome brief: the shards out there walk. The Chimefield sings them awake and the Shardsea marches them around, and every year the dark between the lamps gets a little BOLDER.',
+      'I don’t need a hero. I need MAINTENANCE. Thin the glass — ten of them — and the lamps stay lit another season. That’s the whole job. That’s always been the whole job.',
+    ],
+    acceptLine: 'Ten of the vitrified! Aim for the shine — and DON’T stand where they shatter!',
+    objective: { kind: 'kill_faction', label: 'Walking glass swept', count: 10, faction: 'vitrified', markerX: -70, markerZ: -10, mapId: 'vitra' },
+    rewardCash: 9000, rewardXp: 12000, rewardItem: 'epic',
+    completeLine: 'Ten panes down and the night got QUIETER. The lamps hold. You’ll do, contractor. The dark and I have a long ledger — plenty of work left in it.',
   },
 ];
 

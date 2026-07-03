@@ -44,6 +44,7 @@ export const NPC_INTROS: Record<string, { name: string; sub: string }> = {
   juno: { name: 'DR. JUNO CALLA', sub: 'xenobotanist. sole survivor. extremely caffeinated.' },
   rita: { name: 'REDLINE RITA', sub: 'fastest courier the wastes ever fired. retired. allegedly.' },
   peg: { name: 'QUARTERMISTRESS PEG', sub: 'the pelican’s last dry crew member. the paperwork survived too.' },
+  faro: { name: 'KEEPER FARO', sub: 'two hundred years on lamp duty. the dark blinked first.' },
 };
 
 /** Slow orbit around a boss, ending face-to-face. */

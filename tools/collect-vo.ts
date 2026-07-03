@@ -32,6 +32,7 @@ const VOICE_TAG: Record<string, string> = {
   sable: 'cool, focused intensity',
   kez: 'scrappy, energetic, grinning',
   tovah: 'deep, growling, menacing',
+  faro: 'calm, weathered, quietly amused lighthouse keeper',
   wirelog: 'weary, haunted, distant',
 };
 
