@@ -833,6 +833,8 @@ function endCinematic(): void {
   document.getElementById('ui-root')?.classList.remove('cine-on');
   player.paused = false;
   player.viewmodel.visible = true;
+  // hand the camera back on solid ground — no falling out of the sky
+  player.position.y = world.groundHeight(player.position.x, player.position.z);
   canvas.requestPointerLock();
   setTimeout(() => bark('WIRE SPOOL (AUTO-PLAY)', 'Welcome to the Claudelands, contractor. Foreman Quibb is waiting in Gutterlight — follow the gold diamond.'), 800);
 }
@@ -1313,6 +1315,12 @@ function startRun(mode: StartMode, classId: string, difficultyId: DifficultyId, 
     gameMode = 'campaign';
     giveStartingKit();
     started = true;
+    // reset the spawn: the attract-mode menu parks the player at y=220 over
+    // its beauty shots, and unlike veteran/endless this path never switchMaps
+    player.position.set(WORLD.spawn.x, world.groundHeight(WORLD.spawn.x, WORLD.spawn.z), WORLD.spawn.z);
+    player.yaw = 0; // the north road, looking south into Gutterlight
+    player.pitch = 0;
+    player.respawnPoint.copy(player.position);
     cinematicT = 0;
     player.paused = true;
     player.viewmodel.visible = false;
