@@ -282,21 +282,25 @@ export function buildGunMesh(w: WeaponInstance): THREE.Group {
   }
 
   // ------------------------------------------------------------ magazine (below front-of-grip)
+  // removable mags are NAMED so the reload animation can pull the real part
+  // out of the well and seat the fresh one (phials hum, tubes take shells)
   const mag = w.parts.mag;
   const magZ = dims.len * 0.05;
   switch (mag.look.shape) {
     case 'drum': {
-      const d = tube(bh * 0.55 * (mag.look.fat ?? 1), bw * 0.8, pal.secondary, 12);
+      const d = tube(bh * 0.55 * (mag.look.fat ?? 1), bw * 0.8, pal.dark, 12);
       d.rotation.set(0, 0, Math.PI / 2);
       d.rotation.y = Math.PI / 2;
       d.position.set(0, -bh * 0.85, magZ);
+      d.name = 'magpart';
       g.add(d);
       break;
     }
     case 'canister': {
-      const c = tube(bh * 0.4, bh * 0.9, pal.secondary, 8);
+      const c = tube(bh * 0.4, bh * 0.9, pal.dark, 8);
       c.rotation.x = Math.PI / 2 - 0.2;
       c.position.set(0, -bh * 0.9, magZ);
+      c.name = 'magpart';
       g.add(c);
       break;
     }
@@ -314,9 +318,10 @@ export function buildGunMesh(w: WeaponInstance): THREE.Group {
       break;
     }
     default: { // 'box' | 'slim'
-      const m = box(bw * 0.55, bh * (mag.look.shape === 'slim' ? 0.7 : 1.0), bh * 0.5, pal.secondary);
+      const m = box(bw * 0.55, bh * (mag.look.shape === 'slim' ? 0.7 : 1.0), bh * 0.5, pal.dark);
       m.position.set(0, -bh * 0.8, magZ);
       m.rotation.x = 0.12;
+      m.name = 'magpart';
       g.add(m);
     }
   }

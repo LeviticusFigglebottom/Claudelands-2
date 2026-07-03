@@ -18,12 +18,15 @@ class Turret {
   group = new THREE.Group();
   private headGroup = new THREE.Group();
   private shootTimer = 0;
+  private barrelFlip = false;
   age = 0;
   duration: number;
   alive = true;
   position: THREE.Vector3;
 
-  constructor(pos: THREE.Vector3, duration: number, private damage: number, private ember: boolean) {
+  // damage is a THUNK: re-read every shot, so the rig keeps pace with the
+  // player's level and any skill points spent while it's standing
+  constructor(pos: THREE.Vector3, duration: number, private damage: () => number, private ember: boolean) {
     this.duration = duration;
     this.position = pos.clone();
 
@@ -41,14 +44,16 @@ class Turret {
     body.position.y = 0.55;
     this.group.add(body);
 
+    // lookAt() points the head's local +z at the target, so the barrels and
+    // eye live on +z — the muzzles genuinely face what the rig is shooting
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.26, 0.4), bodyMat);
     const barrelL = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.5, 8), legMat);
     barrelL.geometry.rotateX(Math.PI / 2);
-    barrelL.position.set(-0.09, 0, -0.35);
+    barrelL.position.set(-0.09, 0, 0.35);
     const barrelR = barrelL.clone();
     barrelR.position.x = 0.09;
     const eye = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), glowMat(this.ember ? 0xff6a1a : 0xffd23c, 1));
-    eye.position.set(0, 0.1, -0.22);
+    eye.position.set(0, 0.1, 0.22);
     this.headGroup.add(head, barrelL, barrelR, eye);
     this.headGroup.position.y = 0.82;
     this.group.add(this.headGroup);
@@ -82,15 +87,19 @@ class Turret {
     this.shootTimer -= dt;
     if (this.shootTimer <= 0) {
       this.shootTimer = 0.18;
-      const muzzle = this.group.position.clone().add(new THREE.Vector3(0, 0.82, 0));
+      // fire from the actual barrel tips, alternating left/right
+      this.barrelFlip = !this.barrelFlip;
+      this.headGroup.updateWorldMatrix(true, false);
+      const muzzle = this.headGroup.localToWorld(new THREE.Vector3(this.barrelFlip ? 0.09 : -0.09, 0, 0.6));
       const dir = aim.clone().sub(muzzle).normalize();
-      fx.muzzleFlash(muzzle.clone().addScaledVector(dir, 0.4), dir, this.ember ? 0xff6a1a : 0xffd23c, 0.6);
+      fx.muzzleFlash(muzzle, dir, this.ember ? 0xff6a1a : 0xffd23c, 0.6);
       fx.tracer(muzzle, aim, this.ember ? 0xff6a1a : 0xffe8a0);
       audio.shot('junk', 1.5);
-      applyDamage(best, this.damage, this.ember ? 'ember' : 'kinetic', {
+      const dmg = this.damage();
+      applyDamage(best, dmg, this.ember ? 'ember' : 'kinetic', {
         source: 'turret',
         elemChance: this.ember ? 0.45 : 0,
-        elemDps: this.damage * 0.5,
+        elemDps: dmg * 0.5,
       });
     }
   }
@@ -107,7 +116,7 @@ class Hound {
   private biteTimer = 0;
   private bobT = Math.random() * 6;
 
-  constructor(pos: THREE.Vector3, public duration: number, private damage: number, private ember: boolean, private fetch: boolean,
+  constructor(pos: THREE.Vector3, public duration: number, private damage: () => number, private ember: boolean, private fetch: boolean,
     private groundAt: (x: number, z: number) => number, private heal: (amt: number) => void) {
     this.position = pos.clone();
     const rust = toonMat({ color: 0xffffff, map: swatch('#8a5a2a', 80) });
@@ -167,12 +176,13 @@ class Hound {
       this.biteTimer = 0.7;
       fx.impact(best.position.clone().add(new THREE.Vector3(0, 0.9, 0)), this.ember ? 'ember' : 'kinetic');
       audio.shot('junk', 2.2);
-      applyDamage(best, this.damage, this.ember ? 'ember' : 'kinetic', {
+      const dmg = this.damage();
+      applyDamage(best, dmg, this.ember ? 'ember' : 'kinetic', {
         source: 'turret',
         elemChance: this.ember ? 0.45 : 0,
-        elemDps: this.damage * 0.5,
+        elemDps: dmg * 0.5,
       });
-      if (this.fetch) this.heal(this.damage * 0.03);
+      if (this.fetch) this.heal(dmg * 0.03);
     }
   }
 }
@@ -244,7 +254,8 @@ export class ActionSkillSystem {
     }
     if (PLAYER_CLASS.actionSkill.id === 'iron_hound') {
       const duration = PLAYER_CLASS.actionSkill.duration * statsys.mult('turretDuration');
-      const damage = 9 * levelScale(state.level) * statsys.mult('turretDamage');
+      // live thunk: base bite grows with the player's level, skill %s on top
+      const damage = () => 9 * levelScale(state.level) * statsys.mult('turretDamage');
       const ember = state.hasAugment('hound_ember');
       const fetch = state.hasAugment('hound_fetch');
       const twins = state.hasAugment('hound_twins');
@@ -273,7 +284,8 @@ export class ActionSkillSystem {
       return true;
     }
     const duration = PLAYER_CLASS.actionSkill.duration * statsys.mult('turretDuration');
-    const damage = 6 * levelScale(state.level) * statsys.mult('turretDamage');
+    // live thunk: base rounds grow with the player's level, skill %s on top
+    const damage = () => 6 * levelScale(state.level) * statsys.mult('turretDamage');
     const ember = state.hasAugment('rig_ember');
     const twins = state.hasAugment('rig_twins');
 

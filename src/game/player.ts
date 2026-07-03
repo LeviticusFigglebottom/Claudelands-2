@@ -72,6 +72,12 @@ export class Player implements Damageable {
   private reloadT = -1;
   private reloadCues = new Set<string>();
   private magDropped = false;
+  /** The gun's REAL magazine mesh + its rest pose, animated during reloads. */
+  private reloadMag: THREE.Object3D | null = null;
+  private reloadMagBase = new THREE.Vector3();
+  private reloadMagBaseRx = 0;
+  /** Transient shell prop thumbed into shotguns, parented to the viewmodel. */
+  private shellProp: THREE.Group | null = null;
   private swapT = -1;
   private fireTimer = 0;
   private focusHeat = 0;
@@ -150,6 +156,7 @@ export class Player implements Damageable {
   }
 
   equipWeapon(w: WeaponInstance | null, instant = false): void {
+    this.resetReloadProps();
     if (this.gunMesh) { this.viewmodel.remove(this.gunMesh); this.gunMesh = null; }
     if (w) {
       this.gunMesh = buildGunMesh(w);
@@ -391,6 +398,56 @@ export class Player implements Damageable {
     return false;
   }
 
+  /** Drive the gun's REAL magazine mesh through the exchange:
+   *  [outA..outB] it slides down + tilts out of the well, then it's gone
+   *  (the debris drop takes over), [inA..inB] the fresh one rises from
+   *  below and snaps home. Outside those windows it sits at rest. */
+  private animateMagPart(f: number, outA: number, outB: number, inA: number, inB: number): void {
+    const m = this.reloadMag;
+    if (!m) return;
+    if (f < outA) return;
+    if (f < outB) {
+      const p = (f - outA) / (outB - outA);
+      m.visible = true;
+      m.position.y = this.reloadMagBase.y - p * p * 0.26;      // accelerates as it clears
+      m.position.z = this.reloadMagBase.z + p * 0.12;          // swings toward the eye
+      m.rotation.x = this.reloadMagBaseRx + p * 0.9;           // kicks out nose-first, DAYLIGHT between mag and well
+    } else if (f < inA) {
+      m.visible = false;                                        // in the off hand / falling
+    } else if (f < inB) {
+      const p = (f - inA) / (inB - inA);
+      m.visible = true;
+      const rise = 1 - Math.pow(1 - p, 2);                      // decelerates into the well
+      m.position.y = this.reloadMagBase.y - (1 - rise) * 0.3;
+      m.position.z = this.reloadMagBase.z - (1 - rise) * 0.05;
+      m.rotation.x = this.reloadMagBaseRx - (1 - rise) * 0.3;   // rocks in heel-first
+    } else {
+      m.visible = true;
+      m.position.copy(this.reloadMagBase);
+      m.rotation.x = this.reloadMagBaseRx;
+    }
+  }
+
+  /** Lazy shotgun shell: a stubby red hull with a brass head, ridden by the
+   *  thumb from the belt line into the loading gate. */
+  private ensureShellProp(w: WeaponInstance): THREE.Group {
+    if (this.shellProp) return this.shellProp;
+    const g = new THREE.Group();
+    const hull = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.028, 0.028, 0.085, 8),
+      new THREE.MeshToonMaterial({ color: w.element === 'kinetic' ? 0xd83a2a : ELEMENTS[w.element].color }),
+    );
+    const head = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.03, 0.03, 0.026, 8),
+      new THREE.MeshToonMaterial({ color: 0xe8c458 }),
+    );
+    head.position.y = -0.055;
+    g.add(hull, head);
+    this.shellProp = g;
+    this.viewmodel.add(g);
+    return g;
+  }
+
   /** Characteristic reloads: the WEAPON TYPE choreographs the hands — mags
    *  drop and seat, shells feed one by one, bolts cycle — and the maker adds
    *  its own spice on top. Launchers keep the simple tip-back (for now).
@@ -413,27 +470,39 @@ export class Player implements Damageable {
         fx.emit(vm.localToWorld(new THREE.Vector3(0, 0, -0.3)), new THREE.Vector3(0, 0.4, 0), ELEMENTS[w.element].color, 0.05, 0.4, 0);
       }
     } else if (w.type === 'shotgun') {
-      // ---- shell-by-shell: cradle the gun, thumb rounds in, PUMP
+      // ---- shell-by-shell: cradle the gun port-up, a REAL shell rides the
+      // thumb into the loading gate each beat, then the pump slams
       const shells = clamp(Math.round(w.stats.magSize * 0.7), 2, 6);
-      const cradle = Math.min(1, f / 0.12);
-      vm.rotation.z += 0.4 * Math.sin(Math.min(cradle, (1 - f) / 0.1) * Math.PI * 0.5);
-      vm.rotation.x += -0.18 * cradle;
+      const cradle = Math.min(1, f / 0.12, Math.max(0, (0.92 - f) / 0.08));
+      vm.rotation.z += 0.5 * cradle;                           // roll the port toward the eye
+      vm.rotation.x -= 0.22 * cradle;                          // muzzle DOWN: gate rolls up into view
+      vm.position.x -= 0.1 * cradle;
+      vm.position.y += 0.12 * cradle;                          // lift the work into frame
       if (f >= 0.12 && f < 0.84) {
         const seg = (f - 0.12) / (0.72 / shells);
         const k = Math.floor(seg);
         const local = seg - k;
-        vm.position.y -= 0.055 * Math.sin(local * Math.PI);
-        vm.rotation.x += -0.06 * Math.sin(local * Math.PI);
-        if (this.cue(`shell${k}`, f, 0.12 + k * (0.72 / shells))) audio.reloadStage('shell');
+        vm.position.y -= 0.03 * Math.sin(local * Math.PI);
+        const shell = this.ensureShellProp(w);
+        // the shell arcs up from the belt line into the gate, vanishing as it feeds
+        shell.visible = local < 0.82;
+        shell.position.set(
+          lerp(-0.02, -0.1, local),                             // left of the receiver: clear of the stock
+          lerp(-0.18, -0.03, Math.min(1, local * 1.25)),
+          lerp(0.18, 0.03, local),                              // +z = between the eye and the receiver
+        );
+        shell.rotation.z = lerp(0.9, 0.15, local);
+        if (this.cue(`shell${k}`, f, 0.12 + (k + 0.8) * (0.72 / shells))) audio.reloadStage('shell');
       }
       if (f >= 0.84) {
+        if (this.shellProp) this.shellProp.visible = false;
         const p = (f - 0.84) / 0.16;
-        vm.position.z += 0.09 * Math.sin(p * Math.PI);         // fore-end pull
-        vm.rotation.x += -0.08 * Math.sin(p * Math.PI);
+        vm.position.z += 0.11 * Math.sin(p * Math.PI);         // fore-end pull
+        vm.rotation.x += -0.1 * Math.sin(p * Math.PI);
         if (this.cue('pump', f, 0.86)) audio.reloadStage('pump');
       }
     } else if (w.type === 'sniper') {
-      // ---- bolt cycle: lift + draw, feed, drive home, settle
+      // ---- bolt cycle: lift + draw, mag REALLY leaves and returns, drive home
       if (f < 0.22) {
         const p = f / 0.22;
         vm.rotation.z += 0.32 * Math.sin(p * Math.PI);          // bolt lift
@@ -441,8 +510,11 @@ export class Player implements Damageable {
         if (this.cue('bo', f, 0.05)) audio.reloadStage('boltopen');
       } else if (f < 0.66) {
         const p = (f - 0.22) / 0.44;
-        vm.rotation.x += -0.5 * Math.sin(p * Math.PI);
-        vm.position.y -= 0.2 * Math.sin(p * Math.PI);
+        vm.rotation.x -= 0.3 * Math.sin(p * Math.PI);           // muzzle DOWN: well rolls up into view
+        vm.rotation.z += 0.34 * Math.sin(p * Math.PI);          // roll the well into view
+        vm.position.y += 0.12 * Math.sin(p * Math.PI);
+        vm.position.x -= 0.08 * Math.sin(p * Math.PI);
+        this.animateMagPart(f, 0.22, 0.34, 0.5, 0.62);
         if (this.cue('mo', f, 0.28)) audio.reloadStage('magout');
         if (this.cue('drop', f, 0.34)) {
           this.camera.updateMatrixWorld(true);
@@ -462,22 +534,31 @@ export class Player implements Damageable {
       if (f > 0.85) vm.position.y += Math.sin((f - 0.85) / 0.15 * Math.PI) * 0.03;
       if (this.cue('seat', f, 0.55)) audio.reloadClack(1);
     } else {
-      // ---- mag cycle (pistol / smg / ar): EJECT, SEAT, RACK
+      // ---- mag cycle (pistol / smg / ar): the gun rolls into view and the
+      // REAL mag slides out, drops, and the fresh one seats from below —
+      // the whole exchange happens on-screen, not under the frame
       const amp = w.type === 'pistol' ? 0.72 : w.type === 'smg' ? 0.85 : 1;
+      const show = Math.min(1, f / 0.12, Math.max(0, (1 - f) / 0.14)); // hold the pose for the WHOLE cycle
+      vm.rotation.x -= 0.35 * show;                            // muzzle DOWN: the well rolls up into view
+      vm.rotation.z += 0.35 * amp * show;                      // roll the well toward centre
+      vm.rotation.y += 0.15 * amp * show;
+      vm.position.x -= 0.16 * amp * show;                      // walk it toward screen centre
+      vm.position.y += 0.15 * show;                            // lift the work into frame
+      vm.position.z -= 0.12 * show;                            // hold it out: the whole gun fits
+      this.animateMagPart(f, 0.06, 0.26, 0.44, 0.62);
       if (f < 0.32) {
         const p = f / 0.32;
-        vm.rotation.z += -0.3 * amp * Math.sin(p * Math.PI);    // roll to eject side
-        vm.rotation.x += -0.22 * amp * Math.sin(p * Math.PI);
+        vm.rotation.x += -0.14 * amp * Math.sin(p * Math.PI);  // tug as the mag pulls
         if (this.cue('mo', f, 0.08)) audio.reloadStage('magout');
-        if (this.cue('drop', f, 0.24)) {
+        if (this.cue('drop', f, 0.26)) {
           this.camera.updateMatrixWorld(true);
-          debris.droppedMag(vm.localToWorld(new THREE.Vector3(0, -0.15, -0.25)));
+          debris.droppedMag(vm.localToWorld(new THREE.Vector3(-0.05, -0.28, -0.3)));
         }
       } else if (f < 0.68) {
         const p = (f - 0.32) / 0.36;
-        vm.position.y -= 0.17 * amp * Math.sin(p * Math.PI);    // fresh mag comes up
-        vm.rotation.x += -0.3 * amp * Math.sin(p * Math.PI);
-        if (this.cue('mi', f, 0.6)) audio.reloadStage('magin');
+        vm.position.y -= 0.06 * amp * Math.sin(p * Math.PI);   // hand reaches, gun dips to meet it
+        vm.rotation.x += -0.1 * amp * Math.sin(p * Math.PI);
+        if (this.cue('mi', f, 0.62)) audio.reloadStage('magin');
       } else {
         const p = (f - 0.68) / 0.32;
         vm.position.z += 0.08 * amp * Math.sin(p * Math.PI) * (p < 0.5 ? 1 : -0.4); // rack back-forward
@@ -718,13 +799,34 @@ export class Player implements Damageable {
     this.reloadT = 0;
     this.magDropped = false;
     this.reloadCues.clear();
+    // grab the real mag off the gun so the animation can pull it
+    this.reloadMag = this.gunMesh?.getObjectByName('magpart') ?? null;
+    if (this.reloadMag) {
+      this.reloadMagBase.copy(this.reloadMag.position);
+      this.reloadMagBaseRx = this.reloadMag.rotation.x;
+    }
     audio.reloadClack(0);
     playerVoice.onReloadGrumble();
+  }
+
+  /** Put the animated parts back exactly where they rest. */
+  private resetReloadProps(): void {
+    if (this.reloadMag) {
+      this.reloadMag.position.copy(this.reloadMagBase);
+      this.reloadMag.rotation.x = this.reloadMagBaseRx;
+      this.reloadMag.visible = true;
+      this.reloadMag = null;
+    }
+    if (this.shellProp) {
+      this.viewmodel.remove(this.shellProp);
+      this.shellProp = null;
+    }
   }
 
   private finishReload(): void {
     const w = state.activeWeapon;
     this.reloadT = -1;
+    this.resetReloadProps();
     if (!w) return;
     const reserve = state.ammo.get(w.type) ?? 0;
     const magMax = Math.round(w.stats.magSize * statsys.mult('magSize'));
@@ -754,7 +856,8 @@ export class Player implements Damageable {
     });
     this.reloadT = 0;
     this.reloadCues.clear();
-    this.magDropped = true; // no mag to drop — the whole gun left
+    this.reloadMag = null; // no mag choreography — the whole gun left
+    this.magDropped = true;
     audio.reloadClack(0);
   }
 

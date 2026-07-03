@@ -324,12 +324,13 @@ export class Vehicle {
       let steerCmd = this.steerSmooth;
       if (this.drifting) {
         const trim = clamp(this.steerSmooth * this.driftDir, -1, 1); // 1 = into the slide
-        // a SLOW, controllable slide: soft arc the player shapes with the
-        // stick — the speed comes back as a burst on release
-        steerCmd = this.driftDir * (0.42 + 0.3 * trim);
-        this.driftCharge += dt * (0.7 + 0.45 * Math.max(0, trim));
+        // built for SUSTAINED turns: the bare slide runs a gentle arc, holding
+        // INTO the slide tightens it hard, counter-steering opens it out to a
+        // near-straight power slide — never a 90° snap
+        steerCmd = this.driftDir * clamp(0.2 + 0.4 * trim, 0.02, 0.62);
+        this.driftCharge += dt * (1.5 + 0.7 * Math.max(0, trim));
       }
-      const rate = S.turnRate * (this.drifting ? 1.25 : 1) * steerAuth;
+      const rate = S.turnRate * steerAuth;
       const reversing = this.vel.dot(this.forward) < -0.5;
       this.yaw += steerCmd * rate * dt * (reversing ? -1 : 1);
 

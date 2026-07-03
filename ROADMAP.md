@@ -1,5 +1,44 @@
 # ROADMAP
 
+## Pass 20 status — the feel pass: drift, sentry, and hands
+
+**Drift, retuned for sustained turns**: the boost charge builds MUCH
+faster (tier 1 in ~half a second, tier 3 inside ~1.3s held), and the
+arc got the opposite treatment — the bare slide runs a gentle sustained
+curve (about half the old rate), HOLDING into the slide is what
+tightens it (~2.5x), and countersteering opens it all the way out to a
+near-straight power slide. No more 90° snaps: the stick shapes the
+turn the whole way through.
+
+**The Sentry Rig aims like it means it**: the turret head's barrels and
+eye were modeled on the trailing face — lookAt() pointed the empty
+side at the target and the muzzle flash floated off the head's centre.
+The head is now built forward-facing and every shot leaves from an
+actual barrel tip, alternating left/right. Damage became a live thunk
+re-read on every shot: the base scales with the player's CURRENT level
+(1.11^level, same curve as gear) and skill %s (Bigger Bolts, class
+mods) multiply on top — levelling up mid-fight makes the standing
+turret hit harder immediately. Iron Hound got the same treatment.
+
+**Reloads you can actually watch**: removable magazines are now NAMED
+meshes on the gun, and the reload rig drives the REAL mag — it slides
+out of the well, kicks nose-first with daylight between mag and
+receiver, drops (physical debris), and the fresh one rises from below
+and rocks in heel-first. The whole exchange happens ON SCREEN: the gun
+tilts muzzle-DOWN and lifts so the well rolls up into view (the old
+pose hid the mag under the frame — the "mag is only partially visible
+for a second" bug). Shotguns thumb a physical shell (red hull, brass
+head) up the left of the receiver into the loading gate every beat;
+snipers do the full mag exchange inside the bolt cycle. Mags are
+palette-dark now so they read against any receiver panel. Launchers
+keep the heavy tip-back.
+
+Headless suite: `verify21.mjs` — 26 checks, all passing (drift charge
+rate/base arc/hold-to-sharpen/countersteer measured live, turret barrel
+placement + level-1 vs level-25 damage ratio on one standing turret,
+and NDC-projected on-screen asserts for the AR mag exchange and the
+shotgun shell, plus swap-mid-reload restore safety).
+
 ## Pass 19 status — thrones, cargo, and things in their places
 
 **Bosses hold court**: bosses now spawn dead-center in their arena
