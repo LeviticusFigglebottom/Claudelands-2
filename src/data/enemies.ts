@@ -532,3 +532,47 @@ ENEMIES.glasswing = {
   projectile: { speed: 27, element: 'rime' },
   weight: 15,
 };
+
+// ---- THE UNLIT MILE: what two hundred years of dead lamplight breeds.
+// Wicklings are the flames the Snuffed Rows lost, still looking for a
+// socket; Knells are cracked street-lamp bells that toll their own
+// shrapnel; Cullet Hulks are the sweepings, self-assembled and rude.
+ENEMIES.wickling = {
+  id: 'wickling', name: 'Wickling', badassName: 'Big Damn Candle',
+  faction: 'vitrified', behavior: 'suicide',
+  flesh: 0.5, shield: 0, armor: 0,
+  hpMult: 0.4, damageMult: 2.1, speed: 8.6, attackRange: 2.0, attackRate: 1, aggroRange: 32,
+  scale: 0.5, tint: 0x9a6aff, dropTier: 0, xp: 14,
+  barks: ['*a flame remembering its lamp*', '*guttering, approaching*', '*the hiss of a wick with a plan*'],
+  weight: 18,
+};
+ENEMIES.knell = {
+  id: 'knell', name: 'Knell', badassName: 'Big Damn Bell',
+  faction: 'vitrified', behavior: 'lobber',
+  flesh: 0.2, shield: 0.3, armor: 0.5,
+  hpMult: 1.25, damageMult: 1.25, speed: 2.9, attackRange: 21, attackRate: 0.55, aggroRange: 30,
+  scale: 1.1, tint: 0x6a5adf, dropTier: 1, xp: 26,
+  barks: ['*a toll you feel in your teeth*', '*the hour, striking back*', '*DONG, with intent*'],
+  projectile: { speed: 17, element: 'rime', arc: true },
+  weight: 12,
+};
+ENEMIES.cullet_hulk = {
+  id: 'cullet_hulk', name: 'Cullet Hulk', badassName: 'Big Damn Sweepings',
+  faction: 'vitrified', behavior: 'brute',
+  flesh: 0.3, shield: 0, armor: 0.7,
+  hpMult: 3.1, damageMult: 1.7, speed: 2.9, attackRange: 2.6, attackRate: 0.55, aggroRange: 24,
+  scale: 1.6, tint: 0x4a3e7a, dropTier: 1, xp: 40,
+  barks: ['*a rockslide made of windows*', 'THE MILE TAKES ITS TOLL!', '*every broken thing, standing up at once*'],
+  weight: 8,
+};
+
+export const BOSS_UNKEEPER: EnemyDef = {
+  id: 'unkeeper', name: 'THE UNKEEPER', badassName: 'THE UNKEEPER',
+  faction: 'vitrified', behavior: 'brute',
+  flesh: 0.35, shield: 0.2, armor: 0.45,
+  hpMult: 38, damageMult: 2.4, speed: 3.1, attackRange: 3.4, attackRate: 0.75, aggroRange: 68,
+  scale: 2.9, tint: 0x241c40, dropTier: 3, xp: 1600,
+  barks: ['I KEPT THE DARK. NOW THE DARK KEEPS ME.', 'the light asked TOO MUCH.', 'TWO HUNDRED YEARS OF QUIET. AND THEN YOU.', 'my lamp is out. COME CLOSER.'],
+  projectile: { speed: 24, element: 'volt', arc: true },
+  weight: 0,
+};

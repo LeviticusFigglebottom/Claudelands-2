@@ -245,6 +245,26 @@ export const WIRE_LOGS: WireLog[] = [
       'chorus (carved deeper): DIG. DIG. DIG.',
     ],
   },
+  {
+    id: 'log_mile1',
+    speaker: 'MILE LAMPLIGHTERS’ GUILD — FINAL ROUND SHEET',
+    lines: [
+      'Round seven thousand three hundred. Lamps one through forty: LIT. Signed, W.',
+      'Round seven thousand three hundred and one. Lamps one through forty went out TOGETHER. Mid-round. Like they’d agreed on it.',
+      'The keeper won’t answer the spire bell. The glass on the road is standing funny. Ending my round early. First time. Sorry.',
+      'Addendum, different hand: kept lamp forty-one going. Someone had to. Still here. Still trimming. — W.',
+    ],
+  },
+  {
+    id: 'log_mile2',
+    speaker: 'KEEPER MORROW — LAMPFALL SPIRE, LAST OFFICIAL WIRE',
+    lines: [
+      'Final entry. To Faro, up the coast: don’t send oil. Don’t send the apprentice. Don’t send ANYTHING.',
+      'You wind your lamp and I wound mine, and friend, I did the arithmetic — the dark is two hundred years of work CHEAPER.',
+      'It isn’t a failure if you file it as a transfer. I’m not letting the light die. I’m switching departments.',
+      'Keep yours burning if it flatters you. Mine is finally QUIET. You’ll see it my way in a century or two.',
+    ],
+  },
 ];
 
 export const ZAZA_GREETINGS = [

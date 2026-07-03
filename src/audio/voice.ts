@@ -60,6 +60,8 @@ export const VOICES: Record<string, VoiceProfile> = {
   tovah: { id: 'tovah', basePitch: 96, range: 0.28, rate: 4.4, wave: 'square', formantShift: 0.86, breath: 0.22, vibrato: 0, drawl: 1.3, gain: 0.16 },        // Ravager: gravel avalanche
   // THUG MODE: a foghorn of pure enthusiasm
   thug: { id: 'thug', basePitch: 88, range: 0.5, rate: 5.0, wave: 'sawtooth', formantShift: 0.82, breath: 0.1, vibrato: 6, drawl: 1.3, gain: 0.2 },
+  // two hundred years alone with forty lamps: quick, bright, slightly cracked
+  wick: { id: 'wick', basePitch: 198, range: 0.46, rate: 6.9, wave: 'triangle', formantShift: 1.12, breath: 0.14, vibrato: 4, drawl: 0.85, gain: 0.15 },
   // two hundred years of lamp oil and patience: low, level, quietly amused
   faro: { id: 'faro', basePitch: 108, range: 0.18, rate: 4.6, wave: 'sawtooth', formantShift: 0.9, breath: 0.2, vibrato: 0, drawl: 1.25, gain: 0.15 },
   // dead miners, drowned sailors, salvage foremen — the wire remembers them

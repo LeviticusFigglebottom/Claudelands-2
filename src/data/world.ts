@@ -7,7 +7,7 @@
 
 import { clamp01, lerp } from '../util/maff';
 
-export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle' | 'gulchgate' | 'shipbreak' | 'castaway' | 'hullgrave' | 'brinepans' | 'anchorage' | 'cavemouth' | 'gloomgrove' | 'cryptworks' | 'lodecourt' | 'lastlight' | 'chimefield' | 'shardsea' | 'nullbasin';
+export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle' | 'gulchgate' | 'shipbreak' | 'castaway' | 'hullgrave' | 'brinepans' | 'anchorage' | 'cavemouth' | 'gloomgrove' | 'cryptworks' | 'lodecourt' | 'lastlight' | 'chimefield' | 'shardsea' | 'nullbasin' | 'gloamgate' | 'snuffrows' | 'wickbothy' | 'echoorgan' | 'lampfall';
 
 export interface DistrictDef {
   id: string;
@@ -1174,9 +1174,133 @@ const VITRA: WorldDef = {
     { id: 'vent4', kind: 'vent', x: 92, z: -52 },
     { id: 'vent5', kind: 'vent', x: -12, z: -58 },
     { id: 'vent6', kind: 'vent', x: 30, z: -84 },
+    { id: 'sign_v3', kind: 'sign', x: 20, z: -104, rot: 0.4, data: 'THE UNLIT MILE → · LAST LAMPPOST FOR A MILE · LITERALLY' },
   ],
   spawn: { x: 0, z: 108 },
-  exits: [],
+  exits: [
+    { x: 30, z: -116, targetMap: 'vitra_mile', targetX: 0, targetZ: 112, label: 'THE UNLIT MILE' },
+  ],
+};
+
+// ===========================================================================
+// PLANET 3, MAP 2 — THE UNLIT MILE. There were two lights on Vitra Null:
+// Faro's Last Light and her sister spire down the coast road, kept by
+// Keeper Morrow. Two hundred years ago Morrow's lamp went out — on purpose —
+// and the mile of lamplit street between them has belonged to the dark ever
+// since. A linear gauntlet of dead lamp posts winding down to Lampfall
+// Spire, where the Unkeeper still walks his rounds. Halfway along, one
+// window is still burning: Wick's bothy.
+const MILE_PATH = [
+  { x: 0, z: 112 },     // the Gloaming Gate (entry)
+  { x: -16, z: 76 },
+  { x: -46, z: 50 },    // the Snuffed Rows arena
+  { x: -40, z: 2 },
+  { x: 2, z: -14 },     // Wick's Bothy (safe)
+  { x: 46, z: -34 },    // the Echo Organ arena
+  { x: 40, z: -76 },
+  { x: 8, z: -92 },     // approach
+  { x: 0, z: -114 },    // Lampfall Spire (boss)
+];
+
+export const VITRA_MILE: WorldDef = {
+  id: 'vitra_mile',
+  name: 'THE UNLIT MILE',
+  tagline: 'two lighthouses. one kept its promise.',
+  size: 300,
+  gravity: 11,
+  skyTop: 0x040210,
+  skyHorizon: 0x1a1240,
+  sun: { color: 0x9a8cf0, intensity: 1.3, dirX: 0.25, dirY: 0.8, dirZ: -0.35 },
+  ambient: { sky: 0x4a3a98, ground: 0x1c1636, intensity: 1.45 },
+  fog: { color: 0x0a0620, near: 46, far: 240 },
+  biome: {
+    ground: { base: '#120d20', light: '#241a3c', dark: '#080510', crack: 'rgba(122,240,255,0.4)' },
+    rock: '#282048',
+    scrub: 0x5a4acf,
+    ambientParticle: 'spore',
+    trees: 'shard',
+    aurora: true,
+    weeds: false,
+  },
+  terrain: {
+    duneAmp: 1.1,
+    roughAmp: 1.0,
+    roads: [],
+    corridor: {
+      pts: MILE_PATH,
+      width: 13,
+      arenas: [
+        { x: 0, z: 112, r: 20 },
+        { x: -46, z: 50, r: 27 },
+        { x: 2, z: -14, r: 18 },
+        { x: 46, z: -34, r: 28 },
+        { x: 0, z: -114, r: 32 },
+      ],
+      wallHeight: 22,
+    },
+  },
+  districts: [
+    {
+      id: 'gloamgate', name: 'THE GLOAMING GATE', subtitle: 'Last Lamppost for a Mile', dress: 'gloamgate',
+      cx: 0, cz: 112, radius: 20, baseHeight: 0.4,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 10,
+    },
+    {
+      id: 'snuffrows', name: 'THE SNUFFED ROWS', subtitle: 'Every Lamp Here Went Out on the Same Night', dress: 'snuffrows',
+      cx: -46, cz: 50, radius: 27, baseHeight: 0.6,
+      faction: 'vitrified',
+      spawnTable: [
+        { enemyId: 'wickling', weight: 22 },
+        { enemyId: 'shardling', weight: 22 },
+        { enemyId: 'knell', weight: 14 },
+        { enemyId: 'glasswing', weight: 10 },
+      ],
+      maxAlive: 8, respawnDelay: 16, levelOffset: 11,
+    },
+    {
+      id: 'wickbothy', name: 'WICK’S BOTHY', subtitle: 'Occupancy: One and a Half', dress: 'wickbothy',
+      cx: 2, cz: -14, radius: 18, baseHeight: 0.8,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 11,
+    },
+    {
+      id: 'echoorgan', name: 'THE ECHO ORGAN', subtitle: 'The Wind Plays. The Glass Answers.', dress: 'echoorgan',
+      cx: 46, cz: -34, radius: 28, baseHeight: 1.0,
+      faction: 'vitrified',
+      spawnTable: [
+        { enemyId: 'knell', weight: 20 },
+        { enemyId: 'prism_sentinel', weight: 16 },
+        { enemyId: 'cullet_hulk', weight: 10 },
+        { enemyId: 'wickling', weight: 12 },
+        { enemyId: 'shardling', weight: 12 },
+      ],
+      maxAlive: 8, respawnDelay: 17, levelOffset: 12,
+    },
+    {
+      id: 'lampfall', name: 'LAMPFALL SPIRE', subtitle: 'The Second Lamp. The First Failure.', dress: 'lampfall',
+      cx: 0, cz: -114, radius: 32, baseHeight: 1.2,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 13,
+    },
+  ],
+  pois: [
+    { id: 'ft_mile', kind: 'fast_travel', x: 8, z: 108, data: 'Gloaming Gate' },
+    { id: 'sign_m1', kind: 'sign', x: 0, z: 100, rot: 0, data: 'THE UNLIT MILE — BRING YOUR OWN LIGHT. BRING TWO.' },
+    { id: 'chest_m1', kind: 'chest', x: -54, z: 44, rot: 0.9 },
+    { id: 'log_m1', kind: 'wirelog', x: -42, z: 56, data: 'log_mile1' },
+    { id: 'vent_m1', kind: 'vent', x: -44, z: 26 },
+    { id: 'ft_bothy', kind: 'fast_travel', x: -6, z: -8, data: 'Wick’s Bothy' },
+    { id: 'npc_wick', kind: 'npc', x: 4, z: -16, rot: 2.4, data: 'wick' },
+    { id: 'sign_m2', kind: 'sign', x: -2, z: -24, rot: 0.2, data: 'BOTHY RULES: WIPE YOUR BOOTS. MIND THE LAMPS. NO SHATTERING INDOORS.' },
+    { id: 'vent_m2', kind: 'vent', x: 24, z: -22 },
+    { id: 'chest_m2', kind: 'chest', x: 54, z: -40, rot: -1.3 },
+    { id: 'log_m2', kind: 'wirelog', x: 40, z: -28, data: 'log_mile2' },
+    { id: 'vent_m3', kind: 'vent', x: 26, z: -84 },
+    { id: 'sign_m3', kind: 'sign', x: 10, z: -86, rot: 0.3, data: 'LAMPFALL SPIRE AHEAD. THE KEEPER IS IN. THAT’S THE PROBLEM.' },
+    { id: 'chest_m3', kind: 'chest', x: 10, z: -122, rot: 0.5 },
+  ],
+  spawn: { x: 0, z: 112 },
+  exits: [
+    { x: 0, z: 128, targetMap: 'vitra', targetX: 26, targetZ: -108, label: 'VITRA NULL' },
+  ],
 };
 
 export const MAPS: Record<string, WorldDef> = {
@@ -1192,6 +1316,7 @@ export const MAPS: Record<string, WorldDef> = {
   veldt_caves: VELDT_CAVES,
   veldt_gp: VELDT_GP,
   vitra: VITRA,
+  vitra_mile: VITRA_MILE,
 };
 
 let active: WorldDef = CLAUDELANDS;

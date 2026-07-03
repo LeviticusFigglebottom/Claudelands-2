@@ -23,6 +23,8 @@ export const CALL_LOOKS: Record<string, HolocallLook> = {
   juno: { name: 'DR. CALLA', accent: '#9adc4a', hat: 'cap' },
   rita: { name: 'REDLINE RITA', accent: '#ff8c2a', hat: 'goggles' },
   peg: { name: 'QUARTERMISTRESS PEG', accent: '#7dffd4', hat: 'bun' },
+  faro: { name: 'KEEPER FARO', accent: '#ffd88a', hat: 'cap' },
+  wick: { name: 'WICK', accent: '#9a6aff', hat: 'goggles' },
 };
 
 interface Call {

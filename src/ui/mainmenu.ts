@@ -113,33 +113,51 @@ export class MainMenu {
 
 
   // ---------------------------------------------------------- extras
+  // Same visual language as SETTINGS (rows, toggles, sliders) -- the cheats
+  // are dials now, not hardwired constants. Thug mode stays a toggle;
+  // there is no half thug.
   private renderExtras(): void {
-    const rows: { key: keyof Prefs; name: string; sub: string }[] = [
-      { key: 'thugMode', name: 'THUG MODE', sub: 'your character\u2019s voicelines, replaced by the sauce. audio only. you did this to yourself.' },
-      { key: 'cheatSpeed', name: 'GOTTA GO FAST', sub: 'x1.6 move speed, always' },
-      { key: 'cheatLevel', name: 'SKIP LEG DAY', sub: 'campaign loads at level 25 minimum' },
-      { key: 'cheatTravel', name: 'ALREADY BEEN EVERYWHERE', sub: 'every fast-travel station pre-discovered on load' },
-      { key: 'cheatRich', name: 'FAT STACKS', sub: 'wallet floor of $100,000 on load' },
-    ];
+    const p = prefs();
+    const toggle = (key: keyof Prefs, label: string, hint: string) => `
+      <div class="mm-setting">
+        <div><div class="mm-set-label">${label}</div><div class="mm-set-hint">${hint}</div></div>
+        <button class="mm-toggle ${p[key] ? 'on' : ''}" data-extra="${key}">${p[key] ? 'ON' : 'OFF'}</button>
+      </div>`;
+    const fmt: Record<string, (v: number) => string> = {
+      cheatSpeed: (v) => v <= 1 ? 'OFF' : `\u00d7${v.toFixed(2)}`,
+      cheatLevel: (v) => v <= 1 ? 'OFF' : `LV ${Math.round(v)}`,
+      cheatRich: (v) => v <= 0 ? 'OFF' : `$${Math.round(v).toLocaleString()}`,
+    };
+    const slider = (key: keyof Prefs, label: string, hint: string, min: number, max: number, step: number) => `
+      <div class="mm-setting">
+        <div><div class="mm-set-label">${label} <span class="mm-set-val" id="val-${key}">${fmt[key](p[key] as number)}</span></div><div class="mm-set-hint">${hint}</div></div>
+        <input class="mm-slider" type="range" data-extra="${key}" min="${min}" max="${max}" step="${step}" value="${p[key]}">
+      </div>`;
     this.chrome(`
-      <div class="mm-menu" style="max-width:640px;">
-        <div class="mm-section">EXTRAS — TOYS, CHEATS, AND REGRETS</div>
-        ${rows.map((r) => `
-          <div class="mm-slot">
-            <div class="mm-slot-head"><b>${r.name}</b></div>
-            <div class="mm-slot-sub">${r.sub}</div>
-            <div class="mm-slot-acts">
-              <button class="mm-slot-btn" data-extra="${r.key}">${prefs()[r.key] ? '\u25a0 ON' : '\u25a1 OFF'}</button>
-            </div>
-          </div>`).join('')}
-        <div class="mm-slot-sub" style="margin-top:8px;">cheats apply when a run starts or a save loads \u2014 speed and thug mode apply instantly.</div>
+      <div class="t-super">EXTRAS \u2014 TOYS, CHEATS, AND REGRETS</div>
+      <div class="mm-settings">
+        <div class="mm-set-group">THE CURSED SHELF</div>
+        ${toggle('thugMode', 'Thug Mode', 'your character\u2019s voicelines, replaced by the sauce. audio only. you did this to yourself.')}
+        <div class="mm-set-group">CHEATS</div>
+        ${slider('cheatSpeed', 'Gotta Go Fast', 'move-speed multiplier, applied instantly \u2014 far left is OFF', 1, 2.5, 0.05)}
+        ${slider('cheatLevel', 'Skip Leg Day', 'campaign level floor on run start or save load \u2014 far left is OFF', 1, 50, 1)}
+        ${slider('cheatRich', 'Fat Stacks', 'wallet floor on run start or save load \u2014 far left is OFF', 0, 500000, 10000)}
+        ${toggle('cheatTravel', 'Already Been Everywhere', 'every fast-travel station pre-discovered on load')}
       </div>`, 'menu');
-    this.root.querySelectorAll<HTMLButtonElement>('[data-extra]').forEach((btn) => {
+    this.root.querySelectorAll<HTMLButtonElement>('button[data-extra]').forEach((btn) => {
       btn.addEventListener('click', () => {
         audio.uiClick();
         const key = btn.dataset.extra as keyof Prefs;
         setPref(key, !prefs()[key] as never);
         this.render();
+      });
+    });
+    this.root.querySelectorAll<HTMLInputElement>('input[data-extra]').forEach((s) => {
+      s.addEventListener('input', () => {
+        const key = s.dataset.extra as keyof Prefs;
+        setPref(key, Number(s.value) as never);
+        const val = this.root.querySelector(`#val-${key}`);
+        if (val) val.textContent = fmt[key](Number(s.value));
       });
     });
   }

@@ -271,15 +271,17 @@ function switchMap(mapId: string, toX?: number, toZ?: number): void {
 
 /** EXTRAS cheats that land when a run starts or a save loads. */
 function applyExtrasCheats(): void {
-  if (prefs().cheatLevel && state.level < 25) {
-    state.level = 25;
+  const lvl = Math.round(prefs().cheatLevel || 1);
+  if (lvl > 1 && state.level < lvl) {
+    state.level = lvl;
     player.recomputeVitals();
     player.flesh = player.maxFlesh;
-    feedText('SKIP LEG DAY: reporting for duty at <b>level 25</b>.', '#c06bff');
+    feedText(`SKIP LEG DAY: reporting for duty at <b>level ${lvl}</b>.`, '#c06bff');
   }
-  if (prefs().cheatRich && state.money < 100000) {
-    state.money = 100000;
-    feedText('FAT STACKS: wallet topped up to <b>$100,000</b>.', '#d8b028');
+  const rich = Math.round(prefs().cheatRich || 0);
+  if (rich > 0 && state.money < rich) {
+    state.money = rich;
+    feedText(`FAT STACKS: wallet topped up to <b>$${rich.toLocaleString()}</b>.`, '#d8b028');
   }
   if (prefs().cheatTravel) {
     for (const st of allStations()) discoveredStations.add(st.poi.data ?? '');

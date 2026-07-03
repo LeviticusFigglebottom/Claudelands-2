@@ -258,7 +258,7 @@ export class Player implements Damageable {
     const speedStat = statsys.mult('moveSpeed');
     const downedFactor = this.downed ? 0.35 : 1;
     const sprinting = this.keys.has('ShiftLeft') && !this.downed && !this.adsHeld;
-    const speed = 7.2 * speedStat * downedFactor * (sprinting ? 1.45 : 1) * (prefs().cheatSpeed ? 1.6 : 1);
+    const speed = 7.2 * speedStat * downedFactor * (sprinting ? 1.45 : 1) * Math.max(1, prefs().cheatSpeed || 1);
 
     const fwd = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
     const right = new THREE.Vector3(-fwd.z, 0, fwd.x);

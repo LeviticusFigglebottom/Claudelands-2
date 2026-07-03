@@ -33,6 +33,7 @@ const VOICE_TAG: Record<string, string> = {
   kez: 'scrappy, energetic, grinning',
   tovah: 'deep, growling, menacing',
   faro: 'calm, weathered, quietly amused lighthouse keeper',
+  wick: 'jittery, over-bright, brittle cheer, talks slightly too fast, two hundred years alone',
   thug: '', // per-line direction only — see THUG_TAGS (the deadpan lines need the contrast)
   wirelog: 'weary, haunted, distant',
 };
@@ -118,6 +119,7 @@ for (const line of THUG_LINES) add('thug', line, line, THUG_TAGS[line] ?? 'screa
 const BOSS_NAMES = [
   'GRAND DUKE GUTTERBALL', 'HX-1 WARDEN PRIME', 'OLD MAN AVALANCHE',
   'SAINT FURNACE', 'THE BLOOM MOTHER', 'ADMIRAL ANCHORHEAD', 'THE MOTHER LODE',
+  'THE UNKEEPER',
 ];
 const deNumber = (s: string): string =>
   s.replace(/\{(n|next|k)\}[-\s]*/g, '').replace(/\s+([!,.?])/g, '$1').replace(/\s{2,}/g, ' ').trim();

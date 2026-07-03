@@ -3,7 +3,7 @@
 // progression. All dialogue is original and lives here for the writers.
 
 export type ObjectiveKind = 'goto' | 'kill_faction' | 'collect' | 'boss' | 'kill_elites' | 'notoriety';
-export type QuestGiver = 'quibb' | 'zaza' | 'mayor' | 'brann' | 'mirelle' | 'okto' | 'juno' | 'peg' | 'faro';
+export type QuestGiver = 'quibb' | 'zaza' | 'mayor' | 'brann' | 'mirelle' | 'okto' | 'juno' | 'peg' | 'faro' | 'wick';
 
 /** Everyone who hands out work: display name, where they stand, greetings. */
 export const GIVERS: Record<QuestGiver, { name: string; where: string; mapId: string; x: number; z: number; greetings: string[] }> = {
@@ -68,6 +68,13 @@ export const GIVERS: Record<QuestGiver, { name: string; where: string; mapId: st
     greetings: [
       'Faro. I keep the light. The light keeps everything else.',
       'Welcome back to the bright side of nowhere.',
+    ],
+  },
+  wick: {
+    name: 'Wick', where: 'at the Bothy on the Unlit Mile', mapId: 'vitra_mile', x: 4, z: -16,
+    greetings: [
+      'A VISITOR! Sit down, sit — mind the lamps, they bite when they’re hungry. I’m Wick. Like the middle of a candle. It’s a WORK name.',
+      'Back again! The dark talked about you all night. Rude things. You must be doing WONDERFULLY.',
     ],
   },
 };
@@ -512,6 +519,65 @@ export const QUESTS: QuestDef[] = [
     objective: { kind: 'kill_faction', label: 'Walking glass swept', count: 10, faction: 'vitrified', markerX: -70, markerZ: -10, mapId: 'vitra' },
     rewardCash: 9000, rewardXp: 12000, rewardItem: 'epic',
     completeLine: 'Ten panes down and the night got QUIETER. The lamps hold. You’ll do, contractor. The dark and I have a long ledger — plenty of work left in it.',
+  },
+  // ---- ARC: THE UNLIT MILE (the sister lamp)
+  {
+    id: 'q29_darkmile',
+    name: 'The Sister Lamp',
+    giver: 'faro',
+    briefing: [
+      'Since you’re still standing, here’s the page of the ledger I don’t read out loud. There were TWO lights on this rock. Mine, and Lampfall Spire — a mile down the old coast road. Keeper Morrow’s lamp.',
+      'Two hundred years ago the glass started walking, and Morrow… stopped feeding his light. Didn’t die. Didn’t leave. Just decided the dark was less WORK. The whole mile of street lamps between us went out in one night. I heard it happen. It sounded like applause.',
+      'Something on that mile is still ringing, and my lamp flickers every time it does. Walk the Unlit Mile and find out what’s left down there. Take the south road past the Basin — and contractor, once you pass the Gloaming Gate, the only light you’ll meet is the kind you BRING.',
+    ],
+    acceptLine: 'The Gloaming Gate node is yours! South past the Basin — and keep your muzzle flash HANDY, it counts as a lamp!',
+    objective: { kind: 'goto', label: 'Walk the Unlit Mile', count: 1, markerX: 0, markerZ: 112, mapId: 'vitra_mile' },
+    rewardCash: 9000, rewardXp: 12000,
+    completeLine: 'You’re on the mile. Dead lamps in rows, like a parade that never got dismissed. And halfway down — one window still burning. That’s not Morrow. Go see who it is.',
+    unlocksStation: 'Gloaming Gate',
+  },
+  {
+    id: 'q30_lamplighter',
+    name: 'Rounds',
+    giver: 'wick',
+    briefing: [
+      'You walked the ROWS? In the DARK? And you’ve still got both your… yes, both. Wonderful. Sit. I’m Wick — Keeper Morrow’s apprentice. Was. AM? Tense is hard when you’re two hundred and still on probation.',
+      'The night the lamp died I was halfway up a ladder with a wick-trimmer. The glass took my arm to the shoulder — see, it chimes in cold weather now, very festive — and I’ve held this bothy ever since. Me, forty salvaged lamps, and a kettle with opinions.',
+      'The Rows out there fill up with walking glass every night, and every night my lamps buy me one more morning. Help me with my rounds: put ten of them down before they crowd the light. That’s the job. That’s been the job for two centuries. It’s nice to finally have STAFF.',
+    ],
+    acceptLine: 'Ten of them, any shape! And if one of them rings like a doorbell — DON’T ANSWER IT!',
+    objective: { kind: 'kill_faction', label: 'The Rows swept for Wick', count: 10, faction: 'vitrified', markerX: -46, markerZ: 50, mapId: 'vitra_mile' },
+    rewardCash: 10000, rewardXp: 13000, rewardItem: 'epic',
+    completeLine: 'Ten down, and the bothy got a whole quiet hour. Wick made tea to celebrate. The kettle objected. You’re on the roster now — there’s a hook for your coat and everything.',
+  },
+  {
+    id: 'q31_cinders',
+    name: 'Fuel for the Forty',
+    giver: 'wick',
+    briefing: [
+      'Now the awkward part of lamp-keeping on a planet with no oil, no wood, and no sun: FUEL. My forty lamps burn living cinders — the little cores the walking glass carries where a heart would go. Morrow’s design, ironically. He was BRILLIANT before he was… dim.',
+      'The strongest cores are down in the Echo Organ, where the big glass goes to hum. Crack the vitrified open and the cinder pops right out, still warm, slightly indignant.',
+      'Bring me FOUR — and hand them over HERE, at the bothy. Cinders go out if you dawdle, and I do not have the wardrobe for a second one-armed sprint through the dark.',
+    ],
+    acceptLine: 'Four living cinders, back to THIS table! Cup your hands around them — they like to feel IMPORTANT!',
+    objective: { kind: 'collect', label: 'Living cinders hauled back to Wick', count: 4, faction: 'vitrified', markerX: 46, markerZ: -34, mapId: 'vitra_mile' },
+    returnToGiver: true,
+    rewardCash: 11000, rewardXp: 14000, rewardItem: 'epic',
+    completeLine: 'Four cinders, delivered warm. The forty lamps are fat and bright for the first time in a decade — Wick walked the yard twice just to look at them. “Morrow used to say a fed lamp forgives you anything,” they said. “Let’s go test that.”',
+  },
+  {
+    id: 'q32_secondlamp',
+    name: 'Lights Out',
+    giver: 'faro',
+    briefing: [
+      'Wick’s wire reached me — first signal off that mile in two hundred years. A fed lamp, a live apprentice, and a name I’d filed under GONE. So here’s the last entry, contractor, and I’ll say it plain.',
+      'Morrow is still down there. The mile’s glass tolls on HIS rounds — he walks the spire base every night with his lantern out, winding the dark like I wind my light. My opposite number. My old friend. THE UNKEEPER, if you want what the glass calls him.',
+      'A keeper’s shift only ends one way, and he’s two centuries past his. Go down to Lampfall Spire and end it. Aim for the lantern on his crook — it’s empty, it’s cold, and it is STILL the only thing he’d hate to lose.',
+    ],
+    acceptLine: 'Lampfall Spire, the bottom of the mile! Snuff him gently if you can, LOUDLY if you can’t!',
+    objective: { kind: 'boss', label: 'The Unkeeper’s shift ended', count: 1, bossId: 'unkeeper', markerX: 0, markerZ: -114, mapId: 'vitra_mile' },
+    rewardCash: 16000, rewardXp: 18000, rewardItem: 'legendary',
+    completeLine: 'The Unkeeper is out. The mile went silent — then, one by one, the Snuffed Rows flickered ON, two hundred years of stored dark paying its bill. Wick is already up a ladder. Faro logged one line in the ledger: “Shift covered. Sleep well, Morrow.”',
   },
 ];
 

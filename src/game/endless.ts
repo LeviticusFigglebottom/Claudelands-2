@@ -4,7 +4,7 @@
 // time to loot, shop at the pit vendors, and regret. Best wave persists.
 
 import * as THREE from 'three';
-import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, BOSS_BLOOM, BOSS_ANCHORHEAD, BOSS_MOTHERLODE, type EnemyDef } from '../data/enemies';
+import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, BOSS_BLOOM, BOSS_ANCHORHEAD, BOSS_MOTHERLODE, BOSS_UNKEEPER, type EnemyDef } from '../data/enemies';
 import { enemySpawner, type Enemy } from './enemies';
 import { spawnBoss, type BossId } from './boss';
 import { state } from './state';
@@ -19,6 +19,7 @@ const BOSS_CYCLE: { id: BossId; def: EnemyDef }[] = [
   { id: 'bloom_mother', def: BOSS_BLOOM },
   { id: 'admiral_anchorhead', def: BOSS_ANCHORHEAD },
   { id: 'mother_lode', def: BOSS_MOTHERLODE },
+  { id: 'unkeeper', def: BOSS_UNKEEPER },
 ];
 
 /** Trash pool: a spread of behaviors from every faction — later entries

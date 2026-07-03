@@ -16,10 +16,10 @@ export interface Prefs {
   saturation: number;        // 0.8..1.5
   // ---- EXTRAS (main-menu fun tab): cheats + novelty toggles
   thugMode: boolean;         // player voicelines swap to the thug sauce pool
-  cheatSpeed: boolean;       // x1.6 move speed
-  cheatLevel: boolean;       // runs load at level 25+
+  cheatSpeed: number;        // move-speed multiplier, 1 = off (up to 2.5)
+  cheatLevel: number;        // level floor applied on run start/load, 1 = off
   cheatTravel: boolean;      // every fast-travel station pre-discovered
-  cheatRich: boolean;        // wallet floor $100k
+  cheatRich: number;         // wallet floor in $ applied on run start/load, 0 = off
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -35,10 +35,10 @@ export const DEFAULT_PREFS: Prefs = {
   fov: 75,
   saturation: 1.22,
   thugMode: false,
-  cheatSpeed: false,
-  cheatLevel: false,
+  cheatSpeed: 1,
+  cheatLevel: 1,
   cheatTravel: false,
-  cheatRich: false,
+  cheatRich: 0,
 };
 
 const KEY = 'claudelands2.prefs';
@@ -47,6 +47,13 @@ try {
   const raw = localStorage.getItem(KEY);
   if (raw) current = { ...DEFAULT_PREFS, ...JSON.parse(raw) };
 } catch { /* private mode */ }
+// the cheat prefs began life as ON/OFF booleans; the sliders took over,
+// so old saved values map to the strengths the toggles used to hardcode
+const legacy = (v: unknown, on: number, off: number): number =>
+  typeof v === 'number' && isFinite(v) ? v : v === true ? on : off;
+current.cheatSpeed = legacy(current.cheatSpeed, 1.6, 1);
+current.cheatLevel = legacy(current.cheatLevel, 25, 1);
+current.cheatRich = legacy(current.cheatRich, 100000, 0);
 
 export function prefs(): Prefs { return current; }
 

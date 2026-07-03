@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { Enemy, enemySpawner, enemyHooks } from './enemies';
-import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, BOSS_BLOOM, BOSS_ANCHORHEAD, BOSS_MOTHERLODE, type EnemyDef } from '../data/enemies';
+import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, BOSS_BLOOM, BOSS_ANCHORHEAD, BOSS_MOTHERLODE, BOSS_UNKEEPER, type EnemyDef } from '../data/enemies';
 import { toonMat, glowMat } from '../render/toon';
 import { fx } from './particles';
 import { audio } from '../audio/synth';
@@ -711,7 +711,139 @@ export class MotherLode extends Boss {
 }
 
 // ---------------------------------------------------------------------------
-export type BossId = 'gutterball' | 'warden_prime' | 'old_man_avalanche' | 'saint_furnace' | 'bloom_mother' | 'admiral_anchorhead' | 'mother_lode';
+// THE UNKEEPER — Keeper Morrow of Lampfall Spire, two hundred years past his
+// last lit round. He walks his old circuit with the lantern OUT, winding the
+// dark the way Faro winds the light. The dead lantern on his crook is the
+// crit zone: it's the only thing he'd hate to lose.
+export class Unkeeper extends Boss {
+  private lantern: THREE.Mesh;
+  private crook: THREE.Group;
+  private walking = 0;                 // THE LONG ROUND: his charge is a stride
+  private walkDir = new THREE.Vector3();
+  private flicker = 0;                 // crit feedback: the dead lamp remembers
+
+  constructor(level: number, pos: THREE.Vector3) {
+    super(BOSS_UNKEEPER, level, pos);
+    const scale = this.def.scale;
+    const iron = toonMat({ color: 0x1e1836 });
+    const cloth = toonMat({ color: 0x2a2244 });
+    // keeper's storm coat: a long skirt of dark cloth
+    const coat = new THREE.Mesh(new THREE.CylinderGeometry(0.55 * scale, 0.85 * scale, 1.3 * scale, 8), cloth);
+    coat.position.y = 0.75 * scale;
+    this.group.add(coat);
+    this.bodyParts.push(coat);
+    // wide-brimmed keeper's hat
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.5 * scale, 0.54 * scale, 0.07 * scale, 10), iron);
+    brim.position.y = 1.98 * scale;
+    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.24 * scale, 0.3 * scale, 0.34 * scale, 8), iron);
+    crown.position.y = 2.16 * scale;
+    this.group.add(brim, crown);
+    this.bodyParts.push(brim, crown);
+    // the crook: a tall hooked staff carried off one shoulder...
+    this.crook = new THREE.Group();
+    const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.06 * scale, 0.09 * scale, 3.1 * scale, 6), iron);
+    const hook = new THREE.Mesh(new THREE.TorusGeometry(0.28 * scale, 0.05 * scale, 6, 12, Math.PI * 1.2), iron);
+    hook.position.y = 1.6 * scale;
+    hook.rotation.z = -0.4;
+    this.crook.add(staff, hook);
+    this.crook.position.set(0.75 * scale, 1.35 * scale, 0.1 * scale);
+    this.crook.rotation.z = -0.18;
+    this.group.add(this.crook);
+    this.crook.traverse((o) => { if (o instanceof THREE.Mesh) this.bodyParts.push(o); });
+    // ...with the dead lantern swinging from the hook — CRIT
+    this.lantern = new THREE.Mesh(new THREE.BoxGeometry(0.34 * scale, 0.42 * scale, 0.34 * scale), glowMat(0x241c40, 0.9));
+    this.lantern.position.set(1.05 * scale, 2.6 * scale, 0.1 * scale);
+    this.group.add(this.lantern);
+    this.bodyParts.push(this.lantern);
+    this.critZone = this.lantern;
+    audio.bossRoar(false);
+  }
+
+  protected onPhase(phase: number): void {
+    if (phase === 1) {
+      enemyHooks().bark(this.displayName, 'THE ROWS REMEMBER THEIR KEEPER. UP.');
+      for (const s of [new THREE.Vector3(5, 0, 4), new THREE.Vector3(-5, 0, 4), new THREE.Vector3(0, 0, -6), new THREE.Vector3(4, 0, -4)]) {
+        enemySpawner.spawnOne(ENEMIES.wickling, this.position.clone().add(s), false, 11);
+      }
+    } else {
+      enemyHooks().bark(this.displayName, 'DOUBLE SHIFT.');
+      audio.bossRoar(false);
+      this.def = { ...this.def, speed: this.def.speed * 1.45, attackRate: this.def.attackRate * 1.35 };
+      // the lantern lights — wrong: it burns dark violet
+      (this.lantern.material as THREE.MeshBasicMaterial).color.setHex(0x9a6aff);
+    }
+  }
+
+  protected specialCooldown(): number { return this.phase >= 2 ? 4.2 : 6.6; }
+
+  protected special(): void {
+    const playerPos = enemyHooks().playerPos();
+    const roll = Math.random();
+    if (roll < 0.4 && playerPos.distanceTo(this.position) > 7) {
+      // THE LONG ROUND: he resumes his circuit, straight through you
+      this.walking = 1.2;
+      this.walkDir.copy(playerPos).sub(this.position).setY(0).normalize();
+      fx.burst(this.position.clone().add(new THREE.Vector3(0, 1.6, 0)), 0x9a6aff, 22, 3, 0.14, 0.6, 2);
+      enemyHooks().bark(this.displayName, 'the round CONTINUES.');
+    } else if (roll < 0.72) {
+      // CURFEW: lobbed panes of dead glass bracket the player
+      enemyHooks().bark(this.displayName, 'CURFEW.');
+      for (let i = 0; i < 4; i++) {
+        const target = playerPos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 8));
+        const muzzle = this.position.clone().add(new THREE.Vector3(0, 2.5 * this.def.scale, 0));
+        const aim = target.clone().sub(muzzle);
+        const dist = aim.length();
+        aim.normalize().multiplyScalar(16);
+        aim.y += dist * 0.55;
+        projectiles.spawn({
+          pos: muzzle, vel: aim, damage: 10 * levelScale(this.level), element: 'volt',
+          splash: 3.2, gravity: 14, fuse: -1, source: 'enemy',
+        });
+      }
+      audio.explosion(false);
+    } else {
+      // LIGHTS OUT: the cold of a lamp dying, as a nova
+      fx.explosion(this.position.clone(), 6, 0x6a5adf);
+      audio.explosion(true);
+      audio.elemental('rime');
+      splashDamage(this.position.clone(), 8.5, 9.5 * levelScale(this.level), 'rime', { source: 'enemy', elemChance: 0.85 });
+    }
+  }
+
+  private lastHp = -1;
+
+  override update(dt: number): void {
+    super.update(dt);
+    if (!this.alive) return;
+    if (this.walking > 0) {
+      this.walking -= dt;
+      this.position.addScaledVector(this.walkDir, 14.5 * dt);
+      this.settleToGround(true);
+      this.wobble += dt * 14;
+      fx.burst(this.position.clone().add(new THREE.Vector3(0, 0.4, 0)), 0x5a4acf, 3, 2.5, 0.1, 0.5, 5);
+      const playerPos = enemyHooks().playerPos();
+      if (playerPos.distanceTo(this.position) < 2.9) {
+        enemyHooks().damagePlayer(15 * levelScale(this.level), 'kinetic', this.position);
+        this.walking = 0;
+      }
+    }
+    if (this.phase >= 2 && Math.random() < 7 * dt) fx.statusFlames(this.position, 'volt');
+    // the dead lantern sways on the hook; taking a hit makes it flicker
+    // awake for half a heartbeat — the tell that you found the thing he
+    // still loves (damage lands via combat.ts, so watch the hp delta)
+    const hp = this.totalHp();
+    if (this.lastHp >= 0 && hp < this.lastHp) this.flicker = 1;
+    this.lastHp = hp;
+    this.crook.rotation.z = -0.18 + Math.sin(this.wobble * 0.5) * 0.06;
+    this.lantern.position.x = (1.05 + Math.sin(this.wobble * 0.5) * 0.05) * this.def.scale;
+    this.flicker = Math.max(0, this.flicker - dt * 2);
+    const m = this.lantern.material as THREE.MeshBasicMaterial;
+    m.opacity = this.phase >= 2 ? 0.75 + Math.sin(this.wobble * 2.4) * 0.2 : 0.55 + this.flicker * 0.4;
+  }
+}
+
+// ---------------------------------------------------------------------------
+export type BossId = 'gutterball' | 'warden_prime' | 'old_man_avalanche' | 'saint_furnace' | 'bloom_mother' | 'admiral_anchorhead' | 'mother_lode' | 'unkeeper';
 
 export function spawnBoss(id: BossId, pos: THREE.Vector3, levelOverride?: number): Enemy {
   const level = levelOverride ?? state.level + 2;
@@ -721,11 +853,13 @@ export function spawnBoss(id: BossId, pos: THREE.Vector3, levelOverride?: number
     : id === 'bloom_mother' ? new BloomMother(level, pos)
     : id === 'admiral_anchorhead' ? new AdmiralAnchorhead(level, pos)
     : id === 'mother_lode' ? new MotherLode(level, pos)
+    : id === 'unkeeper' ? new Unkeeper(level, pos)
     : new SaintFurnace(level, pos);
   enemySpawner.registerBoss(boss);
   const flash: Record<string, number> = {
     gutterball: 0xff8438, warden_prime: 0x54d4ff, old_man_avalanche: 0x9ad8e8,
     bloom_mother: 0x9adc4a, admiral_anchorhead: 0x7dffd4, mother_lode: 0x54d4ff,
+    unkeeper: 0x9a6aff,
   };
   fx.explosion(pos.clone().add(new THREE.Vector3(0, 1, 0)), 4, flash[id] ?? 0xff7a1a);
   return boss;

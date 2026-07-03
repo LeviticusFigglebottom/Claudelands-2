@@ -402,6 +402,11 @@ export class World {
         case 'chimefield': this.buildChimefield(d); break;
         case 'shardsea': this.buildShardsea(d); break;
         case 'nullbasin': this.buildNullBasin(d); break;
+        case 'gloamgate': this.buildGloamGate(d); break;
+        case 'snuffrows': this.buildSnuffRows(d); break;
+        case 'wickbothy': this.buildWickBothy(d); break;
+        case 'echoorgan': this.buildEchoOrgan(d); break;
+        case 'lampfall': this.buildLampfall(d); break;
       }
     }
   }
@@ -1541,7 +1546,7 @@ export class World {
         const x = (rng() - 0.5) * WORLD.size * 1.05;
         const z = (rng() - 0.5) * WORLD.size * 1.05;
         const d = districtAt(x, z);
-        if (d && (d.dress === 'lastlight' || d.dress === 'shardsea')) continue;
+        if (d && (d.dress === 'lastlight' || d.dress === 'shardsea' || d.dress === 'gloamgate' || d.dress === 'wickbothy' || d.dress === 'lampfall')) continue;
         if (!this.clearOfAssets(x, z, 2) || !this.clearOfExits(x, z)) continue;
         const h = 2 + rng() * 5;
         const shard = this.glassShard(h, rng() > 0.6 ? 0xb0a0ff : 0x7af0ff, rng);
@@ -1747,6 +1752,7 @@ export class World {
       okto: { coat: 0xe8e0cc, skin: 0x9a7858, hat: 0xe8e0cc, hatKind: 'hood', accent: 0xffb43c, label: 'TALK TO BROTHER OKTO' },
       juno: { coat: 0x3a8a5a, skin: 0xc89878, hat: 0xd8c898, hatKind: 'cap', accent: 0x9adc4a, label: 'TALK TO DR. CALLA' },
       peg: { coat: 0x4a5a66, skin: 0xb89070, hat: 0xd8d0c0, hatKind: 'bun', accent: 0x7dffd4, label: 'TALK TO QUARTERMISTRESS PEG' },
+      wick: { coat: 0x3a2f6a, skin: 0xd8b090, hat: 0x2a2244, hatKind: 'hood', accent: 0x9a6aff, label: 'TALK TO WICK' },
     };
     const look = looks[poi.data ?? ''] ?? looks.brann;
     const y = terrainHeight(poi.x, poi.z);
@@ -1789,6 +1795,13 @@ export class World {
     const armR = armL.clone();
     armR.position.x = 0.38;
     armR.rotation.z = -0.1;
+    // Wick's right arm is glass to the shoulder — it chimes in cold weather
+    if (poi.data === 'wick') {
+      armR.material = new THREE.MeshToonMaterial({ color: 0x7af0ff, transparent: true, opacity: 0.55 });
+      const knuckle = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), glowMat(0x7af0ff, 0.9));
+      knuckle.position.set(0.4, 0.76, 0.02);
+      g.add(knuckle);
+    }
     const belt = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.08, 0.36), toonMat({ color: 0x2a2622 }));
     belt.position.y = 0.74;
     const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.07, 0.03), toonMat({ color: look.accent }));
@@ -3744,6 +3757,244 @@ export class World {
     eye.rotation.x = -Math.PI / 2;
     eye.position.set(d.cx, terrainHeight(d.cx, d.cz) + 0.08, d.cz);
     this.group.add(eye);
+  }
+
+  // ------------------------------------------------------- THE UNLIT MILE
+  /** A mile street lamp: iron post, swing arm, caged head. The mile's dead
+   *  ones are the scenery; the lit ones are the plot. */
+  private mileLamp(x: number, z: number, lit: boolean, lean = 0): void {
+    const y = terrainHeight(x, z);
+    const g = new THREE.Group();
+    const iron = toonMat({ color: 0x1e1836, map: swatch('#181230', 70) });
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.16, 4.4, 6), iron);
+    post.position.y = 2.2;
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.1, 0.1), iron);
+    arm.position.set(0.35, 4.3, 0);
+    const cage = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.52, 0.44), iron);
+    cage.position.set(0.75, 3.98, 0);
+    const pane = lit
+      ? new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.4, 0.32), glowMat(0xffd88a, 0.95))
+      : new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.4, 0.32), new THREE.MeshToonMaterial({ color: 0x0c0918 }));
+    pane.position.set(0.75, 3.98, 0);
+    if (lit) pane.name = 'blinker';
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.36, 0.3, 4), iron);
+    cap.position.set(0.75, 4.4, 0);
+    g.add(post, arm, cage, pane, cap);
+    g.rotation.set(0, (x * 13 + z * 7) % 6, lean);
+    g.position.set(x, y, z);
+    g.traverse((o) => (o.castShadow = true));
+    this.group.add(g);
+    this.staticTargets.push(g);
+    if (Math.abs(lean) < 0.8) this.addCollider(x, z, 0.3, 0.3, 4.4);
+  }
+
+  /** THE GLOAMING GATE — the last two lit lamps on the planet's last road,
+   *  and the first few dead ones, leaning in to listen. */
+  private buildGloamGate(d: DistrictDef): void {
+    this.mileLamp(d.cx - 5.5, d.cz + 4, true);
+    this.mileLamp(d.cx + 5.5, d.cz + 4, true);
+    const rng = mulberry32(616001);
+    for (let i = 0; i < 4; i++) {
+      const a = Math.PI * (0.9 + rng() * 1.2);
+      this.mileLamp(d.cx + Math.cos(a) * (9 + rng() * 6), d.cz - 6 - rng() * 8, false, (rng() - 0.5) * 0.5);
+    }
+    // the guild's cracked call-bell, grounded beside the road
+    const y = terrainHeight(d.cx + 7, d.cz - 4);
+    const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.15, 1.3, 10, 1, true), toonMat({ color: 0x2e2652, map: rockTexture('#282048') }));
+    bell.position.set(d.cx + 7, y + 0.7, d.cz - 4);
+    bell.rotation.z = 0.5;
+    this.group.add(bell);
+    this.staticTargets.push(bell);
+    this.addCollider(d.cx + 7, d.cz - 4, 1.2, 1.2, 1.6);
+  }
+
+  /** THE SNUFFED ROWS — the parade of dead lamps, still standing at
+   *  attention two hundred years after last light. One never gave up. */
+  private buildSnuffRows(d: DistrictDef): void {
+    const rng = mulberry32(616002);
+    for (let i = 0; i < 14; i++) {
+      const a = rng() * Math.PI * 2, r = 5 + rng() * d.radius * 0.85;
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 2)) continue;
+      this.mileLamp(x, z, false, rng() < 0.3 ? (rng() - 0.5) * 1.6 : (rng() - 0.5) * 0.3);
+    }
+    // lamp forty-one's cousin: one stubborn flicker mid-field
+    this.mileLamp(d.cx + 3, d.cz - 5, true, 0.08);
+    // drifts of swept glass between the posts
+    for (let i = 0; i < 10; i++) {
+      const a = rng() * Math.PI * 2, r = rng() * d.radius * 0.8;
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 1.2)) continue;
+      const h = 0.7 + rng() * 1.1;
+      const heap = this.glassShard(h, 0x5a4acf, rng);
+      heap.position.set(x, terrainHeight(x, z) + h * 0.3, z);
+      heap.rotation.x = 1.1 + rng() * 0.6;
+      this.group.add(heap);
+    }
+  }
+
+  /** WICK'S BOTHY — one warm window on a dark mile: a stone hut, a yard of
+   *  salvaged lamps (all lit, all fussy), and string-lights between posts. */
+  private buildWickBothy(d: DistrictDef): void {
+    const y = terrainHeight(d.cx, d.cz);
+    const stoneMat = toonMat({ color: 0x3a3260, map: rockTexture('#332b56') });
+    // the hut itself, off the arena centre so the yard stays walkable
+    const hx = d.cx - 7, hz = d.cz + 5;
+    const hy = terrainHeight(hx, hz);
+    const hut = new THREE.Mesh(new THREE.CylinderGeometry(3.0, 3.4, 3.0, 8), stoneMat);
+    hut.position.set(hx, hy + 1.5, hz);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(3.8, 2.0, 8), toonMat({ color: 0x241c40 }));
+    roof.position.set(hx, hy + 4.0, hz);
+    const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, 0.5), stoneMat);
+    chimney.position.set(hx + 1.6, hy + 4.4, hz);
+    const win = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.1), glowMat(0xffd88a, 0.95));
+    win.position.set(hx + 2.6, hy + 1.7, hz + 1.4);
+    win.lookAt(d.cx + 6, hy + 1.7, d.cz - 6);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.9, 0.14), toonMat({ color: 0x4a3e7a }));
+    door.position.set(hx + 2.9, hy + 0.95, hz - 0.6);
+    door.lookAt(d.cx + 8, hy + 0.95, d.cz - 4);
+    this.group.add(hut, roof, chimney, win, door);
+    this.staticTargets.push(hut);
+    this.addCollider(hx, hz, 3.5, 3.5, 4.2);
+    // the forty (abridged): a ring of mismatched salvaged lamps, all burning
+    const rng = mulberry32(616003);
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2 + 0.3;
+      const lx = d.cx + Math.cos(a) * (10 + rng() * 3);
+      const lz = d.cz + Math.sin(a) * (10 + rng() * 3);
+      if (!this.clearOfAssets(lx, lz, 1.4)) continue;
+      this.mileLamp(lx, lz, true, (rng() - 0.5) * 0.16);
+    }
+    // string-lights: beads slung between two posts across the yard
+    const p1 = new THREE.Vector3(d.cx - 4, 0, d.cz - 6);
+    const p2 = new THREE.Vector3(d.cx + 7, 0, d.cz + 2);
+    p1.y = terrainHeight(p1.x, p1.z) + 3.6;
+    p2.y = terrainHeight(p2.x, p2.z) + 3.6;
+    for (const p of [p1, p2]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 3.8, 6), stoneMat);
+      post.position.set(p.x, p.y - 1.9, p.z);
+      this.group.add(post);
+      this.addCollider(p.x, p.z, 0.25, 0.25, 3.8);
+    }
+    for (let i = 1; i < 8; i++) {
+      const t = i / 8;
+      const bead = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), glowMat(i % 2 ? 0xffd88a : 0x9a6aff, 0.9));
+      bead.position.lerpVectors(p1, p2, t);
+      bead.position.y -= Math.sin(t * Math.PI) * 0.7; // the sag
+      bead.name = 'blinker';
+      this.group.add(bead);
+    }
+    // crates of lamp heads awaiting repair
+    for (let i = 0; i < 3; i++) {
+      const cx = d.cx + 4 + i * 1.4, cz = d.cz + 6 - i * 0.8;
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.9, 1.1), toonMat({ color: 0x4a3e7a, map: swatch('#42366a', 60) }));
+      crate.position.set(cx, terrainHeight(cx, cz) + 0.45, cz);
+      crate.rotation.y = i * 0.5;
+      this.group.add(crate);
+      this.staticTargets.push(crate);
+      this.addCollider(cx, cz, 0.8, 0.8, 1.0);
+    }
+    void y;
+  }
+
+  /** THE ECHO ORGAN — ranks of hollow glass pipes the wind plays. The
+   *  mouths glow when the draft moves through them. */
+  private buildEchoOrgan(d: DistrictDef): void {
+    const rng = mulberry32(616004);
+    for (let c = 0; c < 9; c++) {
+      const a = rng() * Math.PI * 2, r = 6 + rng() * d.radius * 0.8;
+      const cx = d.cx + Math.cos(a) * r, cz = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(cx, cz, 3)) continue;
+      const cluster = new THREE.Group();
+      const n = 3 + Math.floor(rng() * 3);
+      let tallest = 0;
+      for (let k = 0; k < n; k++) {
+        const h = 3.5 + rng() * 8.5;
+        tallest = Math.max(tallest, h);
+        const px = (rng() - 0.5) * 2.6, pz = (rng() - 0.5) * 2.6;
+        const pipe = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.42, 0.5, h, 7, 1, true),
+          new THREE.MeshToonMaterial({ color: k % 2 ? 0x6a5adf : 0x54d4ff, transparent: true, opacity: 0.5, side: THREE.DoubleSide }),
+        );
+        pipe.position.set(px, h * 0.5, pz);
+        cluster.add(pipe);
+        const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.44, 0.06, 6, 14), glowMat(0x7af0ff, 0.85));
+        mouth.rotation.x = Math.PI / 2;
+        mouth.position.set(px, h, pz);
+        mouth.name = 'blinker';
+        cluster.add(mouth);
+      }
+      cluster.position.set(cx, terrainHeight(cx, cz), cz);
+      this.group.add(cluster);
+      this.staticTargets.push(cluster);
+      this.addCollider(cx, cz, 1.7, 1.7, tallest);
+    }
+  }
+
+  /** LAMPFALL SPIRE — the sister lighthouse, toppled the night it went out.
+   *  The court around the base is the Unkeeper's arena; the tower lies
+   *  across the rim like a felled tree, lamp room dark where it rolled. */
+  private buildLampfall(d: DistrictDef): void {
+    const stoneMat = toonMat({ color: 0x2e2652, map: rockTexture('#282048') });
+    const bandMat = toonMat({ color: 0x6a5a3a, map: swatch('#5a4c30', 60) }); // tarnished gold
+    // the stump: four metres of tower still standing, rim cracked
+    const bx = d.cx - 16, bz = d.cz - 6;
+    const by = terrainHeight(bx, bz);
+    const stump = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.3, 4.5, 10), stoneMat);
+    stump.position.set(bx, by + 2.25, bz);
+    this.group.add(stump);
+    this.staticTargets.push(stump);
+    this.addCollider(bx, bz, 2.4, 2.4, 5);
+    // the fallen shaft, laid outward from the stump toward the rim
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.9, 14, 10), stoneMat);
+    const dir = new THREE.Vector3(-0.55, 0, -0.83);
+    const mid = new THREE.Vector3(bx, 0, bz).addScaledVector(dir, 9.5);
+    mid.y = terrainHeight(mid.x, mid.z) + 1.4;
+    shaft.position.copy(mid);
+    shaft.rotation.z = Math.PI / 2 - 0.12;
+    shaft.rotation.y = Math.atan2(dir.x, dir.z) + Math.PI / 2;
+    this.group.add(shaft);
+    this.staticTargets.push(shaft);
+    for (const t of [0.35, 0.65, 0.95]) {
+      const cpos = new THREE.Vector3(bx, 0, bz).addScaledVector(dir, 4 + t * 11);
+      this.addCollider(cpos.x, cpos.z, 1.8, 1.8, 3);
+    }
+    for (const t of [0.3, 0.6, 0.9]) {
+      const band = new THREE.Mesh(new THREE.CylinderGeometry(1.45 + (1 - t) * 0.4, 1.5 + (1 - t) * 0.4, 0.45, 10), bandMat);
+      const bpos = new THREE.Vector3(bx, 0, bz).addScaledVector(dir, 2.5 + t * 14);
+      bpos.y = terrainHeight(bpos.x, bpos.z) + 1.4;
+      band.position.copy(bpos);
+      band.rotation.copy(shaft.rotation);
+      this.group.add(band);
+    }
+    // the lamp room, rolled clear of the wreck: dark glass, dead beacon
+    const lx = bx + dir.x * 19, lz = bz + dir.z * 19;
+    const ly = terrainHeight(lx, lz);
+    const lampRoom = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.7, 2.2, 8), bandMat);
+    lampRoom.position.set(lx, ly + 1.1, lz);
+    lampRoom.rotation.z = 0.6;
+    const deadBeacon = new THREE.Mesh(new THREE.SphereGeometry(1.0, 12, 12), new THREE.MeshToonMaterial({ color: 0x120d20, transparent: true, opacity: 0.85 }));
+    deadBeacon.position.set(lx, ly + 1.3, lz);
+    this.group.add(lampRoom, deadBeacon);
+    this.staticTargets.push(lampRoom);
+    this.addCollider(lx, lz, 2.0, 2.0, 2.6);
+    // his rounds: a ring of dead lamps around the court, every one attended
+    const rng = mulberry32(616005);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 0.2;
+      const x = d.cx + Math.cos(a) * (d.radius - 6), z = d.cz + Math.sin(a) * (d.radius - 6);
+      if (!this.clearOfAssets(x, z, 2)) continue;
+      this.mileLamp(x, z, false, (rng() - 0.5) * 0.2);
+    }
+    // spilt glass where the tower shattered
+    for (let i = 0; i < 8; i++) {
+      const x = mid.x + (rng() - 0.5) * 14, z = mid.z + (rng() - 0.5) * 14;
+      if (!this.clearOfAssets(x, z, 1.2)) continue;
+      const h = 0.8 + rng() * 1.6;
+      const shardp = this.glassShard(h, 0x6a5adf, rng);
+      shardp.position.set(x, terrainHeight(x, z) + h * 0.35, z);
+      this.group.add(shardp);
+    }
   }
 
   private buildQuibb(poi: WorldPoi): void {
