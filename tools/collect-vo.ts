@@ -33,7 +33,7 @@ const VOICE_TAG: Record<string, string> = {
   kez: 'scrappy, energetic, grinning',
   tovah: 'deep, growling, menacing',
   faro: 'calm, weathered, quietly amused lighthouse keeper',
-  thug: 'absurdly over-the-top comedic bellowing, unhinged ecstatic hype-man screaming at full volume',
+  thug: '', // per-line direction only — see THUG_TAGS (the deadpan lines need the contrast)
   wirelog: 'weary, haunted, distant',
 };
 
@@ -90,8 +90,25 @@ for (const set of Object.values(PLAYER_LINES)) {
   }
 }
 
-// ---- THUG MODE: one pool, every trigger, zero dignity
-for (const line of THUG_LINES) add('thug', line, line, 'screaming, ecstatic');
+// ---- THUG MODE: one pool, every trigger, zero dignity — each line gets
+// its own dramatic read (screams, groans, or deadpan where the joke is
+// the contrast)
+const THUG_TAGS: Record<string, string> = {
+  'I\u2019M ABOUT TO CUM!!': 'ecstatic screaming',
+  'THAT MIGHT JUST BE WHAT I NEED TO BUST!': 'ecstatic screaming',
+  'YOU FUCKING THE SHIT OUT OF ME BRO!!': 'overwhelmed dramatic screaming',
+  'DO THE THUG SHAKER!!': 'commanding hype-man shout',
+  'I\u2019M BUSTING\u2026 YES, I\u2019M BUSTING\u2026!!': 'a deep dramatic groan building into a triumphant scream',
+  'I\u2019M ABOUT TO BLOW!!': 'panicked screaming',
+  'A well-timed ability can help make short work of your adversaries.': 'calm, composed tutorial narrator, completely serious',
+  'Stay away from those oranges, and have fun in Hamburg!': 'cheerful hollering, sincere',
+  'Lay off the bacon, egg, and cheeses, JRC!': 'scolding, exasperated yelling',
+  'FNRK!!': 'a single strangled shout',
+  'A little elbow grease and we\u2019ll be a well-oiled machine!': 'chipper, absurdly enthusiastic',
+  'AAAAAAAAAAAAAAAAAA!!': 'pure sustained screaming at the top of the lungs',
+  'Another one down, another rope shot!': 'triumphant groaning shout',
+};
+for (const line of THUG_LINES) add('thug', line, line, THUG_TAGS[line] ?? 'screaming, ecstatic');
 
 // ---- BIG NAZDA: numbered templates bake number-free (voKey strips digits,
 // so "WAVE 12!" finds the "WAVE!" recording); {boss} expands per boss
