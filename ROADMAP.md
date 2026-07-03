@@ -1,5 +1,34 @@
 # ROADMAP
 
+## Pass 23 status — the score
+
+**Every area has its own soundtrack**: eleven 90-second instrumental
+loops baked through Eleven Music — one per map, written as endless
+background accompaniment (constant energy, no intro/outro/finale) and
+played as sample-accurate WebAudio buffer loops the entire time you're
+on the map. Claudelands gets the spaghetti-western drift, Brasshaven a
+sly bazaar groove, Frosthollow glass-and-snow ambience, the Hollowdeep
+crystal-cavern hum, the Shallows a shipwreck concertina waltz, the
+Crucible a coiled between-rounds pulse, and so on across all eleven.
+
+**Universal combat pool**: four 60-second cyclical combat loops
+(desert-rock riff assault, junkyard war-stomp, electro-rock pursuit,
+surf-punk shootout). Each ENCOUNTER picks one at random (never the
+same one twice in a row), fades it in over the area theme — which
+ducks but keeps playing underneath — and loops it until the fight
+ends, then releases back to the theme. Bosses and the Crucible's
+waves draw from the same pool.
+
+**Plumbing**: `tools/bake-music.mjs` (same resumable pattern as the VO
+bake — delete a file to retake it, version-stamped manifest for cache
+busting), `public/music/` (~20MB), and the music engine keeps the
+entire procedural synth score as an automatic fallback whenever the
+manifest or a track is missing.
+
+Headless suite: `verify23.mjs` — 10 checks, all passing (asset
+integrity/durations, per-area theme switching live, combat pool
+pick/loop/release across two encounters, fresh-track-per-encounter).
+
 ## Pass 21 status — everybody gets a real voice
 
 **Full recorded voice-over**: all 384 fixed character lines are now

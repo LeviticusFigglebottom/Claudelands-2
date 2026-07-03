@@ -41,6 +41,7 @@ import { PausePanel } from './ui/pause';
 import { MainMenu, type StartMode } from './ui/mainmenu';
 import { IntroOverlay, INTRO_PATH } from './ui/intro';
 import { loadVoManifest, voStats } from './audio/vo';
+import { loadMusicManifest } from './audio/music';
 import { endless } from './game/endless';
 import { vehicles } from './game/vehicle';
 import { race, formatRaceTime } from './game/race';
@@ -1500,9 +1501,10 @@ document.addEventListener('intro-finished', () => {
   if (cinematicT >= 0) endCinematic();
 });
 
-// recorded voice-over manifest: fire-and-forget — synth voices carry
-// every line until (and unless) it lands
+// recorded voice-over + soundtrack manifests: fire-and-forget — the synth
+// engines carry everything until (and unless) they land
 void loadVoManifest();
+void loadMusicManifest();
 
 // kick the loop off last — everything above (attract shots, menu, seam) must exist first
 frame();
