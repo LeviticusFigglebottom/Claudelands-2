@@ -7,7 +7,7 @@
 import type { ElementId } from '../game/types';
 
 export type EnemyBehavior = 'rusher' | 'gunner' | 'lobber' | 'brute' | 'flyer' | 'suicide';
-export type Faction = 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant';
+export type Faction = 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'brine' | 'hollow';
 
 export interface EnemyDef {
   id: string;
@@ -336,6 +336,150 @@ ENEMIES.thorn_hurler = {
   barks: ['Catch! With your FACE!', 'The garden shares its POINTIER blessings!', '*the sound of a hedge losing its temper*'],
   projectile: { speed: 19, element: 'bile', arc: true },
   weight: 14,
+};
+
+// ------------------------------------------------------------- THE DROWNED (brine)
+// Shipwreck Shallows: the hauler PELICAN's crew never stopped working the
+// cargo — they just stopped needing air. Barnacled deckhands, harpooneers,
+// tide-chanting mates, plus the local wildlife that got a taste for them.
+ENEMIES.brine_husk = {
+  id: 'brine_husk', name: 'Brine Husk', badassName: 'Big Damn Deckhand',
+  faction: 'brine', behavior: 'rusher',
+  flesh: 1, shield: 0, armor: 0.2,
+  hpMult: 1.1, damageMult: 1.05, speed: 5.2, attackRange: 2.0, attackRate: 1.0, aggroRange: 26,
+  scale: 1.0, tint: 0x5a8a82, dropTier: 0, xp: 16,
+  barks: ['*wet, committed gurgling*', 'Shift... isn’t... OVER...', 'Back... to... WORK...', '*the sound of a lung with tenure*'],
+  weight: 30,
+};
+ENEMIES.harpooneer = {
+  id: 'harpooneer', name: 'Harpooneer', badassName: 'Big Damn Harpooneer',
+  faction: 'brine', behavior: 'gunner',
+  flesh: 1, shield: 0, armor: 0,
+  hpMult: 1.05, damageMult: 1.2, speed: 3.3, attackRange: 18, attackRate: 0.7, aggroRange: 28,
+  scale: 1.0, tint: 0x4a7a8a, dropTier: 0, xp: 16,
+  barks: ['Thar she WALKS!', 'First stick’s free! The rest cost BLOOD!', 'I never miss twice. Once, often!', 'The Admiral wants you FILED under C. For CHUM!'],
+  projectile: { speed: 34, element: 'kinetic' },
+  weight: 26,
+};
+ENEMIES.tidecaller = {
+  id: 'tidecaller', name: 'Tidecaller', badassName: 'High Tidecaller',
+  faction: 'brine', behavior: 'lobber',
+  flesh: 1, shield: 0.55, armor: 0,
+  hpMult: 1.2, damageMult: 1.15, speed: 3.0, attackRange: 20, attackRate: 0.55, aggroRange: 28,
+  scale: 1.05, tint: 0x54a8c8, dropTier: 1, xp: 24,
+  barks: ['The tide comes IN. You go UNDER.', 'The Undertow keeps the books now!', 'Every wave is a page of the LEDGER!', 'Wet is a PROMOTION!'],
+  projectile: { speed: 17, element: 'rime', arc: true },
+  weight: 15,
+};
+ENEMIES.snapjaw = {
+  id: 'snapjaw', name: 'Snapjaw', badassName: 'Big Damn Snapjaw',
+  faction: 'brine', behavior: 'rusher',
+  flesh: 1, shield: 0, armor: 0.35,
+  hpMult: 0.8, damageMult: 0.95, speed: 7.2, attackRange: 1.8, attackRate: 1.25, aggroRange: 28,
+  scale: 0.7, tint: 0xd87a4a, dropTier: 0, xp: 12,
+  barks: ['*castanet noises with intent*', '*a shell sprinting*', '*click click CLICK*'],
+  weight: 22,
+};
+ENEMIES.gullwing = {
+  id: 'gullwing', name: 'Gullwing', badassName: 'Big Damn Gull',
+  faction: 'brine', behavior: 'flyer',
+  flesh: 1, shield: 0, armor: 0,
+  hpMult: 0.75, damageMult: 0.9, speed: 7.4, attackRange: 12, attackRate: 0.85, aggroRange: 30,
+  scale: 0.85, tint: 0xe8e8e0, dropTier: 0, xp: 14,
+  barks: ['MINE! MINE! MINE!', '*a seagull that has seen combat*', 'CHIPS?! CHIPS!!'],
+  projectile: { speed: 26, element: 'kinetic' },
+  weight: 16,
+};
+ENEMIES.anchor_hulk = {
+  id: 'anchor_hulk', name: 'Anchor Hulk', badassName: 'Big Damn Anchorman',
+  faction: 'brine', behavior: 'brute',
+  flesh: 0.5, shield: 0, armor: 0.5,
+  hpMult: 3.0, damageMult: 1.65, speed: 2.6, attackRange: 2.6, attackRate: 0.55, aggroRange: 22,
+  scale: 1.6, tint: 0x6a7a72, dropTier: 1, xp: 38,
+  barks: ['DROPPING ANCHOR!', '*chain noises, load-bearing*', 'The bottom of the sea says HI!'],
+  weight: 9,
+};
+
+// ------------------------------------------------------------- THE UNDERGROWN (hollow)
+// The Hollowdeep: whatever the old dig woke up, plus the dig crew that never
+// came back up. Pale, patient, and extremely pro-tunnel.
+ENEMIES.gloomstalker = {
+  id: 'gloomstalker', name: 'Gloomstalker', badassName: 'Big Damn Gloom',
+  faction: 'hollow', behavior: 'rusher',
+  flesh: 1, shield: 0, armor: 0,
+  hpMult: 1.0, damageMult: 1.1, speed: 6.6, attackRange: 2.0, attackRate: 1.1, aggroRange: 28,
+  scale: 0.95, tint: 0xb8c0d8, dropTier: 0, xp: 16,
+  barks: ['*too many knuckles cracking at once*', '*the dark, walking*', '*a hiss with excellent acoustics*'],
+  weight: 30,
+};
+ENEMIES.shardcaster = {
+  id: 'shardcaster', name: 'Shardcaster', badassName: 'Big Damn Shardcaster',
+  faction: 'hollow', behavior: 'gunner', grenades: true,
+  flesh: 1, shield: 0, armor: 0.2,
+  hpMult: 1.1, damageMult: 1.1, speed: 3.4, attackRange: 17, attackRate: 0.85, aggroRange: 28,
+  scale: 1.0, tint: 0x9aa8c8, dropTier: 0, xp: 17,
+  barks: ['The Dig provides!', 'Sixty years on shift! NO BREAKS!', 'The Mother hums and we HAUL!', 'Fresh hands for the seam!'],
+  projectile: { speed: 30, element: 'volt' },
+  weight: 26,
+};
+ENEMIES.spitgrub = {
+  id: 'spitgrub', name: 'Spitgrub', badassName: 'Big Damn Grub',
+  faction: 'hollow', behavior: 'lobber',
+  flesh: 1, shield: 0, armor: 0,
+  hpMult: 1.15, damageMult: 1.2, speed: 2.8, attackRange: 20, attackRate: 0.55, aggroRange: 28,
+  scale: 1.0, tint: 0xc8d86a, dropTier: 1, xp: 22,
+  barks: ['*a stomach doing math*', '*ptooey, but industrial*', '*digestive ambition*'],
+  projectile: { speed: 17, element: 'bile', arc: true },
+  weight: 15,
+};
+ENEMIES.gravemite = {
+  id: 'gravemite', name: 'Gravemite', badassName: 'Tomb Tick',
+  faction: 'hollow', behavior: 'suicide',
+  flesh: 0.6, shield: 0, armor: 0,
+  hpMult: 0.4, damageMult: 2.0, speed: 8.0, attackRange: 2.0, attackRate: 1, aggroRange: 32,
+  scale: 0.55, tint: 0x54d4ff, dropTier: 0, xp: 11,
+  barks: ['*glowing louder*', '*a lightbulb’s last idea*', '*bzzzt-tick-tick-tick*'],
+  weight: 14,
+};
+ENEMIES.lantern_wisp = {
+  id: 'lantern_wisp', name: 'Lantern Wisp', badassName: 'Big Damn Lantern',
+  faction: 'hollow', behavior: 'flyer',
+  flesh: 0.4, shield: 0.6, armor: 0,
+  hpMult: 0.85, damageMult: 1.0, speed: 5.6, attackRange: 14, attackRate: 1.0, aggroRange: 32,
+  scale: 0.8, tint: 0x7ad8ff, dropTier: 1, xp: 18,
+  barks: ['*a glow that noticed you*', '*flicker, flicker, AIM*', '*the light at the end of the tunnel, armed*'],
+  projectile: { speed: 32, element: 'volt' },
+  weight: 16,
+};
+ENEMIES.deep_roller = {
+  id: 'deep_roller', name: 'Deep Roller', badassName: 'Big Damn Boulder',
+  faction: 'hollow', behavior: 'brute',
+  flesh: 0.35, shield: 0, armor: 0.65,
+  hpMult: 3.2, damageMult: 1.7, speed: 2.8, attackRange: 2.5, attackRate: 0.55, aggroRange: 22,
+  scale: 1.55, tint: 0x5a6478, dropTier: 1, xp: 40,
+  barks: ['*geology, approaching*', '*plates grinding into an opinion*', '*the cave clearing its throat*'],
+  weight: 9,
+};
+
+export const BOSS_ANCHORHEAD: EnemyDef = {
+  id: 'admiral_anchorhead', name: 'ADMIRAL ANCHORHEAD', badassName: 'ADMIRAL ANCHORHEAD',
+  faction: 'brine', behavior: 'brute',
+  flesh: 0.45, shield: 0.15, armor: 0.4,
+  hpMult: 32, damageMult: 2.2, speed: 3.2, attackRange: 3.4, attackRate: 0.75, aggroRange: 65,
+  scale: 2.8, tint: 0x4a7a72, dropTier: 3, xp: 900,
+  barks: ['ALL HANDS! WE HAVE A STOWAWAY!', 'The PELICAN never sank. She just CHANGED DEPARTMENTS.', 'I kept the manifest. YOU’RE ON IT NOW.', 'The sea gave me a second command. You get NONE.'],
+  projectile: { speed: 30, element: 'kinetic' },
+  weight: 0,
+};
+
+export const BOSS_MOTHERLODE: EnemyDef = {
+  id: 'mother_lode', name: 'THE MOTHER LODE', badassName: 'THE MOTHER LODE',
+  faction: 'hollow', behavior: 'brute',
+  flesh: 0.3, shield: 0, armor: 0.7,
+  hpMult: 44, damageMult: 2.4, speed: 3.0, attackRange: 3.6, attackRate: 0.75, aggroRange: 70,
+  scale: 3.2, tint: 0x6a7898, dropTier: 3, xp: 1400,
+  barks: ['the seam sings. YOU ARE OFF-KEY.', 'sixty years of tribute. you are TODAY’S.', 'dig. Dig. DIG.', 'the mountain owed me a body. it paid in CROWN.'],
+  weight: 0,
 };
 
 export const BOSS_BLOOM: EnemyDef = {

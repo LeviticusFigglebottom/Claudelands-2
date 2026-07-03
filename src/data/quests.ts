@@ -3,7 +3,7 @@
 // progression. All dialogue is original and lives here for the writers.
 
 export type ObjectiveKind = 'goto' | 'kill_faction' | 'collect' | 'boss' | 'kill_elites' | 'notoriety';
-export type QuestGiver = 'quibb' | 'zaza' | 'mayor' | 'brann' | 'mirelle' | 'okto' | 'juno';
+export type QuestGiver = 'quibb' | 'zaza' | 'mayor' | 'brann' | 'mirelle' | 'okto' | 'juno' | 'peg';
 
 /** Everyone who hands out work: display name, where they stand, greetings. */
 export const GIVERS: Record<QuestGiver, { name: string; where: string; mapId: string; x: number; z: number; greetings: string[] }> = {
@@ -56,6 +56,13 @@ export const GIVERS: Record<QuestGiver, { name: string; where: string; mapId: st
       'Dr. Juno Calla, xenobotany. Field note one: this planet is gorgeous. Field note two: RUN.',
     ],
   },
+  peg: {
+    name: 'Quartermistress Peg', where: 'at Driftwood Rest', mapId: 'veldt_shallows', x: -66, z: 76,
+    greetings: [
+      'Peg. Quartermistress of the PELICAN. Ship’s in two pieces, crew’s in a MOOD, but the paperwork survived. It always does.',
+      'Welcome to Driftwood Rest. Occupancy: me, four crabs, and whatever you are. Wipe your feet.',
+    ],
+  },
 };
 
 export interface QuestDef {
@@ -70,7 +77,7 @@ export interface QuestDef {
     label: string;
     count: number;
     districtId?: string;
-    faction?: 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant';
+    faction?: 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'brine' | 'hollow';
     bossId?: string;
     markerX?: number; markerZ?: number;
     mapId?: string;                // which map the marker/boss lives on (default claudelands)
@@ -363,6 +370,106 @@ export const QUESTS: QuestDef[] = [
     rewardCash: 9000, rewardXp: 10000, rewardItem: 'legendary',
     completeLine: 'The Bloom Mother is compost. Juno\u2019s people are cut loose \u2014 shaky, sunburnt, alive. Eight of nine. She\u2019ll take it.',
   },
+  // ---- ARC: SHIPWRECK SHALLOWS (the lagoon)
+  {
+    id: 'q20_tidechart',
+    name: 'Low Tide, Long Ledger',
+    giver: 'juno',
+    briefing: [
+      'With the Bloom Mother gone the tide charts finally make SENSE again \u2014 the crossing to the east lagoon is open. Which matters, because my supply barge went down out there five months ago. The PELICAN. Full expedition resupply. Never arrived.',
+      'Last night somebody lit a signal fire on that shore. Regulation Helix distress spacing. Whoever\u2019s burning it knows procedure.',
+      'Walk the beach crossing east of the landing and find that fire, contractor. If any of my cargo is dry, I want it. If any of that crew is alive, I want that MORE.',
+    ],
+    acceptLine: 'East shore, past the palms! Follow the smoke, and do NOT trust the surf \u2014 it\u2019s been WRONG lately!',
+    objective: { kind: 'goto', label: 'Reach Driftwood Rest in the Shallows', count: 1, markerX: -70, markerZ: 80, mapId: 'veldt_shallows' },
+    rewardCash: 5000, rewardXp: 7000,
+    completeLine: 'The fire\u2019s keeper is one Quartermistress Peg \u2014 dry, furious, and inventorying a beach. Juno wants updates. Peg wants LABOR.',
+  },
+  {
+    id: 'q21_crewcut',
+    name: 'Overtime, Waived',
+    giver: 'peg',
+    briefing: [
+      'Here\u2019s the situation, sailor. The PELICAN broke her back on the shoals and my crew went down with the stern. Then they came back UP. Still in uniform. Still on shift. Still hauling cargo \u2014 the wrong way. INTO the sea.',
+      'I\u2019ve re-salvaged the same crate nine times. NINE. The tide keeps receipts and so do I.',
+      'They\u2019re past a medic\u2019s help \u2014 trust me, I checked, it cost me a rowboat. Retire the shift, contractor. Twelve of them should break the work rhythm.',
+    ],
+    acceptLine: 'The Hullgrave and the Pans! And if something says "back to work" \u2014 that\u2019s NOT me talking!',
+    objective: { kind: 'kill_faction', label: 'Drowned crew retired', count: 12, faction: 'brine', markerX: 6, markerZ: -36, mapId: 'veldt_shallows' },
+    rewardCash: 6000, rewardXp: 8000, rewardItem: 'epic',
+    completeLine: 'Twelve punch-outs, permanent. The hauling rhythm on the beach has audibly slowed. Peg is updating the muster roll with a nail.',
+  },
+  {
+    id: 'q22_manifest',
+    name: 'The Wet Manifest',
+    giver: 'peg',
+    briefing: [
+      'Now the real work. Dr. Calla\u2019s resupply \u2014 five sealed expedition crates, stamped HELIX-9, soaked through but watertight. The crew treats them like holy cargo. Carries them in PROCESSION.',
+      'I want them back on dry sand. All five. They\u2019re strapped to the biggest, wettest backs out there.',
+      'Pry them loose however you like. I\u2019ll be here, building a fifth chair out of a fourth boat.',
+    ],
+    acceptLine: 'Five crates! Follow the processions \u2014 and lift with your LEGS, they\u2019re full of science!',
+    objective: { kind: 'collect', label: 'Expedition crates recovered', count: 5, faction: 'brine', markerX: 6, markerZ: -36, mapId: 'veldt_shallows' },
+    rewardCash: 7000, rewardXp: 9000, rewardItem: 'epic',
+    completeLine: 'Five crates, dry-ish, accounted for. Juno\u2019s instruments survived. Peg\u2019s opinion of Helix packaging has, grudgingly, improved.',
+  },
+  {
+    id: 'q23_admiral',
+    name: 'Striking the Colors',
+    giver: 'peg',
+    briefing: [
+      'You\u2019ve met the crew. Now meet MANAGEMENT. Captain Anchorhead went down lashed to the wheel, and the sea \u2014 the sea PROMOTED him. He walks the Anchorage now with the bower anchor on his back, taking salutes from things with too many legs.',
+      'Every drowned deckhand on this beach clocks in for HIM. Strike the Admiral and the whole shift ends.',
+      'He was a good captain, contractor. Make it quick, make it loud, and bring me his lantern. I\u2019ll keep it lit. Tradition.',
+    ],
+    acceptLine: 'The Anchorage, east shore! Salute first \u2014 he appreciates FORM \u2014 then open fire!',
+    objective: { kind: 'boss', label: 'Admiral Anchorhead relieved of command', count: 1, bossId: 'admiral_anchorhead', markerX: 52, markerZ: 56, mapId: 'veldt_shallows' },
+    rewardCash: 10000, rewardXp: 12000, rewardItem: 'legendary',
+    completeLine: 'The Admiral is dismissed. The beach went QUIET \u2014 first ebb tide in five months that didn\u2019t carry cargo. Peg hung his lantern at Driftwood Rest and saluted it. Once.',
+  },
+  // ---- ARC: THE HOLLOWDEEP (the cave)
+  {
+    id: 'q24_seismic',
+    name: 'The Hum Below',
+    giver: 'juno',
+    briefing: [
+      'Peg\u2019s crates saved my expedition \u2014 and buried it in a NEW problem. My seismographs came back online and they are SCREAMING. Rhythmic tremors, under the west jungle. Not tectonic. Tectonics don\u2019t keep a WORK TEMPO.',
+      'The old survey calls it the Hollowdeep \u2014 a Helix bore mine, sealed sixty years ago with the dig crew still logged on shift. Nobody ever filed them out.',
+      'And contractor \u2014 the tremor that dragged Peg\u2019s barge chain? Same signature. The thing under this island has been DIGGING TOWARD THE SEA. Get down there.',
+    ],
+    acceptLine: 'The cave mouth, west of the Overgrowth! Take a light! Take TWO! Take a third for THROWING!',
+    objective: { kind: 'goto', label: 'Descend into the Hollowdeep', count: 1, markerX: 0, markerZ: 112, mapId: 'veldt_caves' },
+    rewardCash: 6000, rewardXp: 8000,
+    completeLine: 'You\u2019re in. The dark down here has LANTERNS, and the lanterns are WALKING. Juno\u2019s seismograph is doing a drumroll.',
+  },
+  {
+    id: 'q25_nightshift',
+    name: 'Ending the Night Shift',
+    giver: 'juno',
+    briefing: [
+      'Your suit telemetry is a HORROR NOVEL. Those pale things in the grove \u2014 that\u2019s the dig crew, contractor. Sixty years under a singing seam changes a workforce. They never stopped mining. They just stopped INVOICING.',
+      'They\u2019re hauling ore to something below \u2014 tribute, tempo, whatever that hum wants. Thin the shift. Twelve should break the rhythm section.',
+      'And whatever the wisps are \u2014 do NOT let them read your badge.',
+    ],
+    acceptLine: 'Twelve of the Undergrown! Grove and Cryptworks! If the hum gets CATCHY, hum something ELSE!',
+    objective: { kind: 'kill_faction', label: 'Undergrown shift broken', count: 12, faction: 'hollow', markerX: 38, markerZ: -30, mapId: 'veldt_caves' },
+    rewardCash: 7000, rewardXp: 9500, rewardItem: 'epic',
+    completeLine: 'Twelve clocked out. The hum below dropped half a step \u2014 Juno says that\u2019s either grief or a KEY CHANGE.',
+  },
+  {
+    id: 'q26_motherlode',
+    name: 'The Mother Lode',
+    giver: 'juno',
+    briefing: [
+      'There it is. The seam\u2019s singer. The survey\u2019s final page just calls it THE MOTHER LODE \u2014 the thing the dig crew found on level nine and started FEEDING instead of filing.',
+      'Sixty years of ore tribute grew it a crystal crown, and the crown is load-bearing \u2014 my scans show the resonance node right at the top. That\u2019s a TIP.',
+      'It dug at the Tangle. It dragged Peg\u2019s barge down by the CHAIN. It is not staying below, contractor. Close the shift. All of it.',
+    ],
+    acceptLine: 'The Lode Court! Bottom of the deep! Shoot the crown and do NOT sing along!',
+    objective: { kind: 'boss', label: 'The Mother Lode closed out', count: 1, bossId: 'mother_lode', markerX: 0, markerZ: -112, mapId: 'veldt_caves' },
+    rewardCash: 14000, rewardXp: 16000, rewardItem: 'legendary',
+    completeLine: 'The Mother Lode cracked like a geode and the hum STOPPED \u2014 planet-wide, mid-note. Juno logged the silence. Peg\u2019s tide came in clean. Somewhere under all that quiet, sixty years of shift-work finally ended.',
+  },
 ];
 
 // ---------------------------------------------------------------- side jobs
@@ -413,6 +520,36 @@ export const SIDE_QUESTS: QuestDef[] = [
     elite: { enemyId: 'lattice_warden', count: 4, x: 79, z: -11, mapId: 'claudelands', levelOffset: 4 },
     rewardCash: 3200, rewardXp: 3800, rewardUnique: 'leg_adjuster',
     completeLine: 'Eleven years of appeals, settled out of court. Take the settlement. It shoots.',
+  },
+  {
+    id: 'sq_undertow',
+    name: 'What the Sea Owes Me',
+    giver: 'mirelle',
+    briefing: [
+      'Word came up the wire: there’s a beach on Veldt Minor where the drowned WALK. Nine winters I begged the Fathom to give my crew back, and some jungle lagoon gets them WHOLESALE?',
+      'The big ones — the anchor-draggers — they’re wearing deep-water rig. MY fleet’s pattern. Explain THAT.',
+      'Put four of them down and check the rig tags. Whatever the sea owes me, collect it. I pay finder’s rates.',
+    ],
+    acceptLine: 'The Shallows! Off-world, east lagoon! If the water calls your name — new rule — DON’T ANSWER!',
+    objective: { kind: 'kill_elites', label: 'Anchor-draggers put down', count: 4, markerX: -20, markerZ: -50, mapId: 'veldt_shallows' },
+    elite: { enemyId: 'anchor_hulk', count: 4, x: -20, z: -50, mapId: 'veldt_shallows', levelOffset: 8 },
+    rewardCash: 5000, rewardXp: 6000, rewardUnique: 'leg_undertow',
+    completeLine: 'The tags came back. Not her fleet — nobody’s fleet. Mirelle stared at them a long time, then paid double. "For the crews," she said. Don’t ask which ones.',
+  },
+  {
+    id: 'sq_wrongbones',
+    name: 'An Ossuary Complaint',
+    giver: 'okto',
+    briefing: [
+      'The bones and I are on a break. The bones under VELDT MINOR did not get the memo.',
+      'A cave full of rollers — armored things wearing their skeletons OUTSIDE, which is showing off — has started grinding up the old dig crew’s remains for... aggregate. Structural bone. UNSANCTIONED structural bone.',
+      'Crack four of the big rollers and scatter what they’ve hoarded. The dead down there clocked out sixty years ago. Let them STAY out.',
+    ],
+    acceptLine: 'The Hollowdeep! Bring a light and an APOLOGY — you’ll know when to use it!',
+    objective: { kind: 'kill_elites', label: 'Deep rollers cracked', count: 4, markerX: 44, markerZ: -66, mapId: 'veldt_caves' },
+    elite: { enemyId: 'deep_roller', count: 4, x: 44, z: -66, mapId: 'veldt_caves', levelOffset: 9 },
+    rewardCash: 5000, rewardXp: 6000, rewardUnique: 'leg_lodestone',
+    completeLine: 'The rollers are gravel and the hoard is scattered. Okto says the cave exhaled. He also says take this — the bones down there INSISTED.',
   },
 ];
 

@@ -1,5 +1,64 @@
 # ROADMAP
 
+## Pass 14 status — the lagoon and the cave
+
+Veldt Minor's two sealed exits are OPEN. Both zones are fully dressed:
+new factions, new bosses, new arcs, new uniques.
+
+**SHIPWRECK SHALLOWS** (`veldt_shallows`, open coastal map): a turquoise
+lagoon hangs off the east edge — sea-sized water you WADE into, with the
+Anchorage boss arena standing ankle-deep in it. The hauler PELICAN lies
+broken in two across the Hullgrave, barnacled, one porthole still lit,
+her anchor chain paying out link-by-link toward the water. Districts:
+Driftwood Rest (Quartermistress Peg's castaway camp — shack, signal
+fire, fish racks, a rowboat with a furniture career), the Hullgrave, the
+Brine Pans (tide pools, salt crusts, drowned tide-totems), the
+Anchorage (hull-rib arena + anchor monument + lantern buoys). Shoreline
+scatter: shells, starfish, kelp, driftwood, decorative crabs; gulls
+circle the wreck fields. THE DROWNED (faction `brine`): the crew never
+stopped working — brine husks, harpooneers, tidecallers, snapjaws,
+gullwings, anchor hulks.
+
+**THE HOLLOWDEEP** (`veldt_caves`, corridor map like the Tangle): a
+bioluminescent cave — near-black sky, glowworm aurora veins overhead,
+drifting spore motes (new ambient particle), glowing crack veins in the
+rock, and a new biome flora: giant glow-mushrooms + stalagmites (70
+grown along the corridor). Districts: the Mouth (mine head-frame, rail
+stub, lanterns), the Gloomgrove (elder mushrooms, spore-light), the
+Cryptworks (timber braces, rail + ore carts, cold-fire camp, ore-heap
+cover), the Lode Court (giant crystal ring + the dead company drill).
+THE UNDERGROWN (faction `hollow`): the dig crew that never clocked out —
+gloomstalkers, shardcasters, spitgrubs, gravemites, lantern wisps, deep
+rollers.
+
+**Bosses** (game/boss.ts): ADMIRAL ANCHORHEAD — the PELICAN's captain,
+promoted by the sea: keelhaul anchor-charge, fanned harpoon volleys,
+rime anchor-slams, boarding-party summons; his still-lit ship lantern is
+the crit. THE MOTHER LODE — the thing on level nine: burrows UNDER the
+floor and erupts beneath you, volt shard volleys, quake novas, gravemite
+tribute; the resonant crystal crown is the crit. Both have dedicated
+legendaries (Broadside pistol / Pay Dirt launcher), first-kill
+guaranteed, excluded from the world pool.
+
+**Quests q20–q26**: the lagoon arc (Juno's lost resupply → meet Peg →
+retire the drowned crew → recover the manifest crates → strike the
+Admiral) and the cave arc (the hum below → break the night shift → close
+out the Mother Lode). Chain rules exercise the pass-13 holocall
+geography on purpose: q21→q22→q23 and q24→q25→q26 auto-chain by
+holocall; giver/map changes are desk visits. Two new side jobs with
+quest-only uniques: Mirelle's "What the Sea Owes Me" (The Undertow) and
+Okto's "An Ossuary Complaint" (Lodestone). Old saves that finished q19
+unlock the new frontier on load.
+
+**New NPC**: Quartermistress Peg — world rig (hair-bun look), gravelly
+saw-wave voice profile, holocall bust, intro cinematic, greetings.
+
+Headless suite: `verify15.mjs` — 21 checks, all passing (travel,
+corridor walls, flora counts, faction waves, both bosses + dedicated
+drops, world-pool exclusion, the full q19→q26 chain including holocall
+vs desk-visit boundaries, boss re-arm on map entry, side jobs, the
+save-frontier fixup).
+
 ## Pass 13 status — the gulch playtest fixes
 
 Direct response to gulch playtest feedback, plus a full Mario-Kart-style

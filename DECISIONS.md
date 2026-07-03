@@ -130,6 +130,22 @@ narrative: instead the old quest completes over holocall and the next
 waits at the giver's desk. Same rule, one line:
 `(next.objective.mapId ?? base) === (q.objective.mapId ?? base)`.
 
+## The sea is a lake and the cave is a corridor (pass 14)
+
+Both new zones reuse proven terrain machinery instead of new systems.
+The Shallows' "sea" is the existing circular lake blend with its center
+hung off the map edge (r118 at x=130) — everything inside the blend
+flattens to ankle depth, so the lagoon reads as open water, you can wade
+it, and the Anchorage boss arena stands IN it for free. The Hollowdeep
+is the Tangle's corridor generator with cave dressing: near-black sky +
+dense fog fake the ceiling, the aurora system reads as glowworm veins in
+the dark, and a new `mushroom` biome flora + `spore` ambient particle
+carry the biome identity. One real lesson: a cave lit "realistically"
+(ambient 0.7) is unplayably black through the toon/ink post pass —
+it took sun 1.45 + ambient 1.35 against the dark palette before
+silhouettes read, and the glow materials (caps, veins, crystals) do the
+actual lighting work.
+
 ## Quests (pass 2)
 
 Declarative rows in `data/quests.ts` (goto / kill_faction / collect / boss);

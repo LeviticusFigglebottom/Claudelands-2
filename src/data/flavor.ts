@@ -209,6 +209,42 @@ export const WIRE_LOGS: WireLog[] = [
       'Day 41: company says the wrecks are “self-managing” now. So am I. Gone fishing.',
     ],
   },
+  {
+    id: 'log_shallows1',
+    speaker: 'QUARTERMISTRESS PEG — SHORE LOG, ENTRY 147',
+    lines: [
+      'Day 1: barge down, cargo scattered, crew lost. Started the fire per regulation. Regulation is all I have left.',
+      'Day 60: the crew came back. Wet. Punctual. They don’t answer muster but they NEVER miss a shift.',
+      'Day 147: re-salvaged crate 7 for the ninth time. If the sea wants a paperwork war, the sea has PICKED THE WRONG QUARTERMISTRESS.',
+    ],
+  },
+  {
+    id: 'log_shallows2',
+    speaker: 'PELICAN DECK LOG — FINAL ENTRY, SALT-CRUSTED',
+    lines: [
+      'Weather clean, shoals charted, crossing routine. Then the chain locker started paying out BY ITSELF.',
+      'Something took the bower anchor like a fish takes a hook. Pulled us stern-first. The captain lashed himself to the wheel and told us the ship comes first.',
+      'The ship came first. We came after. The captain — the captain never clocked out at all.',
+    ],
+  },
+  {
+    id: 'log_hollow1',
+    speaker: 'HELIX BORE SITE 9 — SHIFT SUPERVISOR’S WIRE, DEGRADED',
+    lines: [
+      'Level nine broke into a natural gallery today. Crystal formations. They HUM. The crew hums back on their breaks. Filed under morale: positive.',
+      'Productivity is up 300%. Nobody has clocked out in six days. Filed under morale: very positive.',
+      'HQ ordered the shaft sealed. The crew disagrees. The crew has never disagreed before. Filing this under',
+    ],
+  },
+  {
+    id: 'log_hollow2',
+    speaker: 'UNDERGROWN CHANT — SCRATCHED INTO A RAIL CART, TRANSLATED BADLY',
+    lines: [
+      'verse: the seam sings low and the seam sings long, and the shift is the length of the song.',
+      'verse: she pays in glow what she takes in bone, and nobody hauls alone.',
+      'chorus (carved deeper): DIG. DIG. DIG.',
+    ],
+  },
 ];
 
 export const ZAZA_GREETINGS = [

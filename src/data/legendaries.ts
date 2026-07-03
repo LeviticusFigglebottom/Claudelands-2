@@ -105,6 +105,20 @@ export const LEGENDARIES: LegendaryDef[] = [
     effect: { kind: 'vampire', leech: 0.05 }, forceElement: 'bile',
     dedicatedTo: 'bloom_mother',
   },
+  {
+    id: 'leg_broadside', name: 'Broadside', maker: 'vulkram', type: 'pistol',
+    redText: '“All guns. One hand.”',
+    effectLabel: 'Every trigger pull fires a full naval volley of extra pellets.',
+    effect: { kind: 'pellet_storm', pellets: 6 },
+    dedicatedTo: 'admiral_anchorhead',
+  },
+  {
+    id: 'leg_paydirt', name: 'Pay Dirt', maker: 'vulkram', type: 'launcher',
+    redText: '“Strike the earth. The earth strikes back.”',
+    effectLabel: 'Impacts call down a second, delayed cave-in.',
+    effect: { kind: 'meteor', radius: 5.5 }, forceElement: 'blast',
+    dedicatedTo: 'mother_lode',
+  },
   // ---- quest-unique rewards (side jobs only; never in the world drop pool)
   {
     id: 'leg_ossuary', name: 'Ossuary', maker: 'vulkram', type: 'shotgun',
@@ -123,6 +137,18 @@ export const LEGENDARIES: LegendaryDef[] = [
     redText: '“CLAIM STATUS: DENIED. APPEAL STATUS: DENIED. YOU: DENIED.”',
     effectLabel: 'Damage climbs steeply as the magazine empties (+20%/missing round).',
     effect: { kind: 'money_shot', multPerMissing: 0.2 }, questOnly: true,
+  },
+  {
+    id: 'leg_undertow', name: 'The Undertow', maker: 'aetheric', type: 'smg',
+    redText: '“What goes out comes back. Wetter.”',
+    effectLabel: 'Freezing spray that heals you for 5% of damage dealt.',
+    effect: { kind: 'vampire', leech: 0.05 }, forceElement: 'rime', questOnly: true,
+  },
+  {
+    id: 'leg_lodestone', name: 'Lodestone', maker: 'aetheric', type: 'pistol',
+    redText: '“Everything down here points at you.”',
+    effectLabel: 'Volt hits chain twice instead of once.',
+    effect: { kind: 'bouncing_orbs' }, forceElement: 'volt', questOnly: true,
   },
 ];
 

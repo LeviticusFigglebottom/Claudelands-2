@@ -351,6 +351,15 @@ class QuestSystem {
     }
     this.ensureBosses();
     if (this.quests.find((q) => q.def.id === 'q12_city')?.status === 'complete') this.unlockSides();
+    // content updates append quests: a save that finished the old final
+    // chapter loads with the new frontier still locked — open it
+    for (let i = 0; i < this.quests.length - 1; i++) {
+      if (this.quests[i].status === 'complete' && this.quests[i + 1].status === 'locked') {
+        this.quests[i + 1].status = 'available';
+        this.hooks?.toast(`New work waiting: <b>${GIVERS[this.quests[i + 1].def.giver].name}</b>`, '#ffd23c');
+        break;
+      }
+    }
   }
 }
 

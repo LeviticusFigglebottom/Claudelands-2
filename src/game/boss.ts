@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { Enemy, enemySpawner, enemyHooks } from './enemies';
-import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, BOSS_BLOOM, type EnemyDef } from '../data/enemies';
+import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, BOSS_BLOOM, BOSS_ANCHORHEAD, BOSS_MOTHERLODE, type EnemyDef } from '../data/enemies';
 import { toonMat, glowMat } from '../render/toon';
 import { fx } from './particles';
 import { audio } from '../audio/synth';
@@ -472,7 +472,240 @@ export class BloomMother extends Boss {
 }
 
 // ---------------------------------------------------------------------------
-export type BossId = 'gutterball' | 'warden_prime' | 'old_man_avalanche' | 'saint_furnace' | 'bloom_mother';
+// ADMIRAL ANCHORHEAD — the PELICAN's drowned captain, promoted by the sea.
+// Harpoon volleys, anchor-slam rime novas, hands on deck; his ship's lantern
+// (still lit, still regulation) hangs off the anchor stock — that's the crit.
+export class AdmiralAnchorhead extends Boss {
+  private lantern: THREE.Mesh;
+  private anchor: THREE.Group;
+  private charging = 0;
+  private chargeDir = new THREE.Vector3();
+
+  constructor(level: number, pos: THREE.Vector3) {
+    super(BOSS_ANCHORHEAD, level, pos);
+    const scale = this.def.scale;
+    const iron = toonMat({ color: 0x3a4442 });
+    // the bower anchor across his back
+    this.anchor = new THREE.Group();
+    const shank = new THREE.Mesh(new THREE.BoxGeometry(0.12 * scale, 1.7 * scale, 0.12 * scale), iron);
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(0.9 * scale, 0.1 * scale, 0.1 * scale), iron);
+    stock.position.y = 0.7 * scale;
+    for (const side of [-1, 1]) {
+      const fluke = new THREE.Mesh(new THREE.ConeGeometry(0.14 * scale, 0.5 * scale, 4), iron);
+      fluke.position.set(side * 0.3 * scale, -0.8 * scale, 0);
+      fluke.rotation.z = side * 2.4;
+      this.anchor.add(fluke);
+    }
+    this.anchor.add(shank, stock);
+    this.anchor.position.set(0, 1.3 * scale, 0.42 * scale);
+    this.anchor.rotation.z = 0.35;
+    this.group.add(this.anchor);
+    this.anchor.traverse((o) => { if (o instanceof THREE.Mesh) this.bodyParts.push(o); });
+    // bicorn hat — management
+    const bicorn = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * scale, 0.42 * scale, 0.22 * scale, 4), toonMat({ color: 0x24322e }));
+    bicorn.position.y = 2.1 * scale;
+    bicorn.rotation.y = Math.PI / 4;
+    this.group.add(bicorn);
+    this.bodyParts.push(bicorn);
+    // the ship's lantern: still lit, still regulation — CRIT
+    this.lantern = new THREE.Mesh(new THREE.SphereGeometry(0.22 * scale, 10, 10), glowMat(0x7dffd4, 0.95));
+    this.lantern.position.set(0.55 * scale, 1.75 * scale, 0.35 * scale);
+    this.group.add(this.lantern);
+    this.bodyParts.push(this.lantern);
+    this.critZone = this.lantern;
+    audio.bossRoar(false);
+  }
+
+  protected onPhase(phase: number): void {
+    if (phase === 1) {
+      enemyHooks().bark(this.displayName, 'ALL HANDS! BOARDING PARTY, ASSEMBLE!');
+      for (const s of [new THREE.Vector3(5, 0, 4), new THREE.Vector3(-5, 0, 4), new THREE.Vector3(0, 0, -6)]) {
+        enemySpawner.spawnOne(ENEMIES.brine_husk, this.position.clone().add(s), false, 6);
+      }
+    } else {
+      enemyHooks().bark(this.displayName, 'STORM STATIONS. THAT MEANS ME.');
+      audio.bossRoar(false);
+      this.def = { ...this.def, speed: this.def.speed * 1.45, attackRate: this.def.attackRate * 1.35 };
+      (this.lantern.material as THREE.MeshBasicMaterial).color.setHex(0x54ffb8);
+    }
+  }
+
+  protected specialCooldown(): number { return this.phase >= 2 ? 4.2 : 6.5; }
+
+  protected special(): void {
+    const playerPos = enemyHooks().playerPos();
+    const roll = Math.random();
+    if (roll < 0.4 && playerPos.distanceTo(this.position) > 7) {
+      // KEELHAUL: drag the anchor in a straight charge, spray in the wake
+      this.charging = 1.15;
+      this.chargeDir.copy(playerPos).sub(this.position).setY(0).normalize();
+      fx.burst(this.position.clone().add(new THREE.Vector3(0, 1.6, 0)), 0x7dffd4, 22, 3, 0.14, 0.6, 2);
+      enemyHooks().bark(this.displayName, 'WEIGH ANCHOR!');
+    } else if (roll < 0.7) {
+      // HARPOON VOLLEY: three flat, fast bolts fanned at the player
+      enemyHooks().bark(this.displayName, 'STICK THE STOWAWAY!');
+      const muzzle = this.position.clone().add(new THREE.Vector3(0, 1.9 * this.def.scale, 0));
+      const base = playerPos.clone().sub(muzzle).setY(0).normalize();
+      for (let i = -1; i <= 1; i++) {
+        const dir = base.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), i * 0.16);
+        projectiles.spawn({
+          pos: muzzle.clone(), vel: dir.multiplyScalar(32).add(new THREE.Vector3(0, 1.2, 0)),
+          damage: 8 * levelScale(this.level), element: 'kinetic',
+          splash: 0, gravity: 3, fuse: -1, source: 'enemy',
+        });
+      }
+      audio.explosion(false);
+    } else {
+      // ANCHOR SLAM: freezing brine nova
+      fx.explosion(this.position.clone(), 5.5, 0x54a8c8);
+      audio.explosion(true);
+      audio.elemental('rime');
+      splashDamage(this.position.clone(), 8, 9.5 * levelScale(this.level), 'rime', { source: 'enemy', elemChance: 0.85 });
+    }
+  }
+
+  override update(dt: number): void {
+    super.update(dt);
+    if (!this.alive) return;
+    if (this.charging > 0) {
+      this.charging -= dt;
+      this.position.addScaledVector(this.chargeDir, 15 * dt);
+      this.settleToGround(true);
+      this.wobble += dt * 16;
+      fx.burst(this.position.clone().add(new THREE.Vector3(0, 0.4, 0)), 0xbfe8e0, 3, 2.5, 0.1, 0.5, 5);
+      const playerPos = enemyHooks().playerPos();
+      if (playerPos.distanceTo(this.position) < 2.9) {
+        enemyHooks().damagePlayer(15 * levelScale(this.level), 'rime', this.position);
+        this.charging = 0;
+      }
+    }
+    // the sea drips off him constantly
+    if (Math.random() < 6 * dt) fx.statusFlames(this.position, 'rime');
+    this.anchor.rotation.z = 0.35 + Math.sin(this.wobble * 0.5) * 0.08;
+    const m = this.lantern.material as THREE.MeshBasicMaterial;
+    m.opacity = 0.75 + Math.sin(this.wobble * 2.4) * 0.2;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// THE MOTHER LODE — the thing on level nine that the dig crew started feeding.
+// A crystal-crowned burrower: shard volleys, quake novas, and a plowing
+// underground charge. The resonant crown is the crit zone (it's load-bearing).
+export class MotherLode extends Boss {
+  private crown: THREE.Mesh;
+  private spikes: THREE.Mesh[] = [];
+  private burrowing = 0;
+  private burrowDir = new THREE.Vector3();
+
+  constructor(level: number, pos: THREE.Vector3) {
+    super(BOSS_MOTHERLODE, level, pos);
+    const scale = this.def.scale;
+    // crystal spines down the back
+    const shardMat = glowMat(0x54d4ff, 0.55);
+    for (let i = 0; i < 7; i++) {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.12 * scale, (0.5 + Math.abs(Math.sin(i * 2.1)) * 0.6) * scale, 5), shardMat);
+      spike.position.set((i / 6 - 0.5) * 0.8 * scale, 1.5 * scale + Math.sin(i * 1.4) * 0.2 * scale, 0.3 * scale);
+      spike.rotation.x = -0.5;
+      this.group.add(spike);
+      this.bodyParts.push(spike);
+      this.spikes.push(spike);
+    }
+    // the resonant crown — CRIT
+    this.crown = new THREE.Mesh(new THREE.OctahedronGeometry(0.34 * scale, 0), glowMat(0x9ae8ff, 0.95));
+    this.crown.position.y = 2.25 * scale;
+    this.group.add(this.crown);
+    this.bodyParts.push(this.crown);
+    this.critZone = this.crown;
+    audio.bossRoar(true);
+  }
+
+  protected onPhase(phase: number): void {
+    if (phase === 1) {
+      enemyHooks().bark(this.displayName, 'the seam calls its SHIFT.');
+      for (const s of [new THREE.Vector3(5, 0, 4), new THREE.Vector3(-5, 0, 4), new THREE.Vector3(0, 0, -6), new THREE.Vector3(4, 0, -4)]) {
+        enemySpawner.spawnOne(ENEMIES.gravemite, this.position.clone().add(s), false, 8);
+      }
+    } else {
+      enemyHooks().bark(this.displayName, 'FORTISSIMO.');
+      audio.bossRoar(true);
+      this.def = { ...this.def, speed: this.def.speed * 1.45, attackRate: this.def.attackRate * 1.3 };
+      (this.crown.material as THREE.MeshBasicMaterial).color.setHex(0xd4f4ff);
+    }
+  }
+
+  protected specialCooldown(): number { return this.phase >= 2 ? 4 : 6.5; }
+
+  protected special(): void {
+    const playerPos = enemyHooks().playerPos();
+    const roll = Math.random();
+    if (roll < 0.38 && playerPos.distanceTo(this.position) > 7) {
+      // BURROW: plow under the floor toward the player, erupt on arrival
+      this.burrowing = 1.2;
+      this.burrowDir.copy(playerPos).sub(this.position).setY(0).normalize();
+      fx.burst(this.position.clone(), 0x8a94b8, 26, 4, 0.16, 0.7, 3);
+      enemyHooks().bark(this.displayName, 'the floor is MINE. all floors are.');
+    } else if (roll < 0.7) {
+      // SHARD VOLLEY: charged crystal arcs bracket the player
+      enemyHooks().bark(this.displayName, 'tribute, RETURNED.');
+      for (let i = 0; i < 4; i++) {
+        const target = playerPos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 8));
+        const muzzle = this.position.clone().add(new THREE.Vector3(0, 2.4 * this.def.scale, 0));
+        const aim = target.clone().sub(muzzle);
+        const dist = aim.length();
+        aim.normalize().multiplyScalar(16);
+        aim.y += dist * 0.55;
+        projectiles.spawn({
+          pos: muzzle, vel: aim, damage: 10 * levelScale(this.level), element: 'volt',
+          splash: 3.2, gravity: 14, fuse: -1, source: 'enemy',
+        });
+      }
+      audio.explosion(false);
+    } else {
+      // QUAKE NOVA
+      fx.explosion(this.position.clone(), 6, 0x54d4ff);
+      audio.explosion(true);
+      audio.elemental('volt');
+      splashDamage(this.position.clone(), 8.5, 10 * levelScale(this.level), 'volt', { source: 'enemy', elemChance: 0.8 });
+    }
+  }
+
+  override update(dt: number): void {
+    super.update(dt);
+    if (!this.alive) {
+      this.group.position.y = this.position.y; // never die half-sunk
+      return;
+    }
+    if (this.burrowing > 0) {
+      this.burrowing -= dt;
+      this.position.addScaledVector(this.burrowDir, 16 * dt);
+      this.settleToGround(true);
+      // plowing under: sink the body, throw a bow wave of dirt
+      this.group.position.y = this.position.y - 1.6;
+      this.wobble += dt * 14;
+      fx.burst(this.position.clone().add(new THREE.Vector3(0, 0.3, 0)), 0x48566a, 4, 3, 0.12, 0.6, 4);
+      const playerPos = enemyHooks().playerPos();
+      if (this.burrowing <= 0 || playerPos.distanceTo(this.position) < 3) {
+        // ERUPTION
+        this.burrowing = 0;
+        this.group.position.y = this.position.y;
+        fx.explosion(this.position.clone(), 5, 0x8a94b8);
+        audio.explosion(true);
+        splashDamage(this.position.clone(), 6.5, 11 * levelScale(this.level), 'blast', { source: 'enemy' });
+      }
+    }
+    if (this.phase >= 2 && Math.random() < 8 * dt) fx.statusFlames(this.position, 'volt');
+    this.crown.rotation.y += dt * 1.4;
+    const m = this.crown.material as THREE.MeshBasicMaterial;
+    m.opacity = 0.75 + Math.sin(this.wobble * 2.6) * 0.2;
+    for (let i = 0; i < this.spikes.length; i++) {
+      const sm = this.spikes[i].material as THREE.MeshBasicMaterial;
+      sm.opacity = 0.45 + Math.sin(this.wobble * 2 + i * 0.9) * 0.18;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+export type BossId = 'gutterball' | 'warden_prime' | 'old_man_avalanche' | 'saint_furnace' | 'bloom_mother' | 'admiral_anchorhead' | 'mother_lode';
 
 export function spawnBoss(id: BossId, pos: THREE.Vector3, levelOverride?: number): Enemy {
   const level = levelOverride ?? state.level + 2;
@@ -480,8 +713,14 @@ export function spawnBoss(id: BossId, pos: THREE.Vector3, levelOverride?: number
     : id === 'warden_prime' ? new WardenPrime(level, pos)
     : id === 'old_man_avalanche' ? new OldManAvalanche(level, pos)
     : id === 'bloom_mother' ? new BloomMother(level, pos)
+    : id === 'admiral_anchorhead' ? new AdmiralAnchorhead(level, pos)
+    : id === 'mother_lode' ? new MotherLode(level, pos)
     : new SaintFurnace(level, pos);
   enemySpawner.registerBoss(boss);
-  fx.explosion(pos.clone().add(new THREE.Vector3(0, 1, 0)), 4, id === 'gutterball' ? 0xff8438 : id === 'warden_prime' ? 0x54d4ff : id === 'old_man_avalanche' ? 0x9ad8e8 : id === 'bloom_mother' ? 0x9adc4a : 0xff7a1a);
+  const flash: Record<string, number> = {
+    gutterball: 0xff8438, warden_prime: 0x54d4ff, old_man_avalanche: 0x9ad8e8,
+    bloom_mother: 0x9adc4a, admiral_anchorhead: 0x7dffd4, mother_lode: 0x54d4ff,
+  };
+  fx.explosion(pos.clone().add(new THREE.Vector3(0, 1, 0)), 4, flash[id] ?? 0xff7a1a);
   return boss;
 }

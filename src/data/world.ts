@@ -7,7 +7,7 @@
 
 import { clamp01, lerp } from '../util/maff';
 
-export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle' | 'gulchgate' | 'shipbreak';
+export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle' | 'gulchgate' | 'shipbreak' | 'castaway' | 'hullgrave' | 'brinepans' | 'anchorage' | 'cavemouth' | 'gloomgrove' | 'cryptworks' | 'lodecourt';
 
 export interface DistrictDef {
   id: string;
@@ -16,7 +16,7 @@ export interface DistrictDef {
   dress: DistrictDress;
   cx: number; cz: number; radius: number;
   baseHeight: number;
-  faction: 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'none';
+  faction: 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'brine' | 'hollow' | 'none';
   spawnTable: { enemyId: string; weight: number }[];
   maxAlive: number;
   respawnDelay: number;
@@ -34,8 +34,8 @@ export interface BiomeDef {
   ground: { base: string; light: string; dark: string; crack: string };
   rock: string;
   scrub: number;               // scrub tuft color
-  ambientParticle: 'dust' | 'snow' | 'ash';
-  trees: 'cactus' | 'pine' | 'burnt' | 'palm';
+  ambientParticle: 'dust' | 'snow' | 'ash' | 'spore';
+  trees: 'cactus' | 'pine' | 'burnt' | 'palm' | 'mushroom';
   aurora: boolean;
   weeds: boolean;              // tumbleweeds roam
 }
@@ -581,11 +581,9 @@ export const VELDT: WorldDef = {
   ],
   spawn: { x: 0, z: 88 },
   exits: [
-    { x: -104, z: -62, targetMap: 'veldt_caves', targetX: 0, targetZ: 0, label: 'THE HOLLOWDEEP', style: 'cave',
-      sealed: 'A breath of cold air from the dark. Something below is still digging. (A future update opens the Hollowdeep.)' },
+    { x: -104, z: -62, targetMap: 'veldt_caves', targetX: 0, targetZ: 112, label: 'THE HOLLOWDEEP', style: 'cave' },
     { x: 6, z: -114, targetMap: 'veldt_tangle', targetX: 0, targetZ: 116, label: 'THE TANGLE', style: 'thicket' },
-    { x: 110, z: 26, targetMap: 'veldt_shallows', targetX: 0, targetZ: 0, label: 'SHIPWRECK SHALLOWS', style: 'beach',
-      sealed: 'Sand, surf, and half a hull on the horizon. The tide is wrong for the crossing. (A future update opens the Shallows.)' },
+    { x: 110, z: 26, targetMap: 'veldt_shallows', targetX: -100, targetZ: 96, label: 'SHIPWRECK SHALLOWS', style: 'beach' },
   ],
 };
 
@@ -804,6 +802,202 @@ export const VELDT_TANGLE: WorldDef = {
   ],
 };
 
+// ===========================================================================
+// PLANET 2, MAP 3 — SHIPWRECK SHALLOWS. The east coast of Veldt Minor: a
+// turquoise lagoon with the hauler PELICAN broken across it. Her crew never
+// stopped working the cargo — they just stopped needing air. A castaway
+// quartermaster runs the only dry camp on the shore.
+export const VELDT_SHALLOWS: WorldDef = {
+  id: 'veldt_shallows',
+  name: 'SHIPWRECK SHALLOWS',
+  tagline: 'the tide keeps receipts.',
+  size: 300,
+  skyTop: 0x2a96d8, skyHorizon: 0xd8f0e0,
+  sun: { color: 0xfff6d8, intensity: 1.55, dirX: 0.35, dirY: 0.8, dirZ: -0.3 },
+  ambient: { sky: 0xb8e8f0, ground: 0x7a9a6a, intensity: 0.85 },
+  fog: { color: 0xbfe8e0, near: 70, far: 300 },
+  biome: {
+    ground: { base: '#d8c084', light: '#f0e0ac', dark: '#a89058', crack: 'rgba(90,70,40,0.3)' },
+    rock: '#8a9a84',
+    scrub: 0x5aa86a,
+    ambientParticle: 'dust',
+    trees: 'palm',
+    aurora: false,
+    weeds: false,
+  },
+  terrain: {
+    duneAmp: 1.4,
+    roughAmp: 0.6,
+    roads: [
+      { x0: -110, z0: 100, x1: -70, z1: 80 },   // veldt entry → Driftwood Rest
+      { x0: -70, z0: 80, x1: -60, z1: -60 },    // camp → the Brine Pans
+      { x0: -70, z0: 80, x1: 6, z1: -36 },      // camp → the Hullgrave
+      { x0: -70, z0: 80, x1: 52, z1: 56 },      // camp → the Anchorage shore
+    ],
+    // the lagoon: a sea-sized "lake" hanging off the east edge. Everything
+    // inside its blend wades ankle-deep; the Anchorage arena sits in it.
+    lake: { x: 130, z: 0, r: 118, level: 0.22 },
+  },
+  districts: [
+    {
+      id: 'driftwood', name: 'DRIFTWOOD REST', subtitle: 'Dry. Mostly. Ask About the Chowder.', dress: 'castaway',
+      cx: -70, cz: 80, radius: 30, baseHeight: 1.2,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 0,
+    },
+    {
+      id: 'hullgrave', name: 'THE HULLGRAVE', subtitle: 'The PELICAN, Filed in Two Places', dress: 'hullgrave',
+      cx: 6, cz: -36, radius: 44, baseHeight: 0.7,
+      faction: 'brine', levelOffset: 6,
+      spawnTable: [
+        { enemyId: 'brine_husk', weight: 28 },
+        { enemyId: 'harpooneer', weight: 22 },
+        { enemyId: 'snapjaw', weight: 16 },
+        { enemyId: 'tidecaller', weight: 12 },
+        { enemyId: 'anchor_hulk', weight: 8 },
+      ],
+      maxAlive: 8, respawnDelay: 20,
+    },
+    {
+      id: 'brinepans', name: 'THE BRINE PANS', subtitle: 'Salt Flats. The Salt Is Ambitious.', dress: 'brinepans',
+      cx: -60, cz: -60, radius: 36, baseHeight: 0.6,
+      faction: 'brine', levelOffset: 6,
+      spawnTable: [
+        { enemyId: 'snapjaw', weight: 26 },
+        { enemyId: 'brine_husk', weight: 20 },
+        { enemyId: 'gullwing', weight: 18 },
+        { enemyId: 'tidecaller', weight: 12 },
+      ],
+      maxAlive: 7, respawnDelay: 22,
+    },
+    {
+      id: 'anchorage', name: 'THE ANCHORAGE', subtitle: 'Where the Admiral Takes Salutes', dress: 'anchorage',
+      cx: 52, cz: 56, radius: 34, baseHeight: 0.3,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 7,
+    },
+  ],
+  pois: [
+    { id: 'ft_shallows', kind: 'fast_travel', x: -76, z: 88, data: 'Driftwood Rest' },
+    { id: 'npc_peg', kind: 'npc', x: -66, z: 76, rot: 2.4, data: 'peg' },
+    { id: 'vg_s', kind: 'vendor_gun', x: -78, z: 74, rot: 1.2 },
+    { id: 'vm_s', kind: 'vendor_med', x: -60, z: 86, rot: -2.0 },
+    { id: 'chest_sh1', kind: 'chest', x: -58, z: 92, rot: 0.6 },
+    { id: 'sign_sh1', kind: 'sign', x: -68, z: 64, rot: 0.2, data: '← BRINE PANS · HULLGRAVE ↓ · ANCHORAGE → · SEA: EVERYWHERE' },
+    { id: 'log_sh1', kind: 'wirelog', x: -72, z: 70, data: 'log_shallows1' },
+    { id: 'chest_sh2', kind: 'chest', x: 14, z: -48, rot: -1.2 },
+    { id: 'log_sh2', kind: 'wirelog', x: 0, z: -30, data: 'log_shallows2' },
+    { id: 'sign_sh2', kind: 'sign', x: -8, z: -18, rot: 0.4, data: 'PELICAN SALVAGE: CREW ONLY. CREW STATUS: COMPLICATED.' },
+    { id: 'chest_sh3', kind: 'chest', x: -68, z: -70, rot: 1.8 },
+    { id: 'sign_sh3', kind: 'sign', x: 40, z: 40, rot: -0.6, data: 'THE ANCHORAGE — SALUTE OR SWIM' },
+  ],
+  spawn: { x: -100, z: 96 },
+  exits: [
+    { x: -118, z: 104, targetMap: 'veldt', targetX: 102, targetZ: 30, label: 'VELDT MINOR', style: 'beach' },
+  ],
+};
+
+// ===========================================================================
+// PLANET 2, MAP 4 — THE HOLLOWDEEP. The cave under the jungle: a corridor of
+// glow-mushroom groves and abandoned mine workings spiraling down to the
+// Lode Court, where the dig crew's sixty-year shift never ended.
+const HOLLOW_PATH = [
+  { x: 0, z: 118 },      // the Mouth (entry)
+  { x: 18, z: 74 },
+  { x: -8, z: 44 },
+  { x: -46, z: 40 },     // the Gloomgrove arena
+  { x: -54, z: -6 },
+  { x: -16, z: -26 },
+  { x: 38, z: -30 },     // the Cryptworks arena
+  { x: 44, z: -72 },
+  { x: 10, z: -92 },     // approach
+  { x: 0, z: -112 },     // the Lode Court (boss)
+];
+
+export const VELDT_CAVES: WorldDef = {
+  id: 'veldt_caves',
+  name: 'THE HOLLOWDEEP',
+  tagline: 'the dark down here is employed.',
+  size: 300,
+  skyTop: 0x070b16, skyHorizon: 0x16283a,
+  sun: { color: 0xa8d4ec, intensity: 1.45, dirX: 0.2, dirY: 0.9, dirZ: -0.2 },
+  ambient: { sky: 0x4a6e90, ground: 0x2a3c50, intensity: 1.35 },
+  fog: { color: 0x14222e, near: 34, far: 170 },
+  biome: {
+    ground: { base: '#3a4658', light: '#5c6e88', dark: '#1e2836', crack: 'rgba(84,212,255,0.3)' },
+    rock: '#3a4252',
+    scrub: 0x2fd8c8,
+    ambientParticle: 'spore',
+    trees: 'mushroom',
+    aurora: true,          // in the dark it reads as glowworm veins overhead
+    weeds: false,
+  },
+  terrain: {
+    duneAmp: 0.8,
+    roughAmp: 1.1,
+    roads: [],
+    corridor: {
+      pts: HOLLOW_PATH,
+      width: 13,
+      arenas: [
+        { x: 0, z: 118, r: 22 },
+        { x: -46, z: 40, r: 28 },
+        { x: 38, z: -30, r: 28 },
+        { x: 0, z: -112, r: 34 },
+      ],
+      wallHeight: 24,
+    },
+  },
+  districts: [
+    {
+      id: 'cavemouth', name: 'THE MOUTH', subtitle: 'Last Lantern Before the Long Dark', dress: 'cavemouth',
+      cx: 0, cz: 118, radius: 22, baseHeight: 0,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 0,
+    },
+    {
+      id: 'gloomgrove', name: 'THE GLOOMGROVE', subtitle: 'The Mushrooms Are Watching. Politely.', dress: 'gloomgrove',
+      cx: -46, cz: 40, radius: 28, baseHeight: 0.8,
+      faction: 'hollow', levelOffset: 7,
+      spawnTable: [
+        { enemyId: 'gloomstalker', weight: 28 },
+        { enemyId: 'gravemite', weight: 20 },
+        { enemyId: 'spitgrub', weight: 16 },
+        { enemyId: 'lantern_wisp', weight: 14 },
+      ],
+      maxAlive: 8, respawnDelay: 20,
+    },
+    {
+      id: 'cryptworks', name: 'THE CRYPTWORKS', subtitle: 'Shift Change Was Sixty Years Ago', dress: 'cryptworks',
+      cx: 38, cz: -30, radius: 28, baseHeight: 1.2,
+      faction: 'hollow', levelOffset: 8,
+      spawnTable: [
+        { enemyId: 'shardcaster', weight: 26 },
+        { enemyId: 'gloomstalker', weight: 18 },
+        { enemyId: 'deep_roller', weight: 10 },
+        { enemyId: 'lantern_wisp', weight: 12 },
+        { enemyId: 'gravemite', weight: 12 },
+      ],
+      maxAlive: 8, respawnDelay: 20,
+    },
+    {
+      id: 'lodecourt', name: 'THE LODE COURT', subtitle: 'The Seam Sings Here', dress: 'lodecourt',
+      cx: 0, cz: -112, radius: 34, baseHeight: 1.6,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 9,
+    },
+  ],
+  pois: [
+    { id: 'ft_hollow', kind: 'fast_travel', x: 8, z: 114, data: 'The Mouth' },
+    { id: 'sign_h1', kind: 'sign', x: 0, z: 104, rot: 0, data: 'HOLLOWDEEP WORKS — DAYS SINCE INCIDENT: [ILLEGIBLE]' },
+    { id: 'chest_h1', kind: 'chest', x: -52, z: 34, rot: 0.9 },
+    { id: 'log_h1', kind: 'wirelog', x: -42, z: 46, data: 'log_hollow1' },
+    { id: 'chest_h2', kind: 'chest', x: 46, z: -36, rot: -1.6 },
+    { id: 'log_h2', kind: 'wirelog', x: 32, z: -24, data: 'log_hollow2' },
+    { id: 'sign_h2', kind: 'sign', x: 12, z: -88, rot: 0.3, data: 'LODE COURT AHEAD. HUM ALONG OR HOLD YOUR BREATH.' },
+  ],
+  spawn: { x: 0, z: 118 },
+  exits: [
+    { x: 0, z: 136, targetMap: 'veldt', targetX: -96, targetZ: -56, label: 'VELDT MINOR', style: 'cave' },
+  ],
+};
+
 export const MAPS: Record<string, WorldDef> = {
   claudelands: CLAUDELANDS,
   frosthollow: FROSTHOLLOW,
@@ -813,6 +1007,8 @@ export const MAPS: Record<string, WorldDef> = {
   rustgulch: RUSTGULCH,
   veldt: VELDT,
   veldt_tangle: VELDT_TANGLE,
+  veldt_shallows: VELDT_SHALLOWS,
+  veldt_caves: VELDT_CAVES,
 };
 
 let active: WorldDef = CLAUDELANDS;

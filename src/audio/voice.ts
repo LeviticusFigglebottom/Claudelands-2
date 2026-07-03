@@ -49,6 +49,8 @@ export const VOICES: Record<string, VoiceProfile> = {
   okto: { id: 'okto', basePitch: 118, range: 0.3, rate: 3.9, wave: 'sine', formantShift: 0.9, breath: 0.3, vibrato: 0, drawl: 1.5, gain: 0.16, stepped: true },
   juno: { id: 'juno', basePitch: 255, range: 0.42, rate: 8.6, wave: 'triangle', formantShift: 1.2, breath: 0.08, vibrato: 0, drawl: 0.72, gain: 0.14 },
   rita: { id: 'rita', basePitch: 178, range: 0.38, rate: 6.8, wave: 'sawtooth', formantShift: 1.02, breath: 0.16, vibrato: 4, drawl: 0.85, gain: 0.15 },
+  // salt-cured quartermaster: low, gravelly, unhurried — every word an entry in a ledger
+  peg: { id: 'peg', basePitch: 122, range: 0.2, rate: 4.8, wave: 'sawtooth', formantShift: 0.88, breath: 0.26, vibrato: 2, drawl: 1.2, gain: 0.16 },
   announcer: { id: 'announcer', basePitch: 105, range: 0.55, rate: 4.2, wave: 'sawtooth', formantShift: 0.88, breath: 0.06, vibrato: 5, drawl: 1.45, gain: 0.2, echo: true },
 };
 

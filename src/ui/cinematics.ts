@@ -30,6 +30,8 @@ export const BOSS_EPITHETS: Record<string, string> = {
   old_man_avalanche: 'the weather, personally',
   saint_furnace: 'patron saint of arson',
   bloom_mother: 'the garden god who woke up hungry',
+  admiral_anchorhead: 'promoted by the sea itself',
+  mother_lode: 'sixty years of tribute, crowned',
 };
 
 export const NPC_INTROS: Record<string, { name: string; sub: string }> = {
@@ -41,6 +43,7 @@ export const NPC_INTROS: Record<string, { name: string; sub: string }> = {
   okto: { name: 'BROTHER OKTO', sub: 'bone-priest, lapsed. the bones and he are on a break.' },
   juno: { name: 'DR. JUNO CALLA', sub: 'xenobotanist. sole survivor. extremely caffeinated.' },
   rita: { name: 'REDLINE RITA', sub: 'fastest courier the wastes ever fired. retired. allegedly.' },
+  peg: { name: 'QUARTERMISTRESS PEG', sub: 'the pelican’s last dry crew member. the paperwork survived too.' },
 };
 
 /** Slow orbit around a boss, ending face-to-face. */
