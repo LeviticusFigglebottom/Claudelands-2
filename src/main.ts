@@ -61,6 +61,9 @@ import { SECOND_WIND_LINES, LEVELUP_LINES, VICTORY_LINES } from './data/flavor';
 import type { ItemInstance } from './game/types';
 import { GIVERS } from './data/quests';
 import type { QuestGiver } from './data/quests';
+import { coop } from './net/coop';
+import { remotePlayers, CLASS_TINT_CSS } from './net/remoteplayers';
+import { renderPartyPanel, updatePartyHud } from './ui/party';
 
 // ---------------------------------------------------------------- renderer
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
@@ -131,8 +134,17 @@ actionSkill.playerPos = () => player.position;
 actionSkill.healPlayer = (amt) => player.heal(amt);
 actionSkill.playerMaxHealth = () => player.maxFlesh;
 
+/** Co-op duels only: the live opponent's avatar proxy joins the target lists.
+ *  Outside a duel this is empty — party members are bulletproof to each other. */
+function duelProxies(): Damageable[] {
+  const pid = coop.duelLivePid;
+  if (!pid) return [];
+  const proxy = remotePlayers.proxy(pid);
+  return proxy ? [proxy] : [];
+}
+
 projectiles.player = player;
-projectiles.targets = () => [...enemySpawner.enemies, ...world.barrels, player] as unknown as Damageable[];
+projectiles.targets = () => [...enemySpawner.enemies, ...world.barrels, ...duelProxies(), player] as unknown as Damageable[];
 projectiles.healPlayer = (amt) => {
   player.heal(amt);
   dmgNumbers.spawn(player.position.clone().add(new THREE.Vector3(0, 1.8, 0)), amt, 'kinetic', false, 'heal');
@@ -141,7 +153,13 @@ actionSkill.enemies = () => enemySpawner.enemies;
 
 const dmgNumbers = new DamageNumberSystem(camera);
 setNumberSpawner((pos, amount, element, crit, kind) => dmgNumbers.spawn(pos as THREE.Vector3, amount, element, crit, kind));
-setTargetProvider(() => [...enemySpawner.enemies, ...world.barrels, player] as unknown as Damageable[]);
+setTargetProvider(() => [...enemySpawner.enemies, ...world.barrels, ...duelProxies(), player] as unknown as Damageable[]);
+player.extraRayTargets = () => {
+  const pid = coop.duelLivePid;
+  if (!pid) return [];
+  const rt = remotePlayers.rayTarget(pid);
+  return rt ? [rt] : [];
+};
 
 setEnemyHooks({
   playerPos: () => player.position,
@@ -245,6 +263,7 @@ function faceArrival(): void {
 
 function switchMap(mapId: string, toX?: number, toZ?: number): void {
   if (activeMap().id === mapId) return;
+  coop.onMapChanged(); // a live duel forfeits when someone walks off the map
   race.cancel(false);
   world.dispose(scene);
   enemySpawner.reset();
@@ -366,7 +385,7 @@ const questLogPanel = new QuestLogPanel();
 const dialoguePanel = new DialoguePanel();
 const pausePanel = new PausePanel();
 
-type PanelKind = 'none' | 'inventory' | 'skills' | 'vendor_gun' | 'vendor_med' | 'questlog' | 'dialogue' | 'pause' | 'fasttravel' | 'map' | 'race';
+type PanelKind = 'none' | 'inventory' | 'skills' | 'vendor_gun' | 'vendor_med' | 'questlog' | 'dialogue' | 'pause' | 'fasttravel' | 'map' | 'race' | 'party';
 let openPanel: PanelKind = 'none';
 let dialogueGiver: QuestGiver = 'quibb';
 
@@ -427,6 +446,7 @@ function setPanel(kind: PanelKind): void {
       break;
     case 'fasttravel': renderFastTravel(panel); break;
     case 'race': renderRacePanel(panel); break;
+    case 'party': renderPartyPanel(panel, { close: () => setPanel('none'), rerender: () => { if (openPanel === 'party') setPanel('party'); } }); break;
     case 'map': fullMapPanel.render(panel, player.position, player.yaw, fullmapExtras()); break;
     default:
       vendorPanel.render(panel, kind, {
@@ -757,6 +777,7 @@ bus.on('gritTick', ({ label }) => {
   if (label) feedText(`◆ GRIT RANK UP — <b>${label}</b>`, '#ffd23c');
 });
 bus.on('downed', () => {
+  if (coop.duelLivePid) coop.duelLost(); // first one down loses — and gets right back up
   setDownedOverlay(true, 0);
   // shot out of the driver's seat: the fight-for-your-life happens on foot
   if (vehicles.driving) {
@@ -887,6 +908,7 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyK') { setPanel(openPanel === 'skills' ? 'none' : 'skills'); return; }
   if (e.code === 'KeyJ') { setPanel(openPanel === 'questlog' ? 'none' : 'questlog'); return; }
   if (e.code === 'KeyM') { setPanel(openPanel === 'map' ? 'none' : 'map'); return; }
+  if (e.code === 'KeyP') { setPanel(openPanel === 'party' ? 'none' : 'party'); return; }
   if (e.code === 'Escape') {
     if (openPanel !== 'none') setPanel('none');
     else setPanel('pause');
@@ -1138,12 +1160,16 @@ function compassMarkers(): CompassMarker[] {
   }
   const boss = enemySpawner.boss;
   if (boss?.alive) markers.push({ x: boss.position.x, z: boss.position.z, icon: '☠', color: '#ff5a5a', id: 'boss' });
+  for (const tm of remotePlayers.onMapPositions(activeMap().id)) {
+    markers.push({ x: tm.x, z: tm.z, icon: '◉', color: CLASS_TINT_CSS[tm.classId] ?? '#d8a03c', id: 'tm_' + tm.pid });
+  }
   return markers;
 }
 
 // ---------------------------------------------------------------- loop
 let last = performance.now();
 let started = false;
+let partyHudT = 0;
 
 function stepSim(dt: number): void {
   tickCombatClock(dt);
@@ -1179,6 +1205,10 @@ function stepSim(dt: number): void {
   world.update(dt, player.position);
   debris.update(dt, player.position);
   fx.update(dt);
+  coop.update(dt);
+  remotePlayers.update(dt, activeMap().id);
+  partyHudT -= dt;
+  if (partyHudT <= 0) { partyHudT = 0.4; updatePartyHud(); }
   if (gameMode === 'endless' || pitActive) endless.update(dt);
   announcer.update(dt);
 
@@ -1314,6 +1344,55 @@ function updateAttract(dt: number): void {
 // ---------------------------------------------------------------- boot
 const mainMenu = new MainMenu();
 
+// ---------------------------------------------------------------- co-op
+remotePlayers.attach(scene);
+remotePlayers.groundHeight = (x, z) => world.groundHeight(x, z);
+coop.init({
+  identity: () => ({ name: prefs().playerName || 'DRIFTER', classId: getPlayerClass().id }),
+  localState: () => ({
+    mapId: activeMap().id,
+    x: player.position.x, y: player.position.y, z: player.position.z, yaw: player.yaw,
+    hpF: player.maxFlesh > 0 ? player.flesh / player.maxFlesh : 1,
+    shF: player.maxShield > 0 ? player.shield / player.maxShield : 0,
+    flesh: player.flesh, shield: player.shield, maxFlesh: player.maxFlesh, maxShield: player.maxShield,
+    downed: player.downed,
+    firing: player.recentShot < 0.2,
+    level: state.level,
+    started: started && gameMode === 'campaign',
+  }),
+  toast: feedText,
+  banner,
+  inCampaign: () => started && gameMode === 'campaign',
+  applyDuelHit: (amount, fromPid) => {
+    const m = coop.members.get(fromPid);
+    const from = m ? new THREE.Vector3(m.x, m.y, m.z) : undefined;
+    player.damage(amount, 'kinetic', from);
+  },
+  onDuelPhase: (phase, otherName) => {
+    if (phase === 'countdown') banner(`DUEL vs ${otherName.toUpperCase()} — GUNS UP`);
+    else if (phase === 'live') { banner('DUEL! FIRST ONE DOWN LOSES'); audio.bossRoar(false); }
+    else if (phase === 'won' || phase === 'lost') {
+      // duels never kill: both parties walk away printed and polished
+      if (player.downed) player.secondWind();
+      player.flesh = player.maxFlesh;
+      player.shield = player.maxShield;
+      banner(phase === 'won' ? `DUEL WON — ${otherName.toUpperCase()} EATS DIRT` : `DUEL LOST — ${otherName.toUpperCase()} TAKES IT`);
+      feedText(phase === 'won'
+        ? `You put <b>${otherName}</b> in the dirt. Both healed. No hard feelings.`
+        : `<b>${otherName}</b> takes the round. Both healed. Rematch?`, '#ff5a86');
+    }
+    updatePartyHud();
+  },
+  onPartyChanged: () => {
+    updatePartyHud();
+    mainMenu.notifyCoop();
+    if (openPanel === 'party') setPanel('party');
+  },
+  onTradeChanged: () => {
+    if (openPanel === 'party') setPanel('party');
+  },
+});
+
 /** Level-10 gear spread for veteran/endless starts: common → epic. */
 function giveVeteranKit(): void {
   const starter = generateWeapon({ level: 10, rarityId: 'rare' });
@@ -1365,6 +1444,7 @@ function startRun(mode: StartMode, classId: string, difficultyId: DifficultyId, 
     document.getElementById('ui-root')?.classList.add('cine-on'); // HUD hides for the cutscene
     intro.start();
     applyExtrasCheats();
+    coop.onRunStarted();
     autosave();
     return;
   }
@@ -1379,6 +1459,7 @@ function startRun(mode: StartMode, classId: string, difficultyId: DifficultyId, 
     switchMap('brasshaven', 0, 54);
     feedText('VETERAN CONTRACT — the city knows your name. The Mayor is waiting.', '#ffd23c');
     applyExtrasCheats();
+    coop.onRunStarted();
     autosave();
     canvas.requestPointerLock();
     return;
@@ -1448,6 +1529,7 @@ mainMenu.show({
     gameMode = 'campaign';
     if (restoreSave()) {
       started = true;
+      coop.onRunStarted();
       feedText('CONTRACT RESUMED. The paperwork missed you.', '#ffd23c');
       canvas.requestPointerLock();
     }
@@ -1531,6 +1613,7 @@ canvas.addEventListener('click', () => {
     return world.raycastStatics(ray) === null;
   },
   routeHopDebug: (mapId: string) => routeHopTo(mapId),
+  coop, remotePlayers,
   faceArrivalDebug: () => faceArrival(),
   get stations() { return discoveredStations; },
 };

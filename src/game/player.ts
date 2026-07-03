@@ -84,6 +84,8 @@ export class Player implements Damageable {
   private shellProp: THREE.Group | null = null;
   private swapT = -1;
   private fireTimer = 0;
+  /** Seconds since the trigger last actually fired — co-op presence reads this. */
+  recentShot = 99;
   private focusHeat = 0;
   private fireHeat = 0;           // sustained-fire bloom for the crosshair
   private overkillBank = 0;
@@ -391,6 +393,7 @@ export class Player implements Damageable {
 
     // firing
     this.fireTimer -= dt;
+    this.recentShot += dt;
     this.focusHeat = Math.max(0, this.focusHeat - dt * 1.4);
     this.fireHeat = Math.max(0, this.fireHeat - dt * 3);
     if (this.mouseDown && !this.paused) this.tryFire();
@@ -610,6 +613,7 @@ export class Player implements Damageable {
     const tempest = actionSkill.tempestActive;
     this.canSemiFire = false;
     this.fireTimer = 1 / (stats.fireRate * statsys.mult('fireRate') * (this.slowUntil > combatNow() ? 0.7 : 1));
+    this.recentShot = 0;
 
     let ammoCost = maker.gimmick === 'always_elemental' && this.magazine >= 2 ? 2 : 1;
     if (Math.random() < statsys.bonus('freeAmmoChance')) ammoCost = 0;
@@ -767,9 +771,24 @@ export class Player implements Damageable {
     });
   }
 
-  /** Raycast enemies + explosive barrels; nearest wins. */
+  /** Co-op duels: extra rigs (remote player avatars) injected by main.ts
+   *  while a duel is live — empty otherwise, so party members are bulletproof. */
+  extraRayTargets: (() => { group: THREE.Group; target: Damageable; critZone?: THREE.Object3D }[]) | null = null;
+
+  /** Raycast enemies + explosive barrels (+ duel opponents); nearest wins. */
   raycastTargets(ray: THREE.Raycaster): HitscanTarget | null {
     let best: HitscanTarget | null = null;
+    for (const rt of this.extraRayTargets?.() ?? []) {
+      rt.group.updateMatrixWorld(true);
+      const hits = ray.intersectObject(rt.group, true);
+      for (const h of hits) {
+        if ((h.object as THREE.Sprite).isSprite) continue;
+        if (!best || h.distance < best.distance) {
+          best = { target: rt.target, enemy: null, point: h.point, isCrit: h.object === rt.critZone, distance: h.distance };
+        }
+        break;
+      }
+    }
     for (const e of enemySpawner.enemies) {
       if (!e.alive) continue;
       e.group.updateMatrixWorld(true);

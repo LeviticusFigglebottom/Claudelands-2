@@ -10,6 +10,7 @@ import { SAVE_SLOTS, slotSummary, clearSave, exportSlot, importSlot, type SaveSl
 import { audio } from '../audio/synth';
 import { TRACKS } from '../data/race';
 import { RACE_DIFFICULTIES } from '../data/race';
+import { coop, MAX_PARTY } from '../net/coop';
 
 export type StartMode = 'new' | 'veteran' | 'endless';
 
@@ -21,7 +22,7 @@ export interface MenuCallbacks {
   onRace: (trackId: string, tier: string) => void;
 }
 
-type Screen = 'press' | 'menu' | 'campaign' | 'select' | 'settings' | 'race' | 'extras';
+type Screen = 'press' | 'menu' | 'campaign' | 'select' | 'settings' | 'race' | 'extras' | 'coop';
 
 export class MainMenu {
   private root = document.getElementById('title-screen')!;
@@ -66,7 +67,13 @@ export class MainMenu {
       case 'settings': this.renderSettings(); break;
       case 'race': this.renderRace(); break;
       case 'extras': this.renderExtras(); break;
+      case 'coop': this.renderCoop(); break;
     }
+  }
+
+  /** Called by main when the party roster changes — live-refresh the screen. */
+  notifyCoop(): void {
+    if (this.active && this.screen === 'coop') this.render();
   }
 
   private chrome(inner: string, backTo?: Screen): void {
@@ -101,6 +108,7 @@ export class MainMenu {
         <button class="mm-btn" id="mm-campaign">CAMPAIGN<span class="mm-sub">the claudelands contract — story, side jobs, four worlds</span></button>
         <button class="mm-btn" id="mm-endless">ENDLESS MODE<span class="mm-sub">the crucible — waves without end${best > 0 ? ` · best: wave ${best}` : ''}</span></button>
         <button class="mm-btn" id="mm-race">RACE<span class="mm-sub">any circuit, three laps — solo practice or a grid duel</span></button>
+        <button class="mm-btn" id="mm-coop">CO-OP<span class="mm-sub">party up — four contractors, no server, one shared story${coop.active ? ` · <b>LIVE: ${coop.code}</b>` : ''}</span></button>
         <button class="mm-btn" id="mm-extras">EXTRAS<span class="mm-sub">cheats, toggles, and one deeply cursed voice pack</span></button>
         <button class="mm-btn" id="mm-settings">SETTINGS<span class="mm-sub">look, feel, and how much the screen shakes</span></button>
       </div>`);
@@ -108,6 +116,7 @@ export class MainMenu {
     this.root.querySelector('#mm-endless')?.addEventListener('click', () => { audio.uiClick(); this.startMode = 'endless'; this.screen = 'select'; this.render(); });
     this.root.querySelector('#mm-race')?.addEventListener('click', () => { audio.uiClick(); this.screen = 'race'; this.render(); });
     this.root.querySelector('#mm-settings')?.addEventListener('click', () => { audio.uiClick(); this.screen = 'settings'; this.render(); });
+    this.root.querySelector('#mm-coop')?.addEventListener('click', () => { audio.uiClick(); this.screen = 'coop'; this.render(); });
     this.root.querySelector('#mm-extras')?.addEventListener('click', () => { audio.uiClick(); this.screen = 'extras'; this.render(); });
   }
 
@@ -161,6 +170,84 @@ export class MainMenu {
       });
     });
   }
+
+  // ---------------------------------------------------------- co-op
+  private coopBusy = false;
+
+  private renderCoop(): void {
+    const p = prefs();
+    if (!p.playerName) {
+      setPref('playerName', 'DRIFTER-' + Math.random().toString(36).slice(2, 5).toUpperCase());
+    }
+    const name = prefs().playerName;
+    const roster = coop.active
+      ? `<div class="mm-slot">
+          <div class="mm-slot-head"><b>PARTY LIVE — CODE ${coop.code}</b> · ${coop.members.size + 1}/${MAX_PARTY} · ${coop.isHost ? 'you host the story ledger' : 'story follows the host'}</div>
+          <div class="mm-slot-sub">you — ${name}</div>
+          ${[...coop.members.values()].map((m) => `<div class="mm-slot-sub">◉ ${m.name} — LV ${m.level}</div>`).join('')}
+          <div class="mm-slot-acts">
+            <button class="mm-btn mm-slot-btn" id="coop-leave">LEAVE PARTY</button>
+          </div>
+        </div>
+        <div class="dialogue-box">Party's on the line. Now open <b>CAMPAIGN</b> and pick a save — everyone plays their own
+        character on their own worlds, and the story ledger stays shared. In game, <b>P</b> opens the party panel
+        (trade anywhere, duel face to face).</div>`
+      : `
+        <div class="mm-slot">
+          <div class="mm-slot-head"><b>HOST A PARTY</b></div>
+          <div class="mm-slot-sub">get a 5-letter code, read it to up to three friends. your save is the story ledger.</div>
+          <div class="mm-slot-acts"><button class="mm-btn mm-slot-btn" id="coop-host" ${this.coopBusy ? 'disabled' : ''}>OPEN THE LINE</button></div>
+        </div>
+        <div class="mm-slot">
+          <div class="mm-slot-head"><b>JOIN A PARTY</b></div>
+          <div class="mm-slot-sub">type the host's code. your character and loot stay yours; the story follows theirs.</div>
+          <div class="mm-slot-acts">
+            <input id="coop-code" maxlength="5" placeholder="CODE" style="width:110px; text-transform:uppercase" value="">
+            <button class="mm-btn mm-slot-btn" id="coop-join" ${this.coopBusy ? 'disabled' : ''}>JOIN</button>
+          </div>
+        </div>
+        <div class="mm-setting">
+          <div><div class="mm-set-label">Same-device party</div><div class="mm-set-hint">two tabs in this browser instead of the internet — great for testing the ropes</div></div>
+          <button class="mm-toggle ${this.coopLocal ? 'on' : ''}" id="coop-local">${this.coopLocal ? 'ON' : 'OFF'}</button>
+        </div>
+        ${coop.lastError ? `<div class="mm-slot-sub" style="color:#ff5a5a">${coop.lastError}</div>` : ''}
+        ${this.coopBusy ? '<div class="mm-slot-sub">dialling…</div>' : ''}`;
+
+    this.chrome(`
+      <div class="t-super">CO-OP — FOUR CONTRACTORS, NO SERVER, ONE LEDGER</div>
+      <div class="mm-menu" style="max-width:640px; gap:12px;">
+        <div class="mm-setting">
+          <div><div class="mm-set-label">Your handle</div><div class="mm-set-hint">what the party sees over your head</div></div>
+          <input id="coop-name" maxlength="12" value="${name}" style="width:150px; text-transform:uppercase">
+        </div>
+        ${roster}
+        <div class="mm-slot-sub">campaign only · objectives shared, worlds independent · loot &amp; sound instanced per player · trade and duel built in</div>
+      </div>`, 'menu');
+
+    this.root.querySelector<HTMLInputElement>('#coop-name')?.addEventListener('change', (e) => {
+      const v = (e.target as HTMLInputElement).value.toUpperCase().replace(/[^A-Z0-9 _-]/g, '').trim().slice(0, 12);
+      setPref('playerName', v || name);
+    });
+    this.root.querySelector('#coop-local')?.addEventListener('click', () => { this.coopLocal = !this.coopLocal; audio.uiClick(); this.render(); });
+    this.root.querySelector('#coop-leave')?.addEventListener('click', () => { coop.leave(); audio.uiClick(); this.render(); });
+    this.root.querySelector('#coop-host')?.addEventListener('click', () => {
+      audio.uiClick();
+      this.coopBusy = true;
+      this.render();
+      void coop.host(this.coopLocal).finally(() => { this.coopBusy = false; this.notifyRender(); });
+    });
+    this.root.querySelector('#coop-join')?.addEventListener('click', () => {
+      const code = this.root.querySelector<HTMLInputElement>('#coop-code')?.value ?? '';
+      if (code.trim().length < 4) return;
+      audio.uiClick();
+      this.coopBusy = true;
+      this.render();
+      void coop.join(code, this.coopLocal).finally(() => { this.coopBusy = false; this.notifyRender(); });
+    });
+  }
+
+  private coopLocal = false;
+  private notifyRender(): void { if (this.active && this.screen === 'coop') this.render(); }
 
   // ---------------------------------------------------------- race mode
   private renderRace(): void {

@@ -20,6 +20,7 @@ export interface Prefs {
   cheatLevel: number;        // level floor applied on run start/load, 1 = off
   cheatTravel: boolean;      // every fast-travel station pre-discovered
   cheatRich: number;         // wallet floor in $ applied on run start/load, 0 = off
+  playerName: string;        // co-op handle shown on nameplates and the roster
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -39,6 +40,7 @@ export const DEFAULT_PREFS: Prefs = {
   cheatLevel: 1,
   cheatTravel: false,
   cheatRich: 0,
+  playerName: '',
 };
 
 const KEY = 'claudelands2.prefs';

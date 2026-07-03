@@ -569,3 +569,37 @@ body { font-family: var(--ui-font); user-select: none; }
   font-family: inherit; font-weight: 700; letter-spacing: 0.15em; padding: 6px 0; cursor: pointer; }
 .mm-toggle.on { background: var(--gold); color: #241a06; border-color: var(--gold); }
 .mm-slider { width: 180px; accent-color: var(--gold); }
+
+/* ---------------------------------------------------------------- co-op */
+#party-hud {
+  position: fixed; left: 14px; top: 30%;
+  display: flex; flex-direction: column; gap: 6px;
+  z-index: 30; pointer-events: none; width: 168px;
+}
+.ph-row {
+  background: rgba(12, 9, 6, 0.62);
+  border-left: 3px solid #d8a03c;
+  padding: 5px 8px; border-radius: 0 4px 4px 0;
+  font-size: 11px; color: #e8dcc4;
+}
+.ph-name { font-weight: 700; letter-spacing: 0.04em; }
+.ph-lv { opacity: 0.7; font-weight: 400; }
+.ph-down { color: #ff5a5a; font-weight: 700; }
+.ph-map { opacity: 0.62; font-size: 10px; margin: 1px 0 3px; }
+.ph-bar { height: 3px; background: rgba(255,255,255,0.12); border-radius: 2px; margin-top: 2px; overflow: hidden; }
+.ph-bar i { display: block; height: 100%; }
+
+.trade-cols { display: flex; gap: 18px; margin-top: 10px; }
+.trade-cols > div { flex: 1; min-width: 0; }
+.trade-cols .item-card { width: 100%; max-width: 300px; font-size: 12px; }
+.trade-head { font-size: 12px; letter-spacing: 0.05em; margin-bottom: 6px; color: #ffd23c; }
+.trade-inv { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; }
+.trade-inv .ft-row { padding: 5px 8px; font-size: 12px; }
+#trade-money {
+  background: rgba(0,0,0,0.4); border: 1px solid rgba(255,220,160,0.3);
+  color: #ffe8c0; padding: 4px 6px; font: inherit;
+}
+#coop-name, #coop-code {
+  background: rgba(0,0,0,0.4); border: 1px solid rgba(255,220,160,0.3);
+  color: #ffe8c0; padding: 6px 8px; font: inherit; letter-spacing: 0.1em;
+}

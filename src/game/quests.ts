@@ -18,6 +18,11 @@ import type { Enemy } from './enemies';
 
 export type QuestStatus = 'locked' | 'available' | 'active' | 'complete';
 
+/** Co-op wire row: quest id + forward-only status/progress. */
+export interface SharedQuestRow { id: string; s: QuestStatus; p: number }
+
+const STATUS_ORDER: Record<QuestStatus, number> = { locked: 0, available: 1, active: 2, complete: 3 };
+
 export interface QuestRuntime {
   def: QuestDef;
   status: QuestStatus;
@@ -46,6 +51,13 @@ class QuestSystem {
   private hooks: QuestHooks | null = null;
   /** Elite packs waiting for the player to reach the right map. */
   private pendingElites: { enemyId: string; count: number; x: number; z: number; mapId: string; levelOffset: number; tag: string }[] = [];
+
+  // ---- co-op: objective counters are HOST-authoritative. On a client this
+  // hook reports the deed to the host and returns true, which suppresses the
+  // local increment; the host's ledger row comes back via applyShared.
+  onObjectiveEvent: ((kind: 'kill' | 'collect' | 'goto' | 'boss' | 'elite', questId: string) => boolean) | null = null;
+  /** True while remote quest rows are being applied — suppresses re-broadcast. */
+  applyingShared = false;
 
   init(hooks: QuestHooks): void {
     this.hooks = hooks;
@@ -181,18 +193,24 @@ class QuestSystem {
     if (q) {
       const obj = q.def.objective;
       if (obj.kind === 'kill_faction' && enemy.def.faction === obj.faction) {
-        q.progress++;
-        this.checkComplete(q);
+        if (!this.onObjectiveEvent?.('kill', q.def.id)) {
+          q.progress++;
+          this.checkComplete(q);
+        }
       } else if (obj.kind === 'boss' && enemy.def.id === obj.bossId) {
-        q.progress = obj.count;
-        this.checkComplete(q);
+        if (!this.onObjectiveEvent?.('boss', q.def.id)) {
+          q.progress = obj.count;
+          this.checkComplete(q);
+        }
       }
     }
     const s = this.activeSide;
     if (s && s.def.objective.kind === 'kill_elites' && enemy.questTag === s.def.id) {
-      s.progress++;
-      this.hooks?.toast(`${s.def.objective.label}: <b>${s.progress}/${s.def.objective.count}</b>`, '#c06bff');
-      this.completeSide(s);
+      if (!this.onObjectiveEvent?.('elite', s.def.id)) {
+        s.progress++;
+        this.hooks?.toast(`${s.def.objective.label}: <b>${s.progress}/${s.def.objective.count}</b>`, '#c06bff');
+        this.completeSide(s);
+      }
     }
   }
 
@@ -227,6 +245,7 @@ class QuestSystem {
   recordCollect(): void {
     const q = this.active;
     if (!q || q.def.objective.kind !== 'collect') return;
+    if (this.onObjectiveEvent?.('collect', q.def.id)) { audio.pickup(); return; }
     q.progress++;
     audio.pickup();
     this.hooks?.toast(`${q.def.objective.label}: <b>${q.progress}/${q.def.objective.count}</b>`, '#54d4ff');
@@ -259,8 +278,10 @@ class QuestSystem {
       if ((obj.mapId ?? 'claudelands') !== activeMap().id) return;
       const p = this.hooks.playerPos();
       if (Math.hypot(p.x - obj.markerX, p.z - (obj.markerZ ?? 0)) < 18) {
-        q.progress = obj.count;
-        this.checkComplete(q);
+        if (!this.onObjectiveEvent?.('goto', q.def.id)) {
+          q.progress = obj.count;
+          this.checkComplete(q);
+        }
       }
       return;
     }
@@ -371,6 +392,114 @@ class QuestSystem {
       return { x: g.x, z: g.z, mapId: g.mapId, label: `New job: ${g.name}` };
     }
     return null;
+  }
+
+  // ------------------------------------------------------------ co-op share
+  private byId(id: string): { q: QuestRuntime; side: boolean } | null {
+    const main = this.quests.find((x) => x.def.id === id);
+    if (main) return { q: main, side: false };
+    const side = this.sides.find((x) => x.def.id === id);
+    return side ? { q: side, side: true } : null;
+  }
+
+  sharedRows(): SharedQuestRow[] {
+    return [...this.quests, ...this.sides].map((q) => ({ id: q.def.id, s: q.status, p: q.progress }));
+  }
+
+  /** HOST: a client reported an objective deed — count it in the ledger. */
+  applyEvent(kind: 'kill' | 'collect' | 'goto' | 'boss' | 'elite', questId: string): void {
+    const hit = this.byId(questId);
+    if (!hit || hit.q.status !== 'active') return;
+    const q = hit.q;
+    const obj = q.def.objective;
+    if (kind === 'elite' && hit.side) {
+      q.progress++;
+      this.hooks?.toast(`${obj.label}: <b>${q.progress}/${obj.count}</b>`, '#c06bff');
+      this.completeSide(q);
+      return;
+    }
+    if (kind === 'kill' && obj.kind === 'kill_faction') {
+      q.progress++;
+      this.checkComplete(q);
+    } else if (kind === 'boss' && obj.kind === 'boss') {
+      q.progress = obj.count;
+      this.checkComplete(q);
+    } else if (kind === 'goto' && obj.kind === 'goto') {
+      q.progress = obj.count;
+      this.checkComplete(q);
+    } else if (kind === 'collect' && obj.kind === 'collect' && q.progress < obj.count) {
+      q.progress++;
+      this.hooks?.toast(`${obj.label}: <b>${q.progress}/${obj.count}</b>`, '#54d4ff');
+      // fetch quests still finish at the giver's feet — whoever is hauling
+      // triggers that transition from their own update()
+      if (!q.def.returnToGiver) this.checkComplete(q);
+    }
+  }
+
+  /** Silent adoption of the party's story (joining, or catch-up bursts):
+   *  statuses land directly — no reward showers, no twenty banners. */
+  applySnapshot(rows: SharedQuestRow[]): void {
+    this.applyingShared = true;
+    try {
+      for (const row of rows) {
+        const hit = this.byId(row.id);
+        if (!hit) continue;
+        const q = hit.q;
+        if (STATUS_ORDER[row.s] < STATUS_ORDER[q.status]) continue; // forward-only
+        q.status = row.s;
+        q.progress = Math.max(q.progress, Math.min(row.p, q.def.objective.count));
+        if (row.s === 'active' || row.s === 'complete') {
+          if (q.def.unlocksGate) this.hooks?.openGate(q.def.unlocksGate);
+          if (q.def.unlocksStation) this.hooks?.discoverStation(q.def.unlocksStation);
+          if (row.s === 'active' && hit.side) this.armElites(q);
+        }
+      }
+      if (this.quests.find((q) => q.def.id === 'q12_city')?.status === 'complete') this.unlockSides();
+      this.ensureBosses();
+    } finally {
+      this.applyingShared = false;
+    }
+  }
+
+  /** Live merge of a teammate's quest rows: celebrations, rewards, and all
+   *  the usual completion side effects fire locally for every player. */
+  applyShared(rows: SharedQuestRow[]): void {
+    this.applyingShared = true;
+    try {
+      for (const row of rows) {
+        const hit = this.byId(row.id);
+        if (!hit) continue;
+        const q = hit.q;
+        const count = q.def.objective.count;
+        if (row.s === 'available' && q.status === 'locked') q.status = 'available';
+        if (row.s !== 'locked' && STATUS_ORDER[row.s] >= STATUS_ORDER['active'] && (q.status === 'locked' || q.status === 'available')) {
+          q.status = 'active';
+          audio.questAccept();
+          this.hooks?.toast(`PARTY ${hit.side ? 'SIDE JOB' : 'QUEST'} — <b>${q.def.name}</b>`, '#ffd23c');
+          if (q.def.unlocksGate) this.hooks?.openGate(q.def.unlocksGate);
+          if (q.def.unlocksStation) this.hooks?.discoverStation(q.def.unlocksStation);
+          if (hit.side) this.armElites(q);
+          if (q.def.objective.kind === 'boss') this.ensureBosses();
+        }
+        if (q.status === 'active' && row.p > q.progress) {
+          q.progress = Math.min(row.p, count);
+          if (q.def.objective.kind !== 'boss' && q.progress < count) {
+            this.hooks?.toast(`${q.def.objective.label}: <b>${q.progress}/${count}</b>`, '#54d4ff');
+          }
+        }
+        if (row.s === 'complete' && q.status !== 'complete') {
+          if (q.status !== 'active') q.status = 'active';
+          q.progress = count;
+          if (hit.side) this.completeSide(q);
+          else this.checkComplete(q);
+        } else if (q.status === 'active' && q.progress >= count && !q.def.returnToGiver) {
+          if (hit.side) this.completeSide(q);
+          else this.checkComplete(q);
+        }
+      }
+    } finally {
+      this.applyingShared = false;
+    }
   }
 
   // ------------------------------------------------------------ save/load
