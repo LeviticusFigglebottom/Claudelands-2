@@ -75,14 +75,31 @@ the pit announcer (same engine + slap-back delay) share it. Lines stay
 readable text; the voice is a performance layer, so writing more dialogue
 costs nothing.
 
-## Population, not waves (pass 2)
+## Population, not waves (pass 2) → staged encounters (pass 12)
 
-Districts self-repopulate on a cadence (only when the player is near-ish, never
-on top of them). Enemies **patrol** their home district and aggro on proximity
-or damage — the world reads as inhabited rather than arena-triggered. Bosses are
-`Enemy` subclasses (`boss.ts`) with phased patterns, spawned by the quest system,
-never by population. Helix (armor/shield-heavy) vs Rustborn (flesh-heavy) makes
-the element matrix matter by geography.
+Districts originally self-repopulated on a cadence. Pass 12 replaced the
+faucet with **staged encounters**: each hostile district is dormant until
+approached, stages a full wave plus 1–2 reinforcement waves as it's thinned
+(final wave carries a guaranteed badass), then stays CLEARED until the player
+genuinely leaves and returns (range+time, or a map switch). Enemies still
+patrol and aggro organically, but they **leash** at their district's edge —
+give up, heal to full, walk home — so fights have a shape and a place.
+Bosses are `Enemy` subclasses (`boss.ts`) with phased patterns, spawned by
+the quest system, never by population. Helix (armor/shield-heavy) vs
+Rustborn (flesh-heavy) makes the element matrix matter by geography.
+
+## Enemy tactics: one brain, three verbs (pass 12)
+
+The ranged-AI overhaul deliberately isn't a behavior tree. Gunners/lobbers
+run a five-state loop (advance / strafe / toCover / hold / peek) driven by
+three queries: line-of-sight (a raycast down the muzzle through the same
+statics+terrain the guns use), a fighting band (attackRange fractions), and
+`world.coverSpots()` (points on the far side of mid-sized colliders from the
+threat — slivers and walls filtered out). Fire control is the honest part:
+gunners simply can't shoot without LOS, lobbers explicitly can (arcs go over
+cover), and grenades exist to break the player's own cover camping. All the
+"organic" reads — flank a covered enemy and it bails, hurt one and it runs,
+peek cycles vary — fall out of those queries, not scripted animations.
 
 ## Quests (pass 2)
 

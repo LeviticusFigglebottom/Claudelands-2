@@ -185,21 +185,75 @@ export class GameState {
   }
 }
 
-export const SAVE_KEY = 'claudelands2.save';
+export const SAVE_KEY = 'claudelands2.save'; // legacy single-slot key (migrated to slot 1)
 export const state = new GameState();
 
-export function hasSave(): boolean {
-  try { return localStorage.getItem(SAVE_KEY) !== null; } catch { return false; }
+// ---------------------------------------------------------------- save slots
+// Three campaign slots. The active slot is chosen in the main menu; autosave
+// and load go through it. The pre-slots single save migrates into slot 1.
+
+export type SaveSlotId = 's1' | 's2' | 's3';
+export const SAVE_SLOTS: SaveSlotId[] = ['s1', 's2', 's3'];
+let activeSaveSlot: SaveSlotId = 's1';
+
+function slotKey(slot: SaveSlotId): string { return `${SAVE_KEY}.${slot}`; }
+
+/** One-time migration: the old single save becomes slot 1. */
+(function migrateLegacySave(): void {
+  try {
+    const legacy = localStorage.getItem(SAVE_KEY);
+    if (legacy && !localStorage.getItem(slotKey('s1'))) {
+      localStorage.setItem(slotKey('s1'), legacy);
+    }
+    if (legacy) localStorage.removeItem(SAVE_KEY);
+  } catch { /* private mode */ }
+})();
+
+export function setActiveSaveSlot(slot: SaveSlotId): void { activeSaveSlot = slot; }
+export function getActiveSaveSlot(): SaveSlotId { return activeSaveSlot; }
+
+export function hasSave(slot: SaveSlotId = activeSaveSlot): boolean {
+  try { return localStorage.getItem(slotKey(slot)) !== null; } catch { return false; }
 }
 export function writeSave(extra: Record<string, unknown>): void {
-  try { localStorage.setItem(SAVE_KEY, state.serialize(extra)); } catch { /* storage full/blocked */ }
+  try { localStorage.setItem(slotKey(activeSaveSlot), state.serialize(extra)); } catch { /* storage full/blocked */ }
 }
 export function readSave(): Record<string, unknown> | null {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    const raw = localStorage.getItem(slotKey(activeSaveSlot));
     return raw ? state.loadFrom(raw) : null;
   } catch { return null; }
 }
-export function clearSave(): void {
-  try { localStorage.removeItem(SAVE_KEY); } catch { /* nothing to clear */ }
+export function clearSave(slot: SaveSlotId = activeSaveSlot): void {
+  try { localStorage.removeItem(slotKey(slot)); } catch { /* nothing to clear */ }
+}
+
+/** Lightweight peek for the slot picker — never mutates game state. */
+export function slotSummary(slot: SaveSlotId): { level: number; money: number; classId: string; mapId: string } | null {
+  try {
+    const raw = localStorage.getItem(slotKey(slot));
+    if (!raw) return null;
+    const d = JSON.parse(raw) as { level?: number; money?: number; classId?: string; mapId?: string };
+    if (typeof d.level !== 'number') return null;
+    return { level: d.level, money: d.money ?? 0, classId: (d.classId as string) ?? 'gunsmith', mapId: (d.mapId as string) ?? 'claudelands' };
+  } catch { return null; }
+}
+
+/** Export a slot as a portable base64 string (clipboard-friendly). */
+export function exportSlot(slot: SaveSlotId): string | null {
+  try {
+    const raw = localStorage.getItem(slotKey(slot));
+    return raw ? btoa(unescape(encodeURIComponent(raw))) : null;
+  } catch { return null; }
+}
+
+/** Import a base64 save string into a slot. Returns false on garbage. */
+export function importSlot(slot: SaveSlotId, encoded: string): boolean {
+  try {
+    const raw = decodeURIComponent(escape(atob(encoded.trim())));
+    const d = JSON.parse(raw) as { level?: number };
+    if (typeof d.level !== 'number') return false;
+    localStorage.setItem(slotKey(slot), raw);
+    return true;
+  } catch { return false; }
 }

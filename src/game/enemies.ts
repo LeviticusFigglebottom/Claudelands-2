@@ -29,6 +29,10 @@ export interface EnemyHooks {
   onKilled: (enemy: Enemy, overkill: number) => void;
   bark: (name: string, line: string) => void;
   tauntTarget: () => THREE.Vector3 | null;
+  /** True when nothing solid stands between two points (statics + terrain). */
+  hasLOS: (from: THREE.Vector3, to: THREE.Vector3) => boolean;
+  /** Candidate hide spots near a point, on the far side of props from a threat. */
+  coverSpots: (near: THREE.Vector3, threat: THREE.Vector3, maxDist: number) => THREE.Vector3[];
 }
 
 let hooks: EnemyHooks;
@@ -69,6 +73,21 @@ export class Enemy implements Damageable {
   private patrolWait = 0;
   private flashMats: THREE.MeshToonMaterial[] = [];
   private beepT = 0; // fusebug
+
+  // ---- tactical brain (gunners/lobbers) ----
+  private tactic: 'advance' | 'strafe' | 'toCover' | 'hold' | 'peek' = 'advance';
+  private tacticT = 0.4;
+  private strafeSign = Math.random() < 0.5 ? 1 : -1;
+  private coverPos: THREE.Vector3 | null = null;
+  private peekPos: THREE.Vector3 | null = null;
+  private peekCycles = 0;
+  private coverCooldown = 0;
+  private grenadeT = 5 + Math.random() * 7;
+  private crouchK = 0;
+  private noLosT = 0;
+  /** Dropped aggro and walking home; proximity re-aggro is briefly disabled. */
+  private leashing = false;
+  private leashCooldown = 0;
 
   constructor(def: EnemyDef, level: number, pos: THREE.Vector3, badass = false) {
     this.def = def;
@@ -305,10 +324,28 @@ export class Enemy implements Damageable {
     const playerPos = hooks.playerPos();
     const distToPlayer = this.position.distanceTo(playerPos);
 
-    // aggro check
-    if (!this.aggro && distToPlayer < this.def.aggroRange * (this.badass ? 1.2 : 1)) {
+    // aggro check (leashing enemies ignore proximity for a beat)
+    this.leashCooldown = Math.max(0, this.leashCooldown - dt);
+    if (!this.aggro && this.leashCooldown <= 0 && distToPlayer < this.def.aggroRange * (this.badass ? 1.2 : 1)) {
       this.aggro = true;
+      this.leashing = false;
       if (chance(Math.random as never, 0.6)) hooks.bark(this.displayName, pick(Math.random as never, this.def.barks));
+    }
+
+    // leash: nobody chases you to the ends of the earth. Past the home
+    // district's edge they give up, shrug, heal, and wander back.
+    if (this.aggro && this.homeDistrict && this.def.dropTier < 3 && !hooks.tauntTarget()) {
+      const dh = Math.hypot(this.position.x - this.homeDistrict.cx, this.position.z - this.homeDistrict.cz);
+      if (dh > this.homeDistrict.radius + 32) {
+        this.aggro = false;
+        this.leashing = true;
+        this.leashCooldown = 5;
+        this.flesh = this.maxFlesh; this.shield = this.maxShield; this.armor = this.maxArmor;
+        this.patrolTarget.set(this.homeDistrict.cx, 0, this.homeDistrict.cz);
+        this.patrolWait = 0;
+        this.tactic = 'advance'; this.coverPos = null;
+        if (chance(Math.random as never, 0.4)) hooks.bark(this.displayName, 'eh. not worth the walk.');
+      }
     }
 
     if (!this.aggro) {
@@ -316,6 +353,12 @@ export class Enemy implements Damageable {
     } else {
       this.combatUpdate(dt, slow, playerPos, distToPlayer);
     }
+
+    // crouch visual: settle low behind cover, pop back up to fight
+    const wantCrouch = this.tactic === 'hold' ? 1 : 0;
+    this.crouchK += (wantCrouch - this.crouchK) * Math.min(1, dt * 7);
+    if (this.crouchK > 0.01) this.group.scale.y = 1 - this.crouchK * 0.28;
+    else if (this.group.scale.y !== 1) this.group.scale.y = 1;
 
     // limb swing driven by wobble accumulated in movement
     for (const l of this.limbs) {
@@ -349,7 +392,11 @@ export class Enemy implements Damageable {
   }
 
   private patrolUpdate(dt: number, slow: number): void {
-    if (this.patrolWait > 0) {
+    if (this.leashing && this.homeDistrict) {
+      const dh = Math.hypot(this.position.x - this.homeDistrict.cx, this.position.z - this.homeDistrict.cz);
+      if (dh < this.homeDistrict.radius * 0.75) { this.leashing = false; this.pickPatrolTarget(); }
+    }
+    if (this.patrolWait > 0 && !this.leashing) {
       this.patrolWait -= dt;
       this.settleToGround();
       return;
@@ -357,7 +404,7 @@ export class Enemy implements Damageable {
     const to = this.patrolTarget.clone().sub(this.position); to.y = 0;
     if (to.length() < 1.5) { this.pickPatrolTarget(); return; }
     const dir = to.normalize();
-    const speed = this.def.speed * 0.35 * slow;
+    const speed = this.def.speed * (this.leashing ? 0.7 : 0.35) * slow;
     this.moveBlocked(dir, speed * dt);
     this.wobble += dt * 5 * slow;
     this.group.rotation.y = Math.atan2(dir.x, dir.z) + Math.PI;
@@ -409,11 +456,21 @@ export class Enemy implements Damageable {
       return;
     }
 
+    // ranged humanoids get the full tactical brain
+    if ((def.behavior === 'gunner' || def.behavior === 'lobber') && def.projectile) {
+      this.rangedBrain(dt, slow, targetPos, dist, speed, taunt !== null);
+      return;
+    }
+
     if (dist > engage) {
       const dir = toTarget.normalize();
-      // flyers strafe sinusoidally while closing
       if (def.behavior === 'flyer') {
+        // flyers strafe sinusoidally while closing
         const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(Math.sin(this.wobble * 0.7) * 0.6);
+        dir.add(side).normalize();
+      } else if (def.behavior === 'rusher') {
+        // rushers serpentine instead of beelining — harder to track, more alive
+        const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(Math.sin(this.wobble * 1.15) * 0.38);
         dir.add(side).normalize();
       }
       this.moveBlocked(dir, speed * dt);
@@ -423,10 +480,181 @@ export class Enemy implements Damageable {
       this.settleToGround();
       this.attackTimer -= dt * slow;
       if (this.attackTimer <= 0) {
+        // flyers need a sightline; melee lunges connect regardless
+        if (def.behavior === 'flyer' && def.projectile && !this.sightline(targetPos)) return;
         this.attackTimer = 1 / def.attackRate;
         this.attack(targetPos, taunt !== null);
       }
     }
+  }
+
+  /** Muzzle→head line-of-sight through the world's statics. Eye-height on
+   *  both ends so gentle dune crests don't read as walls. */
+  private sightline(targetPos: THREE.Vector3): boolean {
+    const h = this.def.behavior === 'flyer' ? 2.6 : 1.5;
+    const muzzle = this.position.clone().add(new THREE.Vector3(0, h * this.def.scale, 0));
+    return hooks.hasLOS(muzzle, targetPos.clone().add(new THREE.Vector3(0, 1.5, 0)));
+  }
+
+  /** The gunner/lobber brain: hold a fighting band, strafe while shooting,
+   *  break for cover when hurt, peek out in bursts, and frag campers. */
+  private rangedBrain(dt: number, slow: number, targetPos: THREE.Vector3, dist: number, speed: number, attackingTurret: boolean): void {
+    const def = this.def;
+    const engage = def.attackRange;
+    const los = this.sightline(targetPos);
+    this.noLosT = los ? 0 : this.noLosT + dt;
+    this.tacticT -= dt;
+    this.coverCooldown -= dt;
+    this.attackTimer -= dt * slow;
+
+    const hpFrac = this.totalHp() / (this.maxFlesh + this.maxShield + this.maxArmor);
+
+    // hurt in the open → look for something to hide behind
+    if ((this.tactic === 'advance' || this.tactic === 'strafe') && hpFrac < 0.55 && this.coverCooldown <= 0) {
+      this.coverCooldown = 6 + Math.random() * 4;
+      const spots = hooks.coverSpots(this.position, targetPos, 20);
+      const spot = spots.find((s) => s.distanceTo(targetPos) > 7);
+      if (spot) {
+        this.coverPos = spot.clone();
+        this.tactic = 'toCover';
+        this.peekCycles = 0;
+        if (chance(Math.random as never, 0.4)) hooks.bark(this.displayName, pick(Math.random as never, ['COVER! COVER!', 'nope nope nope', 'regrouping!!']));
+      }
+    }
+
+    // frag out: campers get flushed, and so do you
+    if (def.grenades) {
+      this.grenadeT -= dt;
+      // always when the target hides; sometimes just because
+      if (this.grenadeT <= 0 && dist < 26 && dist > 6 && (!los || Math.random() < 0.4)) {
+        this.grenadeT = 8 + Math.random() * 6;
+        this.throwFrag(targetPos);
+      }
+    }
+
+    switch (this.tactic) {
+      case 'advance': {
+        if (this.tacticT <= 0) {
+          // in the fighting band with a sightline → start working angles
+          if (los && dist < engage * 1.05 && dist > engage * 0.35) {
+            this.tactic = 'strafe';
+            this.strafeSign = Math.random() < 0.5 ? 1 : -1;
+            this.tacticT = 1.1 + Math.random() * 1.6;
+          } else {
+            this.tacticT = 0.5 + Math.random() * 0.5;
+          }
+        }
+        const dir = targetPos.clone().sub(this.position).setY(0).normalize();
+        if (dist > engage * 0.8) {
+          this.moveBlocked(dir, speed * dt);
+          this.settleToGround(true);
+        } else if (!los) {
+          // close enough but blind: flank — sidestep while drifting closer
+          const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(this.strafeSign)
+            .addScaledVector(dir, 0.45).normalize();
+          this.moveBlocked(side, speed * 0.9 * dt);
+          this.settleToGround(true);
+          if (this.noLosT > 2.2) { this.strafeSign *= -1; this.noLosT = 0.6; }
+        } else {
+          this.settleToGround();
+        }
+        break;
+      }
+      case 'strafe': {
+        if (this.tacticT <= 0) {
+          if (Math.random() < 0.35) this.strafeSign *= -1;
+          this.tactic = Math.random() < 0.25 ? 'advance' : 'strafe';
+          this.tacticT = 1.1 + Math.random() * 1.6;
+        }
+        const dir = targetPos.clone().sub(this.position).setY(0).normalize();
+        const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(this.strafeSign);
+        // orbit with a gentle correction back into the band
+        const radial = dist > engage * 0.85 ? 0.45 : dist < engage * 0.45 ? -0.55 : 0;
+        const move = side.add(dir.multiplyScalar(radial)).normalize();
+        this.moveBlocked(move, speed * 0.8 * dt);
+        this.settleToGround(true);
+        if (!los && this.noLosT > 1.4) { this.tactic = 'advance'; this.tacticT = 0.6; }
+        break;
+      }
+      case 'toCover': {
+        if (!this.coverPos) { this.tactic = 'advance'; break; }
+        const to = this.coverPos.clone().sub(this.position).setY(0);
+        if (to.length() < 1.1) {
+          this.tactic = 'hold';
+          this.tacticT = 1 + Math.random() * 1.2;
+        } else {
+          this.moveBlocked(to.normalize(), speed * 1.15 * dt);
+          this.settleToGround(true);
+          this.group.rotation.y = Math.atan2(to.x, to.z) + Math.PI; // face the run
+        }
+        break;
+      }
+      case 'hold': {
+        this.settleToGround();
+        // catch a breath behind the prop
+        this.flesh = Math.min(this.maxFlesh, this.flesh + this.maxFlesh * 0.05 * dt);
+        // flanked? cover only works if it's between you and the threat
+        if (dist < 7 || this.sightline(targetPos)) { this.tactic = 'strafe'; this.coverPos = null; break; }
+        if (this.tacticT <= 0) {
+          const dir = targetPos.clone().sub(this.position).setY(0).normalize();
+          const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(this.strafeSign * 2.1);
+          this.peekPos = this.position.clone().add(side);
+          this.tactic = 'peek';
+          this.tacticT = 1.5 + Math.random() * 0.7;
+        }
+        break;
+      }
+      case 'peek': {
+        if (!this.peekPos) { this.tactic = 'strafe'; break; }
+        const to = this.peekPos.clone().sub(this.position).setY(0);
+        if (to.length() > 0.5) {
+          this.moveBlocked(to.normalize(), speed * 1.1 * dt);
+          this.settleToGround(true);
+        } else {
+          this.settleToGround();
+        }
+        if (this.tacticT <= 0) {
+          this.peekCycles++;
+          if (this.peekCycles >= 2 + Math.floor(Math.random() * 2) || !this.coverPos) {
+            this.tactic = 'strafe';
+            this.coverPos = null;
+          } else {
+            // duck back behind the prop
+            this.peekPos = null;
+            this.tactic = 'toCover';
+          }
+        }
+        break;
+      }
+    }
+
+    // fire control: gunners need the sightline; lobbers arc OVER cover —
+    // that's their whole job
+    const canFire = def.behavior === 'lobber'
+      ? dist < engage * 1.2
+      : los && dist < engage * 1.15 && this.tactic !== 'toCover' && this.tactic !== 'hold';
+    if (canFire && this.attackTimer <= 0) {
+      this.attackTimer = 1 / def.attackRate;
+      this.attack(targetPos, attackingTurret);
+    }
+  }
+
+  /** A cooked frag, lobbed in an arc — with a warning glint and a beep. */
+  private throwFrag(targetPos: THREE.Vector3): void {
+    const def = this.def;
+    const dmg = 11 * def.damageMult * levelScale(this.level) * (this.badass ? BADASS_DMG_MULT : 1);
+    const muzzle = this.position.clone().add(new THREE.Vector3(0, 1.5 * def.scale, 0));
+    const aim = targetPos.clone().sub(muzzle);
+    const dist = aim.length();
+    aim.normalize().multiplyScalar(13);
+    aim.y += dist * 0.5;
+    projectiles.spawn({
+      pos: muzzle, vel: aim, damage: dmg, element: 'blast',
+      splash: 3.6, gravity: 15, fuse: 1.25, bounces: 1, source: 'enemy',
+    });
+    fx.burst(muzzle, 0xffd23c, 6, 2.5, 0.08, 0.3, 3);
+    audio.fuseBeep(1.2);
+    if (chance(Math.random as never, 0.5)) hooks.bark(this.displayName, pick(Math.random as never, ['CATCH!', 'present for ya!', 'knock knock!']));
   }
 
   private detonate(): void {
@@ -505,15 +733,21 @@ export class Enemy implements Damageable {
 
 interface Gib { mesh: THREE.Mesh; vel: THREE.Vector3; spin: THREE.Vector3; life: number; frozen: boolean }
 
-interface DistrictPop {
+// Borderlands-style encounters: each hostile district holds a staged fight —
+// a couple of waves that trigger when you arrive, then STAY dead until you
+// actually leave and come back. No trickle-respawn behind your back.
+interface Encounter {
   def: DistrictDef;
-  respawnT: number;
+  state: 'dormant' | 'engaged' | 'cleared';
+  wavesLeft: number;
+  waveDelay: number;   // countdown to the next reinforcement wave
+  awayT: number;       // how long the player has been far away since clearing
 }
 
 export class EnemySpawner {
   enemies: Enemy[] = [];
   private gibs: Gib[] = [];
-  private pops: DistrictPop[] = [];
+  private encounters: Encounter[] = [];
   boss: Enemy | null = null;
   scene!: THREE.Scene;
 
@@ -522,11 +756,12 @@ export class EnemySpawner {
     this.refreshDistricts();
   }
 
-  /** Re-read districts from the active map (call on map switch). */
+  /** Re-read districts from the active map (call on map switch). Everything
+   *  re-arms — leaving a map and returning is the canonical "revisit". */
   refreshDistricts(): void {
-    this.pops = WORLD.districts
+    this.encounters = WORLD.districts
       .filter((d) => d.spawnTable.length > 0)
-      .map((def) => ({ def, respawnT: 2 + Math.random() * 4 }));
+      .map((def) => ({ def, state: 'dormant' as const, wavesLeft: 0, waveDelay: 0, awayT: 0 }));
   }
 
   /** Clear all live enemies and gibs (map switch). */
@@ -550,31 +785,78 @@ export class EnemySpawner {
   /** Race mode etc.: true pauses district repopulation entirely. */
   suppressed = false;
 
+  /** Enemies alive that call this district home. */
+  private aliveIn(districtId: string): number {
+    let n = 0;
+    for (const e of this.enemies) if (e.alive && e.homeDistrict?.id === districtId) n++;
+    return n;
+  }
+
+  /** One encounter wave: a spread of the district's table, spawned away
+   *  from the player. The final wave brings a guaranteed badass. */
+  private spawnWave(enc: Encounter, count: number, finalWave: boolean): void {
+    const playerPos = enemyHooks().playerPos();
+    const d = enc.def;
+    for (let i = 0; i < count; i++) {
+      const entry = weightedPick(Math.random as never, d.spawnTable.map((s) => ({ item: s, w: s.weight })));
+      const def = ENEMIES[entry.enemyId];
+      if (!def) continue;
+      for (let tries = 0; tries < 8; tries++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = d.radius * (0.3 + Math.random() * 0.55);
+        const pos = new THREE.Vector3(d.cx + Math.cos(a) * r, 0, d.cz + Math.sin(a) * r);
+        if (pos.distanceTo(playerPos) < 18) continue;
+        this.spawnOne(def, pos, finalWave && i === 0 && d.maxAlive >= 6 ? true : undefined, d.levelOffset);
+        break;
+      }
+    }
+  }
+
   update(dt: number): void {
     const playerPos = enemyHooks().playerPos();
 
-    // district repopulation — refills fast when empty, trickles when full-ish
-    for (const pop of this.suppressed ? [] : this.pops) {
-      pop.respawnT -= dt;
-      if (pop.respawnT > 0) continue;
-      const alive = this.enemies.filter((e) => e.alive && e.homeDistrict?.id === pop.def.id).length;
-      const fill = pop.def.maxAlive > 0 ? alive / pop.def.maxAlive : 1;
-      pop.respawnT = pop.def.respawnDelay * (0.7 + Math.random() * 0.6) * Math.max(0.12, fill * fill);
-      if (alive >= pop.def.maxAlive) continue;
-      // only populate when the player is near-ish but not on top of the spawn
-      const distToDistrict = Math.hypot(playerPos.x - pop.def.cx, playerPos.z - pop.def.cz);
-      if (distToDistrict > pop.def.radius + 70) continue;
-      const entry = weightedPick(Math.random as never, pop.def.spawnTable.map((s) => ({ item: s, w: s.weight })));
-      const def = ENEMIES[entry.enemyId];
-      if (!def) continue;
-      // find a spawn point away from the player
-      for (let tries = 0; tries < 6; tries++) {
-        const a = Math.random() * Math.PI * 2;
-        const r = Math.random() * pop.def.radius * 0.85;
-        const pos = new THREE.Vector3(pop.def.cx + Math.cos(a) * r, 0, pop.def.cz + Math.sin(a) * r);
-        if (pos.distanceTo(playerPos) < 20) continue;
-        this.spawnOne(def, pos, undefined, pop.def.levelOffset);
-        break;
+    // staged encounters per district
+    for (const enc of this.suppressed ? [] : this.encounters) {
+      const d = enc.def;
+      const distToDistrict = Math.hypot(playerPos.x - d.cx, playerPos.z - d.cz);
+      switch (enc.state) {
+        case 'dormant': {
+          if (distToDistrict < d.radius + 22) {
+            enc.state = 'engaged';
+            enc.wavesLeft = d.maxAlive >= 7 ? 2 : 1;   // 2–3 waves total
+            this.spawnWave(enc, d.maxAlive, enc.wavesLeft === 0);
+          }
+          break;
+        }
+        case 'engaged': {
+          const alive = this.aliveIn(d.id);
+          if (enc.wavesLeft > 0 && alive <= Math.max(1, Math.floor(d.maxAlive * 0.2))) {
+            enc.waveDelay -= dt;
+            if (enc.waveDelay <= 0) {
+              enc.wavesLeft--;
+              enc.waveDelay = 2.4 + Math.random() * 1.4;
+              this.spawnWave(enc, Math.max(2, Math.ceil(d.maxAlive * 0.75)), enc.wavesLeft === 0);
+              if (distToDistrict < d.radius + 40) enemyHooks().bark(d.name, 'REINFORCEMENTS!');
+            }
+          } else {
+            enc.waveDelay = 2.4 + Math.random() * 1.4;
+          }
+          if (enc.wavesLeft === 0 && alive === 0) {
+            enc.state = 'cleared';
+            enc.awayT = 0;
+          }
+          break;
+        }
+        case 'cleared': {
+          // stays cleared until you genuinely leave and come back
+          if (distToDistrict > d.radius + 80) {
+            enc.awayT += dt;
+            if (enc.awayT > 25) enc.state = 'dormant';
+          } else {
+            enc.awayT = 0;
+          }
+          break;
+        }
       }
     }
 

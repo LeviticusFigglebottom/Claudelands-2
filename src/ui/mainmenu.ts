@@ -6,6 +6,7 @@
 import { CLASSES, type ClassDef } from '../data/classes';
 import { DIFFICULTIES, type DifficultyId } from '../game/settings';
 import { prefs, setPref, resetPrefs, DEFAULT_PREFS, type Prefs } from '../game/prefs';
+import { SAVE_SLOTS, slotSummary, clearSave, exportSlot, importSlot, type SaveSlotId } from '../game/state';
 import { audio } from '../audio/synth';
 
 export type StartMode = 'new' | 'veteran' | 'endless';
@@ -13,8 +14,8 @@ export type StartMode = 'new' | 'veteran' | 'endless';
 export interface MenuCallbacks {
   hasSave: () => boolean;
   bestWave: () => number;
-  onContinue: () => void;
-  onStart: (mode: StartMode, classId: string, difficultyId: DifficultyId) => void;
+  onContinue: (slot: SaveSlotId) => void;
+  onStart: (mode: StartMode, classId: string, difficultyId: DifficultyId, slot: SaveSlotId) => void;
 }
 
 type Screen = 'press' | 'menu' | 'campaign' | 'select' | 'settings';
@@ -101,17 +102,73 @@ export class MainMenu {
     this.root.querySelector('#mm-settings')?.addEventListener('click', () => { audio.uiClick(); this.screen = 'settings'; this.render(); });
   }
 
+  // ---------------------------------------------------------- save slots
+  private chosenSlot: SaveSlotId = 's1';
+  private confirmDelete: SaveSlotId | null = null;
+
   private renderCampaign(): void {
-    const save = this.cb.hasSave();
+    const classNames: Record<string, string> = {};
+    for (const c of CLASSES) classNames[c.id] = c.charName;
+    const cards = SAVE_SLOTS.map((slot, i) => {
+      const s = slotSummary(slot);
+      if (!s) {
+        return `
+          <div class="mm-slot" data-slot="${slot}">
+            <div class="mm-slot-head">SLOT ${i + 1} — <span style="opacity:0.6">EMPTY</span></div>
+            <div class="mm-slot-actions">
+              <button class="mm-btn mm-slot-btn" data-act="new" data-slot="${slot}">NEW CONTRACT<span class="mm-sub">full story from the gully up</span></button>
+              <button class="mm-btn mm-slot-btn" data-act="veteran" data-slot="${slot}">VETERAN START<span class="mm-sub">level 10, geared, Brasshaven open</span></button>
+              <button class="mm-btn mm-slot-btn" data-act="import" data-slot="${slot}">IMPORT<span class="mm-sub">paste an exported save string</span></button>
+            </div>
+          </div>`;
+      }
+      const confirm = this.confirmDelete === slot;
+      return `
+        <div class="mm-slot" data-slot="${slot}">
+          <div class="mm-slot-head">SLOT ${i + 1} — <b>${classNames[s.classId] ?? s.classId}</b> · LV ${s.level} · $${s.money.toLocaleString()} · ${s.mapId.replace('_', ' ')}</div>
+          <div class="mm-slot-actions">
+            <button class="mm-btn mm-slot-btn" data-act="continue" data-slot="${slot}">CONTINUE<span class="mm-sub">pick up where the autosave left you</span></button>
+            <button class="mm-btn mm-slot-btn" data-act="new" data-slot="${slot}">NEW<span class="mm-sub">overwrites THIS slot only</span></button>
+            <button class="mm-btn mm-slot-btn" data-act="export" data-slot="${slot}">EXPORT<span class="mm-sub">copy save string</span></button>
+            <button class="mm-btn mm-slot-btn" data-act="delete" data-slot="${slot}" ${confirm ? 'style="border-color:#ff5a5a; color:#ff5a5a"' : ''}>${confirm ? 'REALLY DELETE?' : 'DELETE'}<span class="mm-sub">${confirm ? 'click again to erase forever' : 'clear this slot'}</span></button>
+          </div>
+        </div>`;
+    }).join('');
     this.chrome(`
-      <div class="mm-menu">
-        ${save ? '<button class="mm-btn" id="mm-continue">CONTINUE CONTRACT<span class="mm-sub">pick up where the autosave left you</span></button>' : ''}
-        <button class="mm-btn" id="mm-new">NEW CONTRACT<span class="mm-sub">full story from the gully up${save ? ' — overwrites the current save' : ''}</span></button>
-        <button class="mm-btn" id="mm-veteran">VETERAN START<span class="mm-sub">skip the early jobs: level 10, geared, Brasshaven open, the Mayor waiting${save ? ' — overwrites the current save' : ''}</span></button>
-      </div>`, 'menu');
-    this.root.querySelector('#mm-continue')?.addEventListener('click', () => this.finish(() => this.cb.onContinue()));
-    this.root.querySelector('#mm-new')?.addEventListener('click', () => { audio.uiClick(); this.startMode = 'new'; this.screen = 'select'; this.render(); });
-    this.root.querySelector('#mm-veteran')?.addEventListener('click', () => { audio.uiClick(); this.startMode = 'veteran'; this.screen = 'select'; this.render(); });
+      <div class="t-super">CONTRACT LEDGER — THREE DESKS, PICK ONE</div>
+      <div class="mm-menu" style="max-width:720px; gap:14px;">${cards}</div>`, 'menu');
+
+    this.root.querySelectorAll<HTMLButtonElement>('.mm-slot-btn').forEach((b) => {
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const slot = b.dataset.slot as SaveSlotId;
+        const act = b.dataset.act!;
+        audio.uiClick();
+        if (act === 'continue') { this.finish(() => this.cb.onContinue(slot)); return; }
+        if (act === 'new') { this.chosenSlot = slot; this.startMode = 'new'; this.screen = 'select'; this.render(); return; }
+        if (act === 'veteran') { this.chosenSlot = slot; this.startMode = 'veteran'; this.screen = 'select'; this.render(); return; }
+        if (act === 'delete') {
+          if (this.confirmDelete === slot) { clearSave(slot); this.confirmDelete = null; }
+          else this.confirmDelete = slot;
+          this.render();
+          return;
+        }
+        if (act === 'export') {
+          const code = exportSlot(slot);
+          if (code) {
+            void navigator.clipboard?.writeText(code).catch(() => { /* clipboard blocked */ });
+            window.prompt('Save string (copied to clipboard where allowed) — keep it somewhere safe:', code);
+          }
+          return;
+        }
+        if (act === 'import') {
+          const code = window.prompt('Paste an exported save string:');
+          if (code && importSlot(slot, code)) this.render();
+          else if (code) window.alert('That string didn’t parse as a save. No changes made.');
+          return;
+        }
+      });
+    });
   }
 
   // ------------------------------------------------------- character select
@@ -165,7 +222,7 @@ export class MainMenu {
     });
     this.root.querySelector('#cs-go')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      this.finish(() => this.cb.onStart(this.startMode, this.chosenClass, this.chosenDiff));
+      this.finish(() => this.cb.onStart(this.startMode, this.chosenClass, this.chosenDiff, this.chosenSlot));
     }, { once: true });
   }
 

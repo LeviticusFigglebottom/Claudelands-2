@@ -13,6 +13,9 @@ export interface LegendaryDef {
   effectLabel: string;      // shown on the card under the red text
   /** Never rolls from the world pool; only granted by its quest. */
   questOnly?: boolean;
+  /** A boss's signature: drops from that boss (elevated odds), never from
+   *  the world pool — it's a chase item, not a lottery ticket. */
+  dedicatedTo?: string;
   effect:                   // consumed by combat/player code
     | { kind: 'pellet_storm'; pellets: number }        // massive extra pellets
     | { kind: 'bouncing_orbs' }                        // shots arc lightning twice
@@ -65,12 +68,42 @@ export const LEGENDARIES: LegendaryDef[] = [
     redText: '“It comes down all at once.”',
     effectLabel: 'A wall of freezing pellets; impacts call a second, delayed burst.',
     effect: { kind: 'meteor', radius: 4 }, forceElement: 'rime',
+    dedicatedTo: 'old_man_avalanche',
   },
   {
     id: 'leg_smalltalk', name: 'Small Talk', maker: 'aetheric', type: 'pistol',
     redText: '“So. Cold enough for ya?”',
     effectLabel: 'Volt hits chain twice instead of once.',
     effect: { kind: 'bouncing_orbs' }, forceElement: 'volt',
+  },
+  // ---- boss signatures (dedicated drops; never in the world pool)
+  {
+    id: 'leg_trashjesty', name: 'His Trashjesty', maker: 'ratworks', type: 'shotgun',
+    redText: '“One man’s garbage is one man’s ARSENAL.”',
+    effectLabel: 'Fires a royal court of extra pellets.',
+    effect: { kind: 'pellet_storm', pellets: 8 },
+    dedicatedTo: 'gutterball',
+  },
+  {
+    id: 'leg_site_policy', name: 'Site Policy', maker: 'lumen', type: 'ar',
+    redText: '“Violations will be repeated. For emphasis.”',
+    effectLabel: 'Every volt hit repeats itself a beat later.',
+    effect: { kind: 'echo_round', delay: 0.3 }, forceElement: 'volt',
+    dedicatedTo: 'warden_prime',
+  },
+  {
+    id: 'leg_litany', name: 'The Litany', maker: 'cordwood', type: 'sniper',
+    redText: '“Say it again. Warmer.”',
+    effectLabel: 'Burning rounds; damage climbs as the magazine empties (+18%/missing).',
+    effect: { kind: 'money_shot', multPerMissing: 0.18 }, forceElement: 'ember',
+    dedicatedTo: 'saint_furnace',
+  },
+  {
+    id: 'leg_pruning_song', name: 'Pruning Song', maker: 'aetheric', type: 'smg',
+    redText: '“It grows back. You won’t.”',
+    effectLabel: 'Corrosive spray that heals you for 5% of damage dealt.',
+    effect: { kind: 'vampire', leech: 0.05 }, forceElement: 'bile',
+    dedicatedTo: 'bloom_mother',
   },
   // ---- quest-unique rewards (side jobs only; never in the world drop pool)
   {
@@ -94,7 +127,15 @@ export const LEGENDARIES: LegendaryDef[] = [
 ];
 
 export function legendaryFor(type: WeaponType, roll: number): LegendaryDef | null {
-  const pool = LEGENDARIES.filter((l) => l.type === type && !l.questOnly);
-  if (pool.length === 0) return LEGENDARIES[Math.floor(roll * LEGENDARIES.length) % LEGENDARIES.length];
+  const pool = LEGENDARIES.filter((l) => l.type === type && !l.questOnly && !l.dedicatedTo);
+  if (pool.length === 0) {
+    const world = LEGENDARIES.filter((l) => !l.questOnly && !l.dedicatedTo);
+    return world[Math.floor(roll * world.length) % world.length];
+  }
   return pool[Math.floor(roll * pool.length) % pool.length];
+}
+
+/** A boss's signature drops (by enemy def id). */
+export function dedicatedFor(bossId: string): LegendaryDef[] {
+  return LEGENDARIES.filter((l) => l.dedicatedTo === bossId);
 }

@@ -55,10 +55,62 @@ export class Hud {
     const ch = document.getElementById('crosshair')!;
     ch.innerHTML = `
       <div class="arm h" id="ca-l"></div><div class="arm h" id="ca-r"></div>
-      <div class="arm v" id="ca-t"></div><div class="arm v" id="ca-b"></div>`;
+      <div class="arm v" id="ca-t"></div><div class="arm v" id="ca-b"></div>
+      <div id="ca-dot" style="position:absolute; left:50%; top:50%; width:3px; height:3px; margin:-1.5px; border-radius:50%; background:#f4ead8; opacity:0;"></div>
+      <div id="ca-ring" style="position:absolute; left:50%; top:50%; width:40px; height:40px; border:1.5px solid rgba(244,234,216,0.85); border-radius:50%; transform:translate(-50%,-50%); opacity:0;"></div>`;
     this.crossArms = ['ca-l', 'ca-r', 'ca-t', 'ca-b'].map((id) => document.getElementById(id)!);
 
+    // full sniper scope: vignette mask, crosshair lines, mil dots, rim
+    this.scope = document.createElement('div');
+    this.scope.id = 'scope-overlay';
+    this.scope.style.cssText = 'position:absolute; inset:0; z-index:4; pointer-events:none; display:none;';
+    this.scope.innerHTML = `
+      <div style="position:absolute; inset:0; background:radial-gradient(circle at 50% 50%, transparent 0 30vmin, rgba(4,6,8,0.985) 31.5vmin 100%);"></div>
+      <div style="position:absolute; left:50%; top:50%; width:60vmin; height:60vmin; transform:translate(-50%,-50%); border-radius:50%; box-shadow:inset 0 0 40px rgba(0,0,0,0.9), inset 0 0 4px rgba(84,212,255,0.5);"></div>
+      <div style="position:absolute; left:calc(50% - 30vmin); top:50%; width:60vmin; height:1px; background:rgba(20,26,30,0.9);"></div>
+      <div style="position:absolute; top:calc(50% - 30vmin); left:50%; height:60vmin; width:1px; background:rgba(20,26,30,0.9);"></div>
+      ${[8, 14, 20].map((d) => `
+        <div style="position:absolute; left:50%; top:calc(50% + ${d}vmin); width:5px; height:1.5px; margin-left:-2.5px; background:rgba(20,26,30,0.85);"></div>
+        <div style="position:absolute; top:50%; left:calc(50% + ${d}vmin); height:5px; width:1.5px; margin-top:-2.5px; background:rgba(20,26,30,0.85);"></div>
+        <div style="position:absolute; top:50%; left:calc(50% - ${d}vmin); height:5px; width:1.5px; margin-top:-2.5px; background:rgba(20,26,30,0.85);"></div>`).join('')}
+      <div style="position:absolute; left:50%; top:50%; width:5px; height:5px; margin:-2.5px; border-radius:50%; border:1.5px solid rgba(255,90,90,0.9);"></div>`;
+    document.getElementById('ui-root')?.appendChild(this.scope);
+
     // damage direction arc responder
+  }
+
+  private scope!: HTMLElement;
+  private scopedNow = false;
+
+  /** ADS presentation: arms tighten to a dot, shotguns/launchers get a ring,
+   *  true scopes (zoom ≥ 2.5) go full-tube and holster the viewmodel. */
+  private updateAds(player: Player): void {
+    const w = state.activeWeapon;
+    const ads = player.adsAmount;
+    const zoom = w?.stats.zoom ?? 1;
+    const kind = !w || ads < 0.45 ? 'none'
+      : zoom >= 2.5 ? 'scope'
+      : w.type === 'shotgun' || w.type === 'launcher' ? 'circle'
+      : 'dot';
+
+    const dot = document.getElementById('ca-dot');
+    const ring = document.getElementById('ca-ring');
+    if (dot) dot.style.opacity = kind === 'dot' ? String(ads) : '0';
+    if (ring) {
+      ring.style.opacity = kind === 'circle' ? String(ads * 0.9) : '0';
+      const px = 26 + player.lastSpreadDeg * 16;
+      ring.style.width = `${px}px`; ring.style.height = `${px}px`;
+    }
+    const arms = kind === 'scope' ? 0 : 1;
+    for (const a of this.crossArms) a.style.opacity = String(arms * (kind === 'dot' ? 1 - ads * 0.5 : 1));
+
+    const scoped = kind === 'scope' && ads > 0.7;
+    this.scope.style.display = scoped ? 'block' : 'none';
+    if (scoped !== this.scopedNow) {
+      this.scopedNow = scoped;
+      // the gun leaves the frame while you're in the tube
+      player.viewmodel.scale.setScalar(scoped ? 0.0001 : 1);
+    }
   }
 
   /** Refresh class-dependent labels (call after class select / load). */
@@ -129,11 +181,12 @@ export class Hud {
     const ks = statsys.activeKillBuffCount;
     e['hud-killskill'].textContent = ks > 0 ? `⚡ KILL SKILLS ×${ks}` : '';
 
-    // dynamic crosshair spread
+    // dynamic crosshair spread + ADS reticle morphing
     const px = 6 + player.lastSpreadDeg * 9;
     const [l, r, t, b] = this.crossArms;
     l.style.left = `-${px + 9}px`; r.style.right = `-${px + 9}px`;
     t.style.top = `-${px + 9}px`; b.style.bottom = `-${px + 9}px`;
+    this.updateAds(player);
 
     // target nameplate (sampled every few frames)
     this.nameplateTimer -= dt;

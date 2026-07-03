@@ -13,13 +13,17 @@ scrapship, with a planet-aware launch-and-landing cinematic), and THE
 TANGLE, a ridge-walled deep-jungle gauntlet with waterfalls, ponds, and a
 garden god at the end of it — FOUR playable Vault-Rats, nineteen main
 quests (with BL2-style holocall turn-ins and auto-accepted chains) plus
-Brasshaven side jobs with quest-only unique legendaries, five bosses,
-procedural CHARACTER VOICES for every questgiver and a Crucible announcer,
-in-game cinematics, a digistruct death-and-respawn sequence, BL2-style
-zone-edge transitions, bazillions of guns — plus ENDLESS MODE in the
-Crucible fighting pit (also open for business inside Brasshaven), and a
-cinematic attract-mode main menu with graphics settings and a Veteran
-Start.
+Brasshaven side jobs with quest-only unique legendaries, five bosses EACH
+WITH A DEDICATED SIGNATURE LEGENDARY (first kill guarantees it), enemies
+that strafe, take cover, peek-fire, lob grenades, and leash home instead
+of chasing forever, staged POI encounters that stay cleared until you
+revisit, procedural CHARACTER VOICES for every questgiver and a Crucible
+announcer, in-game cinematics, a digistruct death-and-respawn sequence,
+BL2-style zone-edge transitions, per-weapon ADS reticles with true sniper
+scopes, THREE SAVE SLOTS with export/import, bazillions of guns — plus
+ENDLESS MODE in the Crucible fighting pit (also open for business inside
+Brasshaven), and a cinematic attract-mode main menu with graphics settings
+and a Veteran Start.
 
 Everything is procedural — meshes, textures, sound, *music* — and everything
 that is content (guns, parts, manufacturers, elements, skills, enemies,

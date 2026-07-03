@@ -1,5 +1,51 @@
 # ROADMAP
 
+## Pass 12 status — enemies got smart, loot got personal
+
+**AI overhaul** (`game/enemies.ts`): ranged humanoids run a tactical brain.
+They hold a fighting band and STRAFE while shooting instead of statue-
+standing; ranged attacks are gated behind a real line-of-sight raycast (no
+more firing through walls); hurt gunners break for cover — real prop-based
+hide spots computed on the far side of colliders from the threat — crouch
+to catch their breath, then PEEK out in bursts to fire, duck back, and
+re-engage after a few cycles (flanking them works: cover only counts if
+it's between you and them). Grenadier archetypes (Shieldhead, Snowmad,
+Ashwalker, Lattice Warden) cook and lob real arcing frags — especially
+when YOU hide. Rushers serpentine instead of beelining; lobbers still arc
+over cover, because that's their whole job.
+
+**Encounters, not faucets**: districts no longer trickle-respawn behind
+your back. Each hostile POI stages a Borderlands-style fight — a full wave
+on arrival, then one or two REINFORCEMENT waves as you thin them (the
+final wave brings a guaranteed badass) — and once cleared it STAYS cleared
+until you genuinely leave (out of range ~25s, or a map change) and come
+back. And nobody chases you to the ends of the earth: enemies leash at
+their district's edge, shrug, heal to full, and walk home.
+
+**Dedicated drops**: every boss owns a signature legendary — His
+Trashjesty (Gutterball), Site Policy (Warden Prime), The Avalanche (Old
+Man Avalanche), The Litany (Saint Furnace), Pruning Song (Bloom Mother).
+First kill guarantees the signature; repeat kills roll elevated odds
+(38%), with a strong epic as the consolation ceremony. Signatures never
+roll from the world pool — world legendaries still happen, rarely, as
+before. The Crucible's boss waves use the same dedicated system, so the
+pit is a legitimate farm.
+
+**Save slots**: three campaign slots with a slot-picker ledger in the menu
+(per-slot continue/new/veteran, summary line, two-click delete), the old
+single save migrates into slot 1, and every slot can EXPORT to a portable
+save string / IMPORT one back. Endless still never touches saves.
+
+**NPCs are alive now**: every named giver breathes (idle bob + sway),
+head-tracks you when you're close, and fidgets — Quibb taps the clipboard,
+Rita checks the stopwatch, Zaza's orb floats on its own. Town NPCs grew
+arms, belts, and boots in the process.
+
+**ADS finished**: reticles are per-weapon — arms tighten to a dot for
+pistols/SMGs/ARs, shotguns and launchers get a spread ring, and true
+scopes (zoom ≥ 2.5) go full tube: vignette mask, mil dots, holstered
+viewmodel, and mouse sensitivity scaled to the magnification.
+
 ## Pass 10 status — wheels, voices, and no more walking back
 
 **THE RUST GULCH** — the fourth Claudelands-edge zone (east, past the

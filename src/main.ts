@@ -7,7 +7,7 @@ import { PostPipeline } from './render/post';
 import { World } from './game/world';
 import { WORLD, MAPS, setActiveMap, activeMap, districtAt, allStations } from './data/world';
 import { Player } from './game/player';
-import { state, bus, hasSave, writeSave, readSave, clearSave } from './game/state';
+import { state, bus, hasSave, writeSave, readSave, clearSave, setActiveSaveSlot, type SaveSlotId } from './game/state';
 import { statsys } from './game/stats';
 import { juice } from './game/juice';
 import { fx } from './game/particles';
@@ -25,6 +25,7 @@ import { setPlayerClass, getPlayerClass } from './data/classes';
 import { audio } from './audio/synth';
 import { music } from './audio/music';
 import { starterWeapon, generateWeapon } from './gen/weapongen';
+import { dedicatedFor } from './data/legendaries';
 import { generateClassMod } from './gen/geargen';
 import { generateShield, generateGrenadeMod } from './gen/geargen';
 import { DamageNumberSystem } from './ui/damagenumbers';
@@ -144,6 +145,15 @@ setEnemyHooks({
   groundHeight: (x, z) => world.groundHeight(x, z),
   tauntTarget: () => actionSkill.tauntTarget(),
   bark,
+  hasLOS: (from, to) => {
+    const dir = to.clone().sub(from);
+    const dist = dir.length();
+    if (dist < 0.6) return true;
+    dir.normalize();
+    const ray = new THREE.Raycaster(from, dir, 0.1, dist - 0.5);
+    return world.raycastStatics(ray) === null;
+  },
+  coverSpots: (near, threat, maxDist) => world.coverSpots(near, threat, maxDist),
   onKilled: (enemy: Enemy, overkill: number) => {
     enemySpawner.gibBurst(enemy);
     const tier = enemy.badass ? Math.max(2, enemy.def.dropTier) : enemy.def.dropTier;
@@ -160,12 +170,39 @@ setEnemyHooks({
     if (player.downed) player.secondWind();
     if (enemy.def.dropTier >= 3) {
       feedText(`<b style="color:#ffa21f">${enemy.displayName} has fallen!</b>`, '#ffa21f');
-      loot.spawnItem(generateWeapon({ level: state.level, rarityId: 'legendary' }), enemy.position.clone().add(new THREE.Vector3(1, 1, 0)), true);
+      dropBossLoot(enemy);
       audio.victory();
     }
   },
 });
 enemySpawner.attach(scene);
+
+// ---------------------------------------------------------------- boss loot
+// Dedicated drops, BL-style: every boss owns a signature legendary. First
+// kill guarantees it (the "oh THAT'S what it does" moment); repeat kills
+// roll elevated odds; misses still pay out an epic so the ceremony never
+// drops a wet firework. World drops can still roll legendaries — rarely.
+const FIRSTKILL_KEY = 'claudelands2.firstkills';
+
+function dropBossLoot(enemy: Enemy): void {
+  const pos = enemy.position.clone().add(new THREE.Vector3(1, 1, 0));
+  const pool = dedicatedFor(enemy.def.id);
+  let firstKills: string[] = [];
+  try { firstKills = JSON.parse(localStorage.getItem(FIRSTKILL_KEY) ?? '[]') as string[]; } catch { /* fresh */ }
+  const firstKill = pool.length > 0 && !firstKills.includes(enemy.def.id);
+  if (pool.length > 0 && (firstKill || Math.random() < 0.38)) {
+    const sig = pool[Math.floor(Math.random() * pool.length)];
+    loot.spawnItem(generateWeapon({ level: state.level, legendaryId: sig.id }), pos, true);
+    feedText(`<b style="color:#ffa21f">SIGNATURE DROP — ${sig.name}</b>${firstKill ? ' (first-kill guarantee)' : ''}`, '#ffa21f');
+    if (firstKill) {
+      try { localStorage.setItem(FIRSTKILL_KEY, JSON.stringify([...firstKills, enemy.def.id])); } catch { /* private mode */ }
+    }
+  } else {
+    // consolation ceremony: a strong epic, plus the regular tier-3 table
+    loot.spawnItem(generateWeapon({ level: state.level, rarityId: 'epic' }), pos, true);
+    if (pool.length > 0) feedText(`${enemy.displayName} kept the good one. It re-rolls every kill.`, '#c8b8a8');
+  }
+}
 
 // ---------------------------------------------------------------- game mode
 let gameMode: 'campaign' | 'endless' = 'campaign';
@@ -1182,7 +1219,8 @@ function veteranQuestState(): void {
   for (const name of ['Gutterlight Plaza', 'Chatterjaw Landing', 'Throat Gate', 'Brasshaven Gate']) discoveredStations.add(name);
 }
 
-function startRun(mode: StartMode, classId: string, difficultyId: DifficultyId): void {
+function startRun(mode: StartMode, classId: string, difficultyId: DifficultyId, slot: SaveSlotId = 's1'): void {
+  if (mode !== 'endless') setActiveSaveSlot(slot);
   setPlayerClass(classId);
   setDifficulty(difficultyId);
   hud.setCharacter();
@@ -1240,11 +1278,12 @@ document.getElementById('ui-root')?.classList.add('cine-on');
 for (let i = 0; i < 240; i++) enemySpawner.update(0.05);
 
 mainMenu.show({
-  hasSave,
+  hasSave: () => hasSave(),
   bestWave: () => endless.bestWave(),
-  onContinue: () => {
+  onContinue: (slot) => {
     document.getElementById('ui-root')?.classList.remove('cine-on');
     audio.unlock();
+    setActiveSaveSlot(slot);
     gameMode = 'campaign';
     if (restoreSave()) {
       started = true;
@@ -1252,9 +1291,9 @@ mainMenu.show({
       canvas.requestPointerLock();
     }
   },
-  onStart: (mode, classId, difficultyId) => {
+  onStart: (mode, classId, difficultyId, slot) => {
     audio.unlock();
-    startRun(mode, classId, difficultyId);
+    startRun(mode, classId, difficultyId, slot);
   },
 });
 applyPrefs();

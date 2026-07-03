@@ -124,7 +124,9 @@ export class Player implements Damageable {
     });
     document.addEventListener('mousemove', (e) => {
       if (document.pointerLockElement !== el || this.paused) return;
-      const sens = 0.0021 * (1 - this.adsAmount * 0.55);
+      // high-zoom scopes slow the mouse further so the tube is aimable
+      const zoomNow = 1 + ((state.activeWeapon?.stats.zoom ?? 1) - 1) * this.adsAmount;
+      const sens = 0.0021 * (1 - this.adsAmount * 0.55) / Math.max(1, zoomNow / 1.8);
       this.yaw -= e.movementX * sens;
       this.pitch = clamp(this.pitch - e.movementY * sens, -1.45, 1.45);
       // viewmodel sway lags behind the look

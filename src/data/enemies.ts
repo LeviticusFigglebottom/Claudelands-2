@@ -30,6 +30,8 @@ export interface EnemyDef {
   xp: number;
   barks: string[];
   projectile?: { speed: number; element: ElementId; arc?: boolean };
+  /** Ranged troops that carry frag grenades — they flush out campers. */
+  grenades?: boolean;
   weight: number;
 }
 
@@ -56,7 +58,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
   },
   shieldhead: {
     id: 'shieldhead', name: 'Shieldhead', badassName: 'Big Damn Shieldhead',
-    faction: 'rustborn', behavior: 'gunner',
+    faction: 'rustborn', behavior: 'gunner', grenades: true,
     flesh: 0.55, shield: 0.45, armor: 0,
     hpMult: 1.3, damageMult: 1.0, speed: 3.2, attackRange: 14, attackRate: 0.8, aggroRange: 26,
     scale: 1.05, tint: 0x4a6a8a, dropTier: 1, xp: 18,
@@ -124,7 +126,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
   },
   lattice_warden: {
     id: 'lattice_warden', name: 'Lattice Warden', badassName: 'Lattice Warden PLUS',
-    faction: 'helix', behavior: 'gunner',
+    faction: 'helix', behavior: 'gunner', grenades: true,
     flesh: 0.25, shield: 0.15, armor: 0.6,
     hpMult: 2.8, damageMult: 1.5, speed: 2.4, attackRange: 18, attackRate: 0.55, aggroRange: 30,
     scale: 1.6, tint: 0xc8c4ba, dropTier: 2, xp: 34,
@@ -135,7 +137,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
   // ------------------------------------------------------------- FROSTBORN
   snowmad: {
     id: 'snowmad', name: 'Snowmad', badassName: 'Big Damn Snowmad',
-    faction: 'frostborn', behavior: 'gunner',
+    faction: 'frostborn', behavior: 'gunner', grenades: true,
     flesh: 1, shield: 0, armor: 0,
     hpMult: 1.15, damageMult: 1.1, speed: 3.5, attackRange: 15, attackRate: 0.9, aggroRange: 26,
     scale: 1.05, tint: 0x5a7a9a, dropTier: 0, xp: 14,
@@ -184,7 +186,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
   // ------------------------------------------------------------- THE KINDLED
   ashwalker: {
     id: 'ashwalker', name: 'Ashwalker', badassName: 'Big Damn Ashwalker',
-    faction: 'kindled', behavior: 'gunner',
+    faction: 'kindled', behavior: 'gunner', grenades: true,
     flesh: 1, shield: 0, armor: 0,
     hpMult: 1.2, damageMult: 1.15, speed: 3.6, attackRange: 15, attackRate: 0.95, aggroRange: 27,
     scale: 1.05, tint: 0x5a4038, dropTier: 0, xp: 16,

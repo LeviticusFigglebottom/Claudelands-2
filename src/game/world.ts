@@ -90,6 +90,8 @@ export class World {
   private vultures: { mesh: THREE.Group; angle: number; r: number; cx: number; cz: number; h: number; speed: number }[] = [];
   private quibb: THREE.Group | null = null;
   private zaza: THREE.Group | null = null;
+  /** Named NPCs get idle life: breathing, sway, head-tracking, fidgets. */
+  private npcRigs: { group: THREE.Group; head: THREE.Object3D | null; armR: THREE.Object3D | null; baseY: number; phase: number; fidgetT: number; fidgetK: number }[] = [];
   private hemi!: THREE.HemisphereLight;
   private raycaster = new THREE.Raycaster();
 
@@ -309,6 +311,32 @@ export class World {
   // ------------------------------------------------------------------ districts
   private addCollider(x: number, z: number, hw: number, hd: number): void {
     this.colliders.push({ minX: x - hw, maxX: x + hw, minZ: z - hd, maxZ: z + hd });
+  }
+
+  private registerNpcRig(group: THREE.Group, head: THREE.Object3D | null, armR: THREE.Object3D | null): void {
+    this.npcRigs.push({ group, head, armR, baseY: group.position.y, phase: Math.random() * 6, fidgetT: 4 + Math.random() * 7, fidgetK: -1 });
+  }
+
+  /** Hide spots for the enemy AI: points on the far side of solid props
+   *  from a threat, nearest first. Skips slivers (no cover) and walls
+   *  (can't wrap around them believably). */
+  coverSpots(near: THREE.Vector3, threat: THREE.Vector3, maxDist: number): THREE.Vector3[] {
+    const spots: { p: THREE.Vector3; d: number }[] = [];
+    for (const c of this.colliders) {
+      const hw = (c.maxX - c.minX) / 2, hd = (c.maxZ - c.minZ) / 2;
+      const half = Math.max(hw, hd);
+      if (half < 0.7 || half > 7) continue;
+      const cx = (c.minX + c.maxX) / 2, cz = (c.minZ + c.maxZ) / 2;
+      const dNear = Math.hypot(cx - near.x, cz - near.z);
+      if (dNear > maxDist) continue;
+      const away = new THREE.Vector3(cx - threat.x, 0, cz - threat.z);
+      if (away.lengthSq() < 0.01) continue;
+      away.normalize();
+      const px = cx + away.x * (half + 1.1), pz = cz + away.z * (half + 1.1);
+      spots.push({ p: new THREE.Vector3(px, terrainHeight(px, pz), pz), d: dNear });
+    }
+    spots.sort((a, b) => a.d - b.d);
+    return spots.slice(0, 6).map((s) => s.p);
   }
 
   /** Free-placed props must not block the walk-up to a zone exit. */
@@ -932,6 +960,7 @@ export class World {
     jewel.position.set(0, 2.14, 0.2);
     const orb = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), glowMat(0xc06bff, 0.85));
     orb.position.set(0.42, 1.35, 0.24);
+    orb.name = 'npc_orb'; // floats on its own — seer stuff
     const marker = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 4), glowMat(0xffd23c, 0.95));
     marker.position.y = 2.6;
     marker.rotation.x = Math.PI;
@@ -943,6 +972,7 @@ export class World {
     q.name = 'zaza';
     this.group.add(q);
     this.zaza = q;
+    this.registerNpcRig(q, head, null);
     this.addCollider(poi.x, poi.z, 0.5, 0.5);
     this.interactables.push({
       kind: 'npc',
@@ -1596,17 +1626,34 @@ export class World {
       cap.position.y = 1.8;
       g.add(cap);
     }
+    // arms + boots + a belt — statues no more
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.56, 0.15), toonMat({ color: look.coat }));
+    armL.position.set(-0.38, 1.06, 0);
+    armL.rotation.z = 0.1;
+    const armR = armL.clone();
+    armR.position.x = 0.38;
+    armR.rotation.z = -0.1;
+    const belt = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.08, 0.36), toonMat({ color: 0x2a2622 }));
+    belt.position.y = 0.74;
+    const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.07, 0.03), toonMat({ color: look.accent }));
+    buckle.position.set(0, 0.74, 0.19);
+    for (const side of [-1, 1]) {
+      const boot = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.26), toonMat({ color: 0x2a2622 }));
+      boot.position.set(side * 0.12, 0.06, 0.03);
+      g.add(boot);
+    }
     const pin = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), glowMat(look.accent, 1));
     pin.position.set(0.18, 1.24, 0.18);
     const marker = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.3, 4), glowMat(0xc06bff, 0.95));
     marker.position.y = 2.35;
     marker.rotation.x = Math.PI;
     marker.name = 'quest_marker';
-    g.add(pin, marker);
+    g.add(armL, armR, belt, buckle, pin, marker);
     g.position.set(poi.x, y, poi.z);
     g.rotation.y = poi.rot ?? 0;
     g.traverse((o) => (o.castShadow = true));
     this.group.add(g);
+    this.registerNpcRig(g, head, armR);
     this.addCollider(poi.x, poi.z, 0.5, 0.5);
     this.interactables.push({ kind: 'npc', pos: new THREE.Vector3(poi.x, y, poi.z), label: look.label, data: poi.data });
   }
@@ -1640,11 +1687,18 @@ export class World {
     marker.position.y = 2.35;
     marker.rotation.x = Math.PI;
     marker.name = 'quest_marker';
-    g.add(legs, jacket, stripe, head, bun, goggleBand, watch, marker);
+    // arms — one permanently checking the stopwatch
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.56, 0.15), toonMat({ color: 0xb43a2a }));
+    armL.position.set(-0.38, 1.06, 0);
+    const armR = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.44, 0.15), toonMat({ color: 0xb43a2a }));
+    armR.position.set(0.36, 1.12, -0.1);
+    armR.rotation.x = -0.9;
+    g.add(legs, jacket, stripe, head, bun, goggleBand, watch, marker, armL, armR);
     g.position.set(poi.x, y, poi.z);
     g.rotation.y = poi.rot ?? 0;
     g.traverse((o) => (o.castShadow = true));
     this.group.add(g);
+    this.registerNpcRig(g, head, armR);
     this.addCollider(poi.x, poi.z, 0.5, 0.5);
     this.interactables.push({ kind: 'racer', pos: new THREE.Vector3(poi.x, y, poi.z), label: 'TALK RACING WITH REDLINE RITA', data: poi.data });
   }
@@ -2468,6 +2522,7 @@ export class World {
     q.name = 'quibb';
     this.group.add(q);
     this.quibb = q;
+    this.registerNpcRig(q, head, clipboard); // the fidget is an angry clipboard tap
     this.addCollider(poi.x, poi.z, 0.5, 0.5);
     this.interactables.push({
       kind: 'npc',
@@ -2674,6 +2729,37 @@ export class World {
         fx.burst(this.gate.group.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 10, 0.4, 0)), 0xc8b498, 3, 2, 0.09, 0.5, 6);
       }
     }
+    // NPC idle life: breathing bob, gentle sway, head-tracking, fidgets
+    for (const r of this.npcRigs) {
+      r.phase += dt;
+      r.group.position.y = r.baseY + Math.sin(r.phase * 1.7) * 0.022;
+      r.group.rotation.z = Math.sin(r.phase * 0.9) * 0.012;
+      if (r.head) {
+        const dx = playerPos.x - r.group.position.x;
+        const dz = playerPos.z - r.group.position.z;
+        const near = Math.hypot(dx, dz) < 9;
+        let want = 0;
+        if (near) {
+          let rel = Math.atan2(dx, dz) - r.group.rotation.y;
+          while (rel > Math.PI) rel -= Math.PI * 2;
+          while (rel < -Math.PI) rel += Math.PI * 2;
+          want = Math.max(-0.75, Math.min(0.75, rel));
+        }
+        r.head.rotation.y += (want - r.head.rotation.y) * Math.min(1, dt * 5);
+        // idle glance when nobody's around
+        if (!near) r.head.rotation.y += Math.sin(r.phase * 0.5) * 0.002;
+      }
+      // fidget: a little arm/prop raise every few seconds
+      r.fidgetT -= dt;
+      if (r.fidgetT <= 0 && r.fidgetK < 0) { r.fidgetK = 0; }
+      if (r.fidgetK >= 0 && r.armR) {
+        r.fidgetK += dt / 0.9;
+        const env = Math.sin(Math.min(1, r.fidgetK) * Math.PI);
+        r.armR.rotation.x = (r.armR.userData.baseRx ?? (r.armR.userData.baseRx = r.armR.rotation.x)) - env * 0.9;
+        if (r.fidgetK >= 1) { r.fidgetK = -1; r.fidgetT = 5 + Math.random() * 8; }
+      }
+    }
+
     // blinking beacons + drifting clouds + quest marker bob
     this.blinkT += dt;
     const blinkOn = Math.sin(this.blinkT * 4) > 0;
@@ -2682,6 +2768,7 @@ export class World {
       else if (o.name === 'blinker') o.visible = blinkOn;
       else if (o.name === 'quest_marker') o.position.y = 2.35 + Math.sin(this.blinkT * 2.5) * 0.12;
       else if (o.name === 'ft_ring') o.rotation.z += dt * 0.8;
+      else if (o.name === 'npc_orb') o.position.y = 1.35 + Math.sin(this.blinkT * 1.8) * 0.08;
     });
     if (this.zaza) {
       const d = this.zaza.position.distanceTo(playerPos);
