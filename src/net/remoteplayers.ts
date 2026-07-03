@@ -74,6 +74,7 @@ class RemoteAvatar {
     this.plate = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
     this.plate.scale.set(2.6, 0.65, 1);
     this.plate.position.y = 2.35;
+    this.plate.layers.set(1); // render layer only — hitscan rays must never see it
     this.group.add(this.plate);
 
     this.proxy = {

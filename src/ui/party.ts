@@ -59,9 +59,10 @@ export function renderPartyPanel(panel: HTMLElement, cb: PartyPanelCallbacks): v
       <h1>PARTY</h1>
       <div class="p-sub">Nobody on the line. Co-op parties are formed from the main menu — CO-OP, then share the code.</div>
       <div class="p-body"><div class="dialogue-box" style="max-width:520px">
-        Up to <b>four contractors</b>, no server, campaign only. Story objectives are <b>shared</b>;
-        worlds, loot, and sound stay <b>yours</b> — the party can be spread across three planets and
-        the ledger still adds up. Meet on the same map to see each other, trade anywhere, duel face to face.
+        Up to <b>four contractors</b>, no server, campaign only. Story objectives are <b>shared</b>, and on
+        shared ground the <b>fight itself is shared</b> — same enemies, same bosses, scaled up for the posse.
+        Loot and sound stay <b>yours</b>. Spread across three planets, the ledger still adds up. Trade anywhere,
+        duel face to face.
       </div></div>
       <div class="p-hint">P / ESC to close</div>`;
     return;
@@ -83,7 +84,7 @@ export function renderPartyPanel(panel: HTMLElement, cb: PartyPanelCallbacks): v
 
   panel.innerHTML = `
     <h1>PARTY — CODE ${coop.code}</h1>
-    <div class="p-sub">${coop.members.size + 1}/4 contractors · ${coop.isHost ? 'you are hosting (the ledger is yours)' : 'story ledger follows the host'} · objectives shared, loot instanced</div>
+    <div class="p-sub">${coop.members.size + 1}/4 contractors · ${coop.isHost ? 'you are hosting (the ledger is yours)' : 'story ledger follows the host'} · shared fights, instanced loot</div>
     <div class="p-body"><div style="flex:1; max-width:640px; display:flex; flex-direction:column; gap:10px;">
       ${duelPromptHtml()}
       ${membersHtml}

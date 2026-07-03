@@ -777,6 +777,7 @@ export class Player implements Damageable {
 
   /** Raycast enemies + explosive barrels (+ duel opponents); nearest wins. */
   raycastTargets(ray: THREE.Raycaster): HitscanTarget | null {
+    ray.camera = this.camera; // sprites in target rigs need it to not throw
     let best: HitscanTarget | null = null;
     for (const rt of this.extraRayTargets?.() ?? []) {
       rt.group.updateMatrixWorld(true);

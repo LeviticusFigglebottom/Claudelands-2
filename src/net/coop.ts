@@ -20,9 +20,14 @@
 // state machines (membership, trade escrow, duel). Rendering lives in
 // remoteplayers.ts; game glue lives in main.ts.
 
+import * as THREE from 'three';
 import { questSystem, type SharedQuestRow } from '../game/quests';
 import { state } from '../game/state';
-import type { ItemInstance } from '../game/types';
+import { enemySpawner, setCoopEnemyScale, type Enemy } from '../game/enemies';
+import { ENEMIES } from '../data/enemies';
+import { spawnBoss, type BossId } from '../game/boss';
+import { applyDamage } from '../game/combat';
+import type { ItemInstance, ElementId } from '../game/types';
 import { LocalTransport, PeerTransport, makePartyCode, type Transport } from './transport';
 import { remotePlayers } from './remoteplayers';
 
@@ -86,7 +91,19 @@ type Msg =
   | { t: 'state'; pid: string; st: MemberState }
   | { t: 'qdiff'; rows: SharedQuestRow[] }
   | { t: 'qevent'; kind: 'kill' | 'collect' | 'goto' | 'boss' | 'elite'; qid: string }
+  | { t: 'esnap'; pid: string; mapId: string; rows: EnemyRow[]; dead: DeadRow[] }
+  | { t: 'ehit'; to: string; mapId: string; i: number; amount: number }
   | { t: 'route'; to: string; inner: PairMsg };
+
+/** One shared enemy on the wire: id, archetype, and authoritative vitals. */
+interface EnemyRow {
+  i: number; d: string; lv: number; b: number; bs: number;
+  x: number; z: number;
+  f: number; s: number; a: number;   // pool fractions
+  g: number;                          // aggro
+  t?: string;                         // side-quest elite tag
+}
+interface DeadRow { i: number; e: string }
 
 type PairMsg =
   | { t: 'trade_invite'; from: string }
@@ -125,6 +142,16 @@ class CoopSession {
   private pendingSnapshot = new Map<string, SharedQuestRow>();
   private runStarted = false;
   private now = 0;
+
+  // ---- shared combat: one authority per map simulates the enemies ----
+  /** pid of MY map's combat authority (null = solo rules, no sharing). */
+  combatAuthority: string | null = null;
+  /** Players (me included) standing on my map — drives enemy scaling. */
+  mapPop = 1;
+  private replicas = new Map<number, Enemy>();
+  private netIdCounter = 1;
+  private deadQueue: DeadRow[] = [];
+  private snapT = 0;
 
   init(hooks: CoopHooks): void { this.hooks = hooks; }
 
@@ -194,6 +221,13 @@ class CoopSession {
     this.pendingSnapshot.clear();
     remotePlayers.clear();
     questSystem.onObjectiveEvent = null;
+    this.combatAuthority = null;
+    this.mapPop = 1;
+    this.replicas.clear();
+    this.deadQueue.length = 0;
+    enemySpawner.coopSuppressed = false;
+    setCoopEnemyScale(1);
+    enemySpawner.applyCoopHpScale();
     if (this.stateTimer) { clearInterval(this.stateTimer); this.stateTimer = null; }
     if (this.questTimer) { clearInterval(this.questTimer); this.questTimer = null; }
   }
@@ -215,13 +249,188 @@ class CoopSession {
   /** Campaign run began on this client — adopt the party's story silently. */
   onRunStarted(): void {
     this.runStarted = true;
-    if (!this.active || this.isHost) { this.resyncQuestBaseline(); return; }
+    if (!this.active || this.isHost) {
+      this.resyncQuestBaseline();
+      this.refreshCombatRoles();
+      return;
+    }
     if (this.pendingSnapshot.size > 0) {
       questSystem.applySnapshot([...this.pendingSnapshot.values()]);
       this.pendingSnapshot.clear();
       this.hooks?.toast('Party story synced — objectives are shared. Kills count for everyone.', '#54d4ff');
     }
     this.resyncQuestBaseline();
+    this.refreshCombatRoles();
+  }
+
+  /** Landed on a new map (after the switch completes) — re-elect authority. */
+  onArrived(): void {
+    this.refreshCombatRoles();
+  }
+
+  // ------------------------------------------------------------ shared combat
+  /** Elect this map's combat authority (lowest pid standing on it) and set
+   *  the posse scaling. Role changes clear the field so the new regime can
+   *  populate it — authority spawns real enemies, everyone else receives
+   *  replicas. Solo (or alone on the map) reverts to plain single-player. */
+  refreshCombatRoles(): void {
+    const h = this.hooks;
+    const inCamp = !!h && h.inCampaign() && this.runStarted;
+    let effAuth: string | null = null;
+    let pop = 1;
+    if (this.active && inCamp && this.selfPid) {
+      const myMap = h!.localState().mapId;
+      const pids = [this.selfPid];
+      for (const m of this.members.values()) {
+        if (m.started && m.mapId === myMap) pids.push(m.pid);
+      }
+      pop = pids.length;
+      if (pop > 1) {
+        pids.sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
+        effAuth = pids[0];
+      }
+    }
+    this.mapPop = pop;
+    setCoopEnemyScale(pop);
+    enemySpawner.applyCoopHpScale();
+    const iAmAuth = effAuth === null || effAuth === this.selfPid;
+    const wantSuppressed = !iAmAuth;
+    // a REAL role change (simulating ↔ receiving, or a new authority while
+    // receiving) clears the field so the new regime can populate it. The
+    // authority keeping its job while the audience changes is NOT a flip —
+    // its enemies (and boss) stay exactly where they are.
+    const flip = wantSuppressed !== enemySpawner.coopSuppressed
+      || (wantSuppressed && effAuth !== this.combatAuthority);
+    this.combatAuthority = effAuth;
+    if (flip) {
+      enemySpawner.coopSuppressed = wantSuppressed;
+      this.replicas.clear();
+      enemySpawner.reset();
+      enemySpawner.refreshDistricts();
+      if (iAmAuth && inCamp) questSystem.ensureBosses();
+      if (this.active && inCamp && pop > 1) {
+        this.hooks?.toast(iAmAuth
+          ? `Shared ground — <b>you</b> run this map's fights. Enemies scaled for a posse of <b>${pop}</b>.`
+          : `Shared ground — the fight is synced. Enemies scaled for a posse of <b>${pop}</b>.`, '#54d4ff');
+      }
+    }
+  }
+
+  /** main.ts hook: one of MY simulated enemies died — tell the replicas. */
+  notifyEnemyKilled(e: Enemy): void {
+    if (!this.active || e.puppet || e.netId === null) return;
+    this.deadQueue.push({ i: e.netId, e: e.killedBy });
+  }
+
+  private broadcastEnemies(): void {
+    if (!this.active || !this.hooks?.inCampaign() || !this.runStarted) { this.deadQueue.length = 0; return; }
+    if (this.combatAuthority !== this.selfPid || this.mapPop < 2) { this.deadQueue.length = 0; return; }
+    const mapId = this.hooks.localState().mapId;
+    const rows: EnemyRow[] = [];
+    for (const e of enemySpawner.enemies) {
+      if (!e.alive || e.puppet) continue;
+      if (e.netId === null) e.netId = this.netIdCounter++;
+      rows.push({
+        i: e.netId, d: e.def.id, lv: e.level, b: e.badass ? 1 : 0, bs: e === enemySpawner.boss ? 1 : 0,
+        x: Math.round(e.position.x * 10) / 10, z: Math.round(e.position.z * 10) / 10,
+        f: e.maxFlesh > 0 ? e.flesh / e.maxFlesh : 0,
+        s: e.maxShield > 0 ? e.shield / e.maxShield : 0,
+        a: e.maxArmor > 0 ? e.armor / e.maxArmor : 0,
+        g: e.aggro ? 1 : 0,
+        t: e.questTag,
+      });
+      if (rows.length >= 48) break;
+    }
+    const msg: Msg = { t: 'esnap', pid: this.selfPid, mapId, rows, dead: this.deadQueue.splice(0) };
+    if (this.isHost) this.sendToAll(msg);
+    else this.sendToHost(msg);
+  }
+
+  private applyEnemySnapshot(msg: { pid: string; mapId: string; rows: EnemyRow[]; dead: DeadRow[] }): void {
+    if (!this.hooks?.inCampaign() || !this.runStarted) return;
+    if (msg.pid !== this.combatAuthority || this.combatAuthority === this.selfPid) return;
+    if (msg.mapId !== this.hooks.localState().mapId) return;
+    const seen = new Set<number>();
+    for (const r of msg.rows) {
+      seen.add(r.i);
+      let e = this.replicas.get(r.i);
+      if (e && !e.alive) continue;
+      if (!e) {
+        const pos = new THREE.Vector3(r.x, 0, r.z);
+        if (r.bs) {
+          e = spawnBoss(r.d as BossId, pos, r.lv);
+          e.puppet = true;
+        } else {
+          const def = ENEMIES[r.d];
+          if (!def) continue;
+          e = enemySpawner.spawnPuppet(def, r.lv, !!r.b, pos);
+        }
+        e.netId = r.i;
+        this.replicas.set(r.i, e);
+      }
+      e.netTarget = { x: r.x, z: r.z };
+      e.aggro = !!r.g;
+      e.questTag = r.t;
+      e.netStale = 0;
+      // authoritative vitals: fractions × this client's identically-scaled maxes
+      e.flesh = Math.max(0.5, r.f * e.maxFlesh);
+      e.shield = r.s * e.maxShield;
+      e.armor = r.a * e.maxArmor;
+      e.netHpBaseline = e.flesh + e.shield + e.armor;
+      e.netKillIntent = false; // the authority says it's still standing
+    }
+    for (const d of msg.dead) {
+      const e = this.replicas.get(d.i);
+      if (e && e.alive) {
+        // the authority called it: run the full local death ceremony —
+        // gibs, INSTANCED loot roll, xp, second wind. Quest counting stays
+        // with the authority (main.ts skips recordKill for puppets).
+        e.netDeathConfirmed = true;
+        e.alive = false;
+        e.onDeath((d.e || 'kinetic') as ElementId, 0);
+      }
+      this.replicas.delete(d.i);
+    }
+    // replicas the authority stopped reporting (despawn/leash reset): sweep
+    for (const [id, e] of [...this.replicas]) {
+      if (seen.has(id)) continue;
+      if (++e.netStale > 3) {
+        e.alive = false; // silent removal — no ceremony, no loot
+        this.replicas.delete(id);
+      }
+    }
+  }
+
+  /** Non-authority: my guns chewed a replica — forward the dealt damage. */
+  private drainReplicaDamage(): void {
+    if (!this.combatAuthority || this.combatAuthority === this.selfPid) return;
+    for (const [id, e] of this.replicas) {
+      if (!e.alive) { this.replicas.delete(id); continue; }
+      const cur = e.flesh + e.shield + e.armor;
+      let delta = e.netHpBaseline - cur;
+      if (e.netKillIntent && delta > 0) {
+        // the floor keeps replicas at 1hp — pad so the killing blow LANDS
+        delta += Math.max(4, (e.maxFlesh + e.maxShield + e.maxArmor) * 0.03);
+        e.netKillIntent = false;
+      }
+      if (delta > 0.5) {
+        const msg: Msg = { t: 'ehit', to: this.combatAuthority, mapId: this.hooks!.localState().mapId, i: id, amount: delta };
+        if (this.isHost) {
+          const addr = this.pidToAddr.get(this.combatAuthority);
+          if (addr) this.transport?.send(addr, msg);
+        } else {
+          this.sendToHost(msg);
+        }
+      }
+      e.netHpBaseline = cur;
+    }
+  }
+
+  private applyEhit(msg: { mapId: string; i: number; amount: number }): void {
+    if (this.combatAuthority !== this.selfPid || !this.hooks) return;
+    if (msg.mapId !== this.hooks.localState().mapId) return;
+    const e = enemySpawner.enemies.find((x) => x.alive && !x.puppet && x.netId === msg.i);
+    if (e) applyDamage(e, msg.amount, 'kinetic', { noChain: true });
   }
 
   onMapChanged(): void {
@@ -306,6 +515,21 @@ class CoopSession {
         this.sendToAll({ t: 'qdiff', rows: msg.rows }, pid);
         return;
       }
+      case 'esnap': {
+        if (!pid) return;
+        this.applyEnemySnapshot(msg);
+        this.sendToAll(msg, pid);
+        return;
+      }
+      case 'ehit': {
+        if (!pid) return;
+        if (msg.to === this.selfPid) this.applyEhit(msg);
+        else {
+          const fwd = this.pidToAddr.get(msg.to);
+          if (fwd) this.transport?.send(fwd, msg);
+        }
+        return;
+      }
       case 'route': {
         if (!pid) return;
         if (msg.to === this.selfPid) this.onPairMessage(msg.inner);
@@ -339,6 +563,7 @@ class CoopSession {
           for (const r of msg.quests) this.pendingSnapshot.set(r.id, r);
         }
         this.hooks?.toast(`Connected — party of <b>${this.members.size + 1}</b>. Code <b>${this.code}</b>.`, '#3ddc4e');
+        this.refreshCombatRoles();
         this.hooks?.onPartyChanged();
         return;
       }
@@ -359,6 +584,8 @@ class CoopSession {
       case 'leave': { this.dropMember(msg.pid, false); return; }
       case 'state': { this.applyState(msg.pid, msg.st); return; }
       case 'qdiff': { this.applyQuestRows(msg.rows); return; }
+      case 'esnap': { this.applyEnemySnapshot(msg); return; }
+      case 'ehit': { if (msg.to === this.selfPid) this.applyEhit(msg); return; }
       case 'route': { if (msg.to === this.selfPid) this.onPairMessage(msg.inner); return; }
       default: return;
     }
@@ -388,6 +615,7 @@ class CoopSession {
     }
     if (this.trade?.withPid === pid) { this.trade = null; this.hooks?.onTradeChanged(); }
     if (this.duel?.withPid === pid) this.finishDuel(this.selfPid, true);
+    this.refreshCombatRoles();
     this.hooks?.toast(`<b>${m.name}</b> left the party`, '#c8b8a8');
     this.hooks?.onPartyChanged();
   }
@@ -403,10 +631,12 @@ class CoopSession {
   private applyState(pid: string, st: MemberState): void {
     const m = this.members.get(pid);
     if (!m) return;
+    const moved = m.mapId !== st.mapId || m.started !== st.started;
     Object.assign(m, st);
     m.lastSeen = this.now;
     remotePlayers.ensure(pid, m.name, m.classId);
     remotePlayers.setState(pid, st);
+    if (moved) this.refreshCombatRoles();
   }
 
   /** Per-frame: duel timers, member liveness, duel damage forwarding. */
@@ -427,6 +657,14 @@ class CoopSession {
       const dealt = remotePlayers.drainDamage(this.duel.withPid);
       if (dealt > 0.5) this.sendPair(this.duel.withPid, { t: 'duel_hit', from: this.selfPid, amount: dealt });
     }
+    // shared combat: the authority streams enemy snapshots; everyone else
+    // forwards the damage their guns did to the replicas
+    this.snapT -= dt;
+    if (this.snapT <= 0) {
+      this.snapT = 0.15;
+      this.broadcastEnemies();
+    }
+    this.drainReplicaDamage();
     // liveness: a vanished tab shouldn't haunt the roster forever
     if (this.isHost) {
       for (const m of [...this.members.values()]) {

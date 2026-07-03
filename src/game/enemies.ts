@@ -43,6 +43,16 @@ let hooks: EnemyHooks;
 export function setEnemyHooks(h: EnemyHooks): void { hooks = h; }
 export function enemyHooks(): EnemyHooks { return hooks; }
 
+// ---- co-op posse scaling: enemies get MUCH more health and slightly more
+// damage per player sharing the map. Solo (or alone on a map) both are 1.
+const COOP_SCALE = { hp: 1, dmg: 1 };
+export function setCoopEnemyScale(playersOnMap: number): void {
+  const n = Math.max(1, playersOnMap);
+  COOP_SCALE.hp = 1 + 0.85 * (n - 1);
+  COOP_SCALE.dmg = 1 + 0.18 * (n - 1);
+}
+export function coopEnemyScale(): { hp: number; dmg: number } { return COOP_SCALE; }
+
 type Limb = { mesh: THREE.Mesh; baseY: number; baseX: number; swing: number };
 
 export class Enemy implements Damageable {
@@ -60,6 +70,25 @@ export class Enemy implements Damageable {
   critZone!: THREE.Mesh;
   /** Set on elite packs spawned for a side quest; recordKill matches on it. */
   questTag?: string;
+  // ---- co-op shared combat ----
+  /** Stable wire id, assigned by the map authority when first broadcast. */
+  netId: number | null = null;
+  /** Replica of an authority-simulated enemy: rendered + fights YOU locally,
+   *  but hp and death belong to the authority's simulation. */
+  puppet = false;
+  /** Authority confirmed this replica's death — the ceremony may run. */
+  netDeathConfirmed = false;
+  /** Replica movement target from the last snapshot. */
+  netTarget: { x: number; z: number } | null = null;
+  /** Snapshot staleness counter — replicas missing too long get swept. */
+  netStale = 0;
+  /** Total hp last reconciled/forwarded — deltas below this are MY damage. */
+  netHpBaseline = 0;
+  /** Local prediction wanted this replica dead — pad the forwarded damage
+   *  so the floor (flesh pinned at 1) can't leave the real enemy on a sliver. */
+  netKillIntent = false;
+  /** The posse hp multiplier baked into this enemy's pools right now. */
+  coopHpApplied = 1;
   bodyParts: THREE.Mesh[] = [];
   homeDistrict: DistrictDef | null = null;
   aggro = false;
@@ -100,7 +129,8 @@ export class Enemy implements Damageable {
     this.position.copy(pos);
     this.homeDistrict = districtAt(pos.x, pos.z);
 
-    const hpBudget = 55 * def.hpMult * levelScale(level) * (badass ? BADASS_HP_MULT : 1) * difficulty().enemyHp;
+    const hpBudget = 55 * def.hpMult * levelScale(level) * (badass ? BADASS_HP_MULT : 1) * difficulty().enemyHp * COOP_SCALE.hp;
+    this.coopHpApplied = COOP_SCALE.hp;
     this.maxFlesh = Math.max(1, hpBudget * def.flesh);
     this.maxShield = hpBudget * def.shield;
     this.maxArmor = hpBudget * def.armor;
@@ -323,6 +353,8 @@ export class Enemy implements Damageable {
       this.flinchT -= dt;
       if (this.flinchT <= 0) for (const m of this.flashMats) m.emissive.setHex(0x000000);
     }
+
+    if (this.puppet) { this.puppetUpdate(dt); return; }
 
     const slow = slowFactor(this);
     const playerPos = hooks.playerPos();
@@ -729,7 +761,63 @@ export class Enemy implements Damageable {
     this.healthTex.needsUpdate = true;
   }
 
+  /** Replica brain: the authority owns movement and hp, but this copy of
+   *  the enemy still fights the LOCAL player — melee swipes and pot shots
+   *  resolve on this client, so every member of the posse is in danger. */
+  private puppetUpdate(dt: number): void {
+    const slow = slowFactor(this);
+    const playerPos = hooks.playerPos();
+    const distToPlayer = this.position.distanceTo(playerPos);
+
+    // glide toward the authority's reported position
+    let moving = false;
+    if (this.netTarget) {
+      const dx = this.netTarget.x - this.position.x;
+      const dz = this.netTarget.z - this.position.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 0.15) {
+        moving = true;
+        const k = 1 - Math.exp(-8 * dt);
+        this.position.x += dx * k;
+        this.position.z += dz * k;
+        this.group.rotation.y = Math.atan2(dx, dz) + Math.PI;
+      }
+    }
+    if (!moving && this.aggro) {
+      this.group.rotation.y = Math.atan2(playerPos.x - this.position.x, playerPos.z - this.position.z) + Math.PI;
+    }
+    this.wobble += dt * (moving ? 6 : 2) * slow;
+    this.settleToGround(moving);
+
+    // local threat: swing/shoot at whoever is standing HERE
+    this.attackTimer -= dt * slow;
+    if (this.aggro && this.attackTimer <= 0 && this.def.behavior !== 'suicide') {
+      const reach = this.def.attackRange * (this.def.projectile ? 1.15 : 1) + 0.8;
+      if (distToPlayer < reach && (!this.def.projectile || this.sightline(playerPos))) {
+        this.attackTimer = 1 / this.def.attackRate;
+        this.attack(playerPos, false);
+      }
+    }
+
+    for (const l of this.limbs) {
+      l.mesh.rotation.x = l.baseX + Math.sin(this.wobble) * 0.55 * l.swing;
+    }
+    const rotor = this.group.getObjectByName('rotor');
+    if (rotor) rotor.rotation.y += dt * 20;
+    const bubble = this.group.getObjectByName('shield_bubble') as THREE.Mesh | undefined;
+    if (bubble) bubble.visible = this.shield > 0;
+    this.drawHealthBar(distToPlayer);
+  }
+
   onDeath(killedBy: ElementId, overkill: number): void {
+    if (this.puppet && !this.netDeathConfirmed) {
+      // local prediction can't kill a replica — only the authority calls it.
+      // Floor the pools, flag the intent, and wait for the confirmation.
+      this.alive = true;
+      this.flesh = Math.max(this.flesh, 1);
+      this.netKillIntent = true;
+      return;
+    }
     this.killedBy = killedBy;
     hooks.onKilled(this, overkill);
   }
@@ -790,6 +878,9 @@ export class EnemySpawner {
 
   /** Race mode etc.: true pauses district repopulation entirely. */
   suppressed = false;
+  /** Co-op: another player is this map's combat authority — no local
+   *  spawning; the shared enemies arrive as replicas over the wire. */
+  coopSuppressed = false;
 
   /** Enemies alive that call this district home. */
   private aliveIn(districtId: string): number {
@@ -824,7 +915,7 @@ export class EnemySpawner {
     const playerPos = enemyHooks().playerPos();
 
     // staged encounters per district
-    for (const enc of this.suppressed ? [] : this.encounters) {
+    for (const enc of (this.suppressed || this.coopSuppressed) ? [] : this.encounters) {
       const d = enc.def;
       const distToDistrict = Math.hypot(playerPos.x - d.cx, playerPos.z - d.cz);
       switch (enc.state) {
@@ -903,6 +994,29 @@ export class EnemySpawner {
     fx.burst(pos.clone().add(new THREE.Vector3(0, 1, 0)), def.faction === 'helix' ? 0x54d4ff : 0xff8438, 14, 4, 0.12, 0.5, 5);
     if (badass) enemyHooks().bark(e.displayName, 'A BADASS APPROACHES.');
     return e;
+  }
+
+  /** Co-op replica of an authority-simulated enemy (exact level/badass). */
+  spawnPuppet(def: EnemyDef, level: number, badass: boolean, pos: THREE.Vector3): Enemy {
+    const e = new Enemy(def, level, pos, badass);
+    e.puppet = true;
+    this.scene.add(e.group);
+    this.enemies.push(e);
+    return e;
+  }
+
+  /** Re-apply the posse hp multiplier to everything alive (players joined
+   *  or left the map): pools scale proportionally, fractions preserved. */
+  applyCoopHpScale(): void {
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      const f = COOP_SCALE.hp / e.coopHpApplied;
+      if (Math.abs(f - 1) < 0.01) continue;
+      e.maxFlesh *= f; e.flesh *= f;
+      e.maxShield *= f; e.shield *= f;
+      e.maxArmor *= f; e.armor *= f;
+      e.coopHpApplied = COOP_SCALE.hp;
+    }
   }
 
   registerBoss(boss: Enemy): void {

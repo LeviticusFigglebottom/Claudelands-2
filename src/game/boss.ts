@@ -35,7 +35,7 @@ abstract class Boss extends Enemy {
     // a boss holds its throne: no patrol wander until the player walks in
     if (this.alive && !this.aggro) this.patrolWait = 1;
     super.update(dt);
-    if (!this.alive) return;
+    if (!this.alive || this.puppet) return; // replicas mirror the authority's pattern
     if (!this.aggro) return; // holding court: no phases, no specials, no barks
     const frac = this.hpFraction();
     if (this.phase === 0 && frac < 0.66) { this.phase = 1; this.onPhase(1); }

@@ -221,7 +221,7 @@ export class MainMenu {
           <input id="coop-name" maxlength="12" value="${name}" style="width:150px; text-transform:uppercase">
         </div>
         ${roster}
-        <div class="mm-slot-sub">campaign only · objectives shared, worlds independent · loot &amp; sound instanced per player · trade and duel built in</div>
+        <div class="mm-slot-sub">campaign only · objectives, enemies &amp; bosses shared on shared ground (scaled for the posse) · loot &amp; sound stay yours · trade and duel built in</div>
       </div>`, 'menu');
 
     this.root.querySelector<HTMLInputElement>('#coop-name')?.addEventListener('change', (e) => {

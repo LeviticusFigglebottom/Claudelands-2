@@ -14,7 +14,7 @@ import { fx } from './game/particles';
 import { debris } from './game/debris';
 import { loot } from './game/loot';
 import { projectiles } from './game/projectiles';
-import { enemySpawner, setEnemyHooks, type Enemy } from './game/enemies';
+import { enemySpawner, setEnemyHooks, coopEnemyScale, type Enemy } from './game/enemies';
 import { ENEMIES } from './data/enemies';
 import { spawnBoss, type BossId } from './game/boss';
 import { actionSkill } from './game/actionskill';
@@ -129,7 +129,9 @@ player.world = {
   arenaHalf: WORLD.size / 2,
 };
 player.bindInput(canvas);
-setPlayerDamageRouter((amount, element, from) => player.damage(amount, element, from));
+// enemy projectiles/splash reach the player through this router — the co-op
+// posse multiplier lands here (and in enemyHooks.damagePlayer for melee)
+setPlayerDamageRouter((amount, element, from) => player.damage(amount * coopEnemyScale().dmg, element, from));
 actionSkill.playerPos = () => player.position;
 actionSkill.healPlayer = (amt) => player.heal(amt);
 actionSkill.playerMaxHealth = () => player.maxFlesh;
@@ -163,7 +165,7 @@ player.extraRayTargets = () => {
 
 setEnemyHooks({
   playerPos: () => player.position,
-  damagePlayer: (amount, element, from) => player.damage(amount, element, from),
+  damagePlayer: (amount, element, from) => player.damage(amount * coopEnemyScale().dmg, element, from),
   groundHeight: (x, z) => world.groundHeight(x, z),
   tauntTarget: () => actionSkill.tauntTarget(),
   bark,
@@ -187,7 +189,10 @@ setEnemyHooks({
     const xp = enemy.def.xp * Math.pow(1.13, enemy.level - 1) * (enemy.badass ? 3 : 1) * difficulty().xpMult;
     state.addXp(xp);
     state.recordGrit('kill');
-    questSystem.recordKill(enemy);
+    // shared enemies count ONCE: replicas skip the ledger (their authority
+    // already recorded the kill); real enemies report their death to the wire
+    if (!enemy.puppet) questSystem.recordKill(enemy);
+    coop.notifyEnemyKilled(enemy);
     actionSkill.onKillWhileActive();
     bus.emit('kill', { xp, worldPos: enemy.position, crit: false, overkill });
     if (player.downed) player.secondWind();
@@ -285,6 +290,7 @@ function switchMap(mapId: string, toX?: number, toZ?: number): void {
   mapFadeT = 1; // fade-in from the reconstruction flash
   fx.burst(player.position.clone().add(new THREE.Vector3(0, 1, 0)), 0x54d4ff, 40, 6, 0.14, 1, 4);
   playCine('map_' + WORLD.id, () => biomeCine(player.position.clone(), WORLD.name.toUpperCase(), WORLD.tagline));
+  coop.onArrived(); // shared combat: re-elect this map's enemy authority
   autosave();
 }
 
@@ -723,6 +729,7 @@ questSystem.init({
     feedText('<b style="color:#3ddc4e">THE HUM IS DEAD. THE STORY IS PAID.</b> And out in the dark, a lighthouse just started calling... The frontier is open.', '#3ddc4e');
   },
   spawnElites: (enemyId, count, x, z, levelOffset, tag) => {
+    if (enemySpawner.coopSuppressed) return; // the map authority spawns them; they arrive as replicas
     const def = ENEMIES[enemyId];
     if (!def) return;
     for (let i = 0; i < count; i++) {
@@ -1614,6 +1621,12 @@ canvas.addEventListener('click', () => {
   },
   routeHopDebug: (mapId: string) => routeHopTo(mapId),
   coop, remotePlayers,
+  coopCombatDebug: () => ({
+    authority: coop.combatAuthority,
+    mapPop: coop.mapPop,
+    suppressed: enemySpawner.coopSuppressed,
+    scale: coopEnemyScale(),
+  }),
   faceArrivalDebug: () => faceArrival(),
   get stations() { return discoveredStations; },
 };

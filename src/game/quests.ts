@@ -160,6 +160,7 @@ class QuestSystem {
    *  quest is still active — leaving mid-quest wipes enemies, so this re-arms
    *  the arena on every entry instead of spawning exactly once. */
   ensureBosses(): void {
+    if (enemySpawner.coopSuppressed) return; // this map's authority spawns the boss; it arrives as a replica
     const map = activeMap();
     for (const q of this.quests) {
       if (q.status !== 'active') continue;
