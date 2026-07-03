@@ -169,7 +169,8 @@ body { font-family: var(--ui-font); user-select: none; }
 
 /* ---------------------------------------------------------------- dialogue & quest log */
 .dialogue-box { background: rgba(0,0,0,0.4); border-left: 4px solid var(--hud-edge); padding: 14px 16px; min-height: 130px; }
-.dlg-line { font-size: 15px; color: #eee2c8; margin-bottom: 8px; line-height: 1.5; }
+.dlg-line { font-size: 15px; color: #eee2c8; margin-bottom: 8px; line-height: 1.5; opacity: 0.82; transition: opacity 0.2s; }
+.dlg-line.speaking { opacity: 1; color: #fff2d8; text-shadow: 0 0 12px rgba(216,176,40,0.25); }
 .dialogue-quest { margin-top: 12px; font-size: 13px; color: #8fff3d; letter-spacing: 0.04em; }
 .quest-row { display: flex; gap: 12px; align-items: center; padding: 10px 12px; margin-bottom: 6px; background: rgba(255,255,255,0.04); border-left: 4px solid #554; }
 .quest-row.active { border-left-color: var(--hud-edge); background: rgba(216,176,40,0.1); }
@@ -179,6 +180,10 @@ body { font-family: var(--ui-font); user-select: none; }
 .quest-row .q-badge { font-family: var(--title-font); font-size: 20px; width: 30px; text-align: center; color: var(--hud-edge); }
 .quest-row .q-name { font-weight: 700; font-size: 15px; color: #ffe8b0; }
 .quest-row .q-obj { font-size: 12px; color: #b8ac90; }
+/* expanded context on the active/next contract: who, where, why */
+.quest-row .q-brief { margin-top: 7px; padding-top: 7px; border-top: 1px dashed rgba(255,232,176,0.25); }
+.quest-row .q-ctx { font-size: 11px; color: #d8b028; letter-spacing: 0.4px; margin-bottom: 6px; }
+.quest-row .q-line { font-size: 12.5px; color: #d8cdb4; font-style: italic; margin-bottom: 5px; line-height: 1.45; }
 
 /* district plate flash on crossing borders */
 #hud-zone.district-flash { animation: district-in 1.2s ease-out; }

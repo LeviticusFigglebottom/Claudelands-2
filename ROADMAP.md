@@ -1,5 +1,48 @@
 # ROADMAP
 
+## Pass 16 status — second QoL sweep
+
+**Shipbreak, actually moved this time**: the wreck field now sits in the
+circuit's north INFIELD pocket (30,90) — 90+ units from every map edge,
+40+ from every road, well clear of the rim mesas. Wrecks, chest, log,
+sign, q14 marker, and the salvage billboard all moved with it.
+
+**The buggy climbs like a vehicle**: grounded pitch/roll now samples the
+actual axle heights, so uphill reads as CLIMBING — nose up, tires on the
+slope — and the body seats on the axle midpoint over crests. Fixed the
+real bug behind "floats up hills flat": the pass-13 crest launch fired on
+mid-slope grid noise (peak-held ground-rise stayed hot the whole climb);
+launches now require the ground AHEAD to actually fall. A 150-frame mesa
+climb is now 150/150 grounded frames with the nose pitched 0.6 rad up.
+
+**Drift moved to C, kart pacing**: SPACE is a clean jump; holding C
+drifts (with its own little hop on press). The slide arcs gentler
+(yaw command 0.52+0.34·trim, was 0.72+0.5), charges slower (tier 1 at
+~1.2s of slide, tiers at 0.8/1.7/2.8s of charge) — gradual and shapeable
+like the kart games it's stealing from. All control hints updated.
+
+**Quest context lives on the quest screen now**: the contract ledger (J)
+expands the active and next-available contract with FROM (giver + where)
+/ WHERE (map) / REWARD, plus the giver's full briefing — where you're
+going, what you're doing, and why, readable any time. The dialogue panel
+shows the WHOLE briefing instantly (the voice still performs it line by
+line, highlighting as it goes) instead of racing a typewriter to the
+accept button.
+
+**Crucible knows the new factions**: the Drowned and the Undergrown
+join the wave pool (the window widens with wave count, so they appear
+from ~wave 11), and the boss cycle now runs all SEVEN bosses including
+the Bloom Mother, Admiral Anchorhead, and the Mother Lode.
+
+**Gear legendaries exist**: legendary-rarity shields, grenade mods,
+class mods, and relics now roll named, red-texted uniques — The
+Admiral's Other Lantern, Barnacle Opinion, Gloomgrove Umbrella, Depth
+Charge, Seam Song, Peg's Chowder, Quartermistress's Ledger, Night Shift
+Charter, Crown Shard, Peg's Dry Boot — with fixed specials/deliveries
+and boosted stats, flavored from the new territories.
+
+Headless suite: `verify17.mjs` — 21 checks, all passing.
+
 ## Pass 15 status — quality of life sweep
 
 **Arrivals face the place**: walking a zone exit, fast-travelling, or

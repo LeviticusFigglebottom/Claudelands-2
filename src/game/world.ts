@@ -2092,7 +2092,7 @@ export class World {
     };
     billboard(-168, 64, 1.1, ['EAT MY', 'DUST', '— R. (ret.)'], '#2a2622', '#ffd23c');
     billboard(36, 168, Math.PI + 0.15, ['BOOST', 'RESPONSIBLY'], '#5a2a6a', '#7dffef');
-    billboard(178, -16, -1.3, ['SHIPBREAK', 'SALVAGE CO.'], '#7a5030', '#f0e8d8');
+    billboard(72, 74, -1.3, ['SHIPBREAK', 'SALVAGE CO.'], '#7a5030', '#f0e8d8');
     billboard(-14, -172, 0.15, ['LAST DRINK', 'BEFORE', 'THE JUMP'], '#2a4a5a', '#ffd23c');
 
     // flag bunting strung high across the line at two checkpoints

@@ -1,11 +1,14 @@
 // Generators for non-gun gear: shields, grenade mods, class mods, relics.
 // Same recipe as weapons: seed + level + rarity -> parts from data tables.
+// Legendary-rarity rolls stamp a named GEAR_LEGENDARY on top (fixed special
+// or delivery, red text, boosted stats) — the gear slots' answer to the
+// weapon signature system.
 
 import { mulberry32, freshSeed, pick, weightedPick, chance, type Rng } from '../util/rng';
 import { rarityById, type RarityDef } from '../data/rarity';
 import { rollRarity, levelScale } from './weapongen';
 import { MAKER_LIST, makerById } from '../data/manufacturers';
-import { SHIELD_SPECIALS, SHIELD_BASE, GRENADE_DELIVERIES, GRENADE_BASE, GRENADE_ELEMENTS, CLASSMOD_ARCHETYPES, RELIC_ARCHETYPES } from '../data/gear';
+import { SHIELD_SPECIALS, SHIELD_BASE, GRENADE_DELIVERIES, GRENADE_BASE, GRENADE_ELEMENTS, CLASSMOD_ARCHETYPES, RELIC_ARCHETYPES, gearLegendariesFor } from '../data/gear';
 import { PLAYER_CLASS } from '../data/classes';
 import type { ClassModInstance, GrenadeModInstance, RelicInstance, ShieldInstance } from '../game/types';
 
@@ -20,23 +23,32 @@ export function generateShield(level: number, rarityId?: string, luck = 0, seed 
   const rng = mulberry32(seed);
   const rarity = pickRarity(rng, rarityId, luck);
   const maker = pick(rng, MAKER_LIST);
-  const scale = levelScale(level) * rarity.statMult;
+  const leg = rarity.tier >= 4 ? pick(rng, gearLegendariesFor('shield')) : null;
+  const scale = levelScale(level) * rarity.statMult * (leg?.statMult ?? 1);
 
   const capacity = Math.round(SHIELD_BASE.capacity * scale * (0.85 + rng() * 0.3));
   const rechargeRate = Math.round(SHIELD_BASE.rechargeRate * scale * (0.85 + rng() * 0.3));
   const rechargeDelay = +(SHIELD_BASE.rechargeDelay * (1.15 - rng() * 0.3) * (1 - rarity.tier * 0.04)).toFixed(1);
 
   let special: ShieldInstance['special'];
-  if (rarity.tier >= 2 || chance(rng, 0.25)) {
-    const pool = SHIELD_SPECIALS.filter((s) => s.makers.includes(maker.id));
-    const def = pool.length ? weightedPick(rng, pool.map((s) => ({ item: s, w: s.weight }))) : pick(rng, SHIELD_SPECIALS);
-    const power = def.id === 'berserk' ? 15 + rarity.tier * 8 : capacity * (0.4 + rarity.tier * 0.15);
-    special = { id: def.id, label: def.label(power), power };
+  const specialDef = leg
+    ? SHIELD_SPECIALS.find((s) => s.id === leg.shield!.specialId)!
+    : (rarity.tier >= 2 || chance(rng, 0.25))
+      ? (() => {
+        const pool = SHIELD_SPECIALS.filter((s) => s.makers.includes(maker.id));
+        return pool.length ? weightedPick(rng, pool.map((s) => ({ item: s, w: s.weight }))) : pick(rng, SHIELD_SPECIALS);
+      })()
+      : null;
+  if (specialDef) {
+    const base = specialDef.id === 'berserk' ? 15 + rarity.tier * 8 : capacity * (0.4 + rarity.tier * 0.15);
+    const power = base * (leg?.shield?.powerMult ?? 1);
+    special = { id: specialDef.id, label: specialDef.label(power), power };
   }
 
   return {
     kind: 'shield', seed, level, rarity: rarity.id, maker: maker.id,
-    name: `${makerById(maker.id).name.split(' ')[0]} ${pick(rng, SHIELD_NOUNS)}`,
+    name: leg?.name ?? `${makerById(maker.id).name.split(' ')[0]} ${pick(rng, SHIELD_NOUNS)}`,
+    redText: leg?.redText,
     capacity, rechargeRate, rechargeDelay, special,
     value: Math.round((10 + rarity.tier * 25) * levelScale(level)) * 3,
   };
@@ -46,17 +58,20 @@ export function generateGrenadeMod(level: number, rarityId?: string, luck = 0, s
   const rng = mulberry32(seed);
   const rarity = pickRarity(rng, rarityId, luck);
   const maker = pick(rng, MAKER_LIST);
-  const delivery = weightedPick(rng, GRENADE_DELIVERIES.map((d) => ({ item: d, w: d.weight })));
-  const element = pick(rng, GRENADE_ELEMENTS);
-  const scale = levelScale(level) * rarity.statMult;
+  const leg = rarity.tier >= 4 ? pick(rng, gearLegendariesFor('grenade')) : null;
+  const delivery = leg
+    ? GRENADE_DELIVERIES.find((d) => d.id === leg.grenade!.deliveryId)!
+    : weightedPick(rng, GRENADE_DELIVERIES.map((d) => ({ item: d, w: d.weight })));
+  const element = leg?.grenade?.element ?? pick(rng, GRENADE_ELEMENTS);
+  const scale = levelScale(level) * rarity.statMult * (leg?.statMult ?? 1);
 
   return {
     kind: 'grenade', seed, level, rarity: rarity.id, maker: maker.id,
-    name: `${delivery.label} ${pick(rng, GRENADE_NOUNS)}`,
-    redText: rarity.tier >= 3 ? `“${delivery.blurb}”` : undefined,
+    name: leg?.name ?? `${delivery.label} ${pick(rng, GRENADE_NOUNS)}`,
+    redText: leg?.redText ?? (rarity.tier >= 3 ? `“${delivery.blurb}”` : undefined),
     delivery: delivery.id, deliveryLabel: delivery.label,
     element,
-    damage: Math.round(GRENADE_BASE.damage * delivery.damageMult * scale * (0.9 + rng() * 0.2)),
+    damage: Math.round(GRENADE_BASE.damage * delivery.damageMult * (leg?.grenade?.damageMult ?? 1) * scale * (0.9 + rng() * 0.2)),
     radius: +(GRENADE_BASE.radius * delivery.radiusMult).toFixed(1),
     fuse: delivery.fuse,
     childCount: delivery.childCount,
@@ -67,7 +82,10 @@ export function generateGrenadeMod(level: number, rarityId?: string, luck = 0, s
 export function generateClassMod(level: number, rarityId?: string, luck = 0, seed = freshSeed()): ClassModInstance {
   const rng = mulberry32(seed);
   const rarity = pickRarity(rng, rarityId, luck);
-  const arch = pick(rng, CLASSMOD_ARCHETYPES);
+  const leg = rarity.tier >= 4 ? pick(rng, gearLegendariesFor('classmod')) : null;
+  const arch = leg
+    ? CLASSMOD_ARCHETYPES.find((a) => a.id === leg.classmod!.archetypeId)!
+    : pick(rng, CLASSMOD_ARCHETYPES);
   const cls = PLAYER_CLASS;
 
   // boost 1-2 random skills from the class's trees
@@ -78,15 +96,16 @@ export function generateClassMod(level: number, rarityId?: string, luck = 0, see
   for (let i = 0; i < boostCount && allSkills.length; i++) {
     const s = pick(rng, allSkills.filter((x) => !boosted.has(x.id)));
     boosted.add(s.id);
-    skillBoosts.push({ skillId: s.id, skillName: s.name, points: 1 + Math.floor(rarity.tier / 2) });
+    skillBoosts.push({ skillId: s.id, skillName: s.name, points: 1 + Math.floor(rarity.tier / 2) + (leg?.classmod?.extraPoint ? 1 : 0) });
   }
 
   return {
     kind: 'classmod', seed, level, rarity: rarity.id, maker: 'lumen',
-    name: `${arch.name}’s Charter`,
+    name: leg?.name ?? `${arch.name}’s Charter`,
+    redText: leg?.redText,
     className: cls.name, classId: cls.id,
     skillBoosts,
-    passives: arch.passives.map((p) => ({ stat: p.stat, label: p.label, amount: +(p.base * rarity.statMult * (0.9 + rng() * 0.2)).toFixed(3) })),
+    passives: arch.passives.map((p) => ({ stat: p.stat, label: p.label, amount: +(p.base * rarity.statMult * (leg?.statMult ?? 1) * (0.9 + rng() * 0.2)).toFixed(3) })),
     value: Math.round((12 + rarity.tier * 22) * levelScale(level)) * 3,
   };
 }
@@ -94,6 +113,16 @@ export function generateClassMod(level: number, rarityId?: string, luck = 0, see
 export function generateRelic(level: number, rarityId?: string, luck = 0, seed = freshSeed()): RelicInstance {
   const rng = mulberry32(seed);
   const rarity = pickRarity(rng, rarityId, luck);
+  const leg = rarity.tier >= 4 ? pick(rng, gearLegendariesFor('relic')) : null;
+  if (leg) {
+    return {
+      kind: 'relic', seed, level, rarity: rarity.id,
+      name: leg.name,
+      flavor: leg.redText,
+      passives: leg.relic!.passives.map((p) => ({ stat: p.stat, label: p.label, amount: +(p.base * rarity.statMult * (0.9 + rng() * 0.2)).toFixed(3) })),
+      value: Math.round((10 + rarity.tier * 24) * levelScale(level)) * 3,
+    };
+  }
   const arch = pick(rng, RELIC_ARCHETYPES);
   return {
     kind: 'relic', seed, level, rarity: rarity.id,

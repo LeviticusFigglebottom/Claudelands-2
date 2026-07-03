@@ -4,7 +4,7 @@
 // time to loot, shop at the pit vendors, and regret. Best wave persists.
 
 import * as THREE from 'three';
-import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, type EnemyDef } from '../data/enemies';
+import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, BOSS_BLOOM, BOSS_ANCHORHEAD, BOSS_MOTHERLODE, type EnemyDef } from '../data/enemies';
 import { enemySpawner, type Enemy } from './enemies';
 import { spawnBoss, type BossId } from './boss';
 import { state } from './state';
@@ -16,10 +16,22 @@ const BOSS_CYCLE: { id: BossId; def: EnemyDef }[] = [
   { id: 'warden_prime', def: BOSS_WARDEN },
   { id: 'old_man_avalanche', def: BOSS_AVALANCHE },
   { id: 'saint_furnace', def: BOSS_FURNACE },
+  { id: 'bloom_mother', def: BOSS_BLOOM },
+  { id: 'admiral_anchorhead', def: BOSS_ANCHORHEAD },
+  { id: 'mother_lode', def: BOSS_MOTHERLODE },
 ];
 
-/** Trash pool: a spread of behaviors from all four factions. */
-const WAVE_POOL = ['rustpunk', 'scrapmutt', 'shieldhead', 'lobber', 'fusebug', 'helix_drone', 'helix_stinger', 'snowmad', 'frostmutt', 'icicle_lobber', 'ashwalker', 'ash_shrike', 'boilerbruiser', 'avalanche_bruiser', 'cinderhulk', 'lattice_warden'];
+/** Trash pool: a spread of behaviors from every faction — later entries
+ *  unlock as waves climb (the pool window widens with the wave count). */
+const WAVE_POOL = [
+  'rustpunk', 'scrapmutt', 'shieldhead', 'lobber', 'fusebug',
+  'helix_drone', 'helix_stinger', 'snowmad', 'frostmutt', 'icicle_lobber',
+  'ashwalker', 'ash_shrike', 'boilerbruiser', 'avalanche_bruiser', 'cinderhulk', 'lattice_warden',
+  // Veldt Minor's exports: the jungle, the drowned coast, and the deep
+  'frond_stalker', 'dartlurker', 'sporeling', 'razorbeak', 'shaman', 'thorn_hurler',
+  'brine_husk', 'harpooneer', 'snapjaw', 'gullwing', 'tidecaller', 'anchor_hulk',
+  'gloomstalker', 'shardcaster', 'gravemite', 'lantern_wisp', 'spitgrub', 'deep_roller',
+];
 
 const BEST_KEY = 'claudelands2.crucible';
 const INTERMISSION = 12;

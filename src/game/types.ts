@@ -100,7 +100,7 @@ export interface GrenadeModInstance {
 export interface ClassModInstance {
   kind: 'classmod';
   seed: number; level: number; rarity: string; maker: string;
-  name: string; className: string; classId: string;
+  name: string; redText?: string; className: string; classId: string;
   skillBoosts: { skillId: string; skillName: string; points: number }[];
   passives: { stat: string; label: string; amount: number }[];
   value: number;

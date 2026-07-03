@@ -4,10 +4,16 @@
 import { questSystem, type QuestRuntime } from '../game/quests';
 import { QUEST_DONE_IDLE, GIVERS } from '../data/quests';
 import type { QuestGiver } from '../data/quests';
+import { MAPS, activeMap } from '../data/world';
 import { audio } from '../audio/synth';
 import { voice, voiceOf } from '../audio/voice';
 import { prefs } from '../game/prefs';
 import { pick } from '../util/rng';
+
+/** Human name of the map an objective lives on. */
+function mapNameOf(mapId?: string): string {
+  return MAPS[mapId ?? 'claudelands']?.name ?? 'THE CLAUDELANDS';
+}
 
 export class QuestTracker {
   private root = document.getElementById('quest-tracker')!;
@@ -20,10 +26,12 @@ export class QuestTracker {
     if (q) {
       const obj = q.def.objective;
       const progress = obj.count > 1 ? ` — ${q.progress}/${obj.count}` : '';
-      key = `${q.def.id}:${q.progress}`;
+      const offMap = (obj.mapId ?? 'claudelands') !== activeMap().id;
+      key = `${q.def.id}:${q.progress}:${offMap}`;
       html = `
         <div class="qt-name">◆ ${q.def.name}</div>
-        <div class="qt-obj">${obj.label}${progress}</div>`;
+        <div class="qt-obj">${obj.label}${progress}</div>
+        ${offMap ? `<div class="qt-obj" style="opacity:0.75">→ in ${mapNameOf(obj.mapId)} (follow the ◆)</div>` : ''}`;
     } else if (questSystem.available) {
       const g = GIVERS[questSystem.available.def.giver];
       key = 'avail:' + questSystem.available.def.id;
@@ -58,12 +66,22 @@ export class QuestLogPanel {
       const cls = q.status;
       const obj = q.def.objective;
       const progress = q.status === 'active' && obj.count > 1 ? ` (${q.progress}/${obj.count})` : '';
+      // the ACTIVE (and next available) contract carries its full context:
+      // who sent you, where it happens, what to do, and the giver's own why
+      const expanded = q.status === 'active' || q.status === 'available';
+      const g = GIVERS[q.def.giver];
+      const detail = expanded ? `
+        <div class="q-brief">
+          <div class="q-ctx"><b>FROM</b> ${g.name}, ${g.where} · <b>WHERE</b> ${mapNameOf(obj.mapId)} · <b>REWARD</b> $${q.def.rewardCash}+ · ${q.def.rewardXp} XP${q.def.rewardItem ? ` · ${q.def.rewardItem} item` : ''}</div>
+          ${q.def.briefing.map((line) => `<div class="q-line">${line}</div>`).join('')}
+        </div>` : '';
       return `
         <div class="quest-row ${cls}">
           <div class="q-badge">${badge}</div>
-          <div>
+          <div style="flex:1">
             <div class="q-name">${q.def.name}</div>
             <div class="q-obj">${q.status === 'locked' ? '— classified until Quibb trusts you —' : obj.label + progress}</div>
+            ${detail}
           </div>
         </div>`;
     }).join('');
@@ -137,34 +155,32 @@ export class DialoguePanel {
       </div></div>
       <div class="p-hint">E / ESC to close</div>`;
 
-    // typewriter — the character voice performs each line as it types
-    // (radio blips remain the fallback when voices are off)
+    // the FULL briefing is readable immediately — no racing a typewriter to
+    // the accept button. The character voice still performs it line by line,
+    // with the spoken line highlighted as it goes.
     const box = root.querySelector('#dlg-box') as HTMLElement;
-    let lineIdx = 0, charIdx = 0;
-    let current: HTMLElement | null = null;
-    const tick = () => {
+    const lineEls = lines.map((line) => {
+      const el = document.createElement('div');
+      el.className = 'dlg-line';
+      el.textContent = line;
+      box.appendChild(el);
+      return el;
+    });
+    let lineIdx = -1;
+    const speakNext = () => {
+      if (lineIdx >= 0) lineEls[lineIdx]?.classList.remove('speaking');
+      lineIdx++;
       if (lineIdx >= lines.length) { this.typing = null; return; }
-      if (!current) {
-        current = document.createElement('div');
-        current.className = 'dlg-line';
-        box.appendChild(current);
-        voice.speak(lines[lineIdx], voiceOf(giver));
-      }
-      const line = lines[lineIdx];
-      charIdx += 2;
-      current.textContent = line.slice(0, charIdx);
-      if (!prefs().characterVoices && charIdx % 6 === 0) audio.dialogBlip();
-      if (charIdx >= line.length) {
-        lineIdx++; charIdx = 0; current = null;
-        // let the voice finish its line before the next one starts talking over it
-        const wait = () => {
-          if (voice.speaking) this.typing = window.setTimeout(wait, 120);
-          else this.typing = window.setTimeout(tick, 280);
-        };
-        this.typing = window.setTimeout(wait, 120);
-      } else this.typing = window.setTimeout(tick, 18);
+      lineEls[lineIdx].classList.add('speaking');
+      voice.speak(lines[lineIdx], voiceOf(giver));
+      if (!prefs().characterVoices) audio.dialogBlip();
+      const wait = () => {
+        if (voice.speaking) this.typing = window.setTimeout(wait, 120);
+        else this.typing = window.setTimeout(speakNext, 260);
+      };
+      this.typing = window.setTimeout(wait, 200);
     };
-    tick();
+    speakNext();
 
     root.querySelector('#dlg-accept')?.addEventListener('click', () => {
       this.stop();

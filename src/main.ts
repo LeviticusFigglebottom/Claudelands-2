@@ -27,7 +27,7 @@ import { music } from './audio/music';
 import { starterWeapon, generateWeapon } from './gen/weapongen';
 import { dedicatedFor } from './data/legendaries';
 import { generateClassMod } from './gen/geargen';
-import { generateShield, generateGrenadeMod } from './gen/geargen';
+import { generateShield, generateGrenadeMod, generateRelic } from './gen/geargen';
 import { DamageNumberSystem } from './ui/damagenumbers';
 import { Hud } from './ui/hud';
 import { Compass, type CompassMarker } from './ui/compass';
@@ -449,7 +449,7 @@ function renderRacePanel(panel: HTMLElement): void {
     <h1>REDLINE RITA</h1>
     <div class="p-sub">${pick(Math.random as never, RITA_GREETINGS)}</div>
     <div class="p-body"><div style="flex:1; max-width:560px; display:flex; flex-direction:column; gap:8px;">
-      <div class="dialogue-box">One lap of REDLINE’S RUN. Seven gates, two forked sections — outer line’s safe, inner cut’s got AIR. Beat me to the flag and keep the purse. Rerun it whenever your pride recovers.<br><br><b>W/S</b> throttle · <b>A/D</b> steer · <b>SPACE</b> slide · <b>SHIFT</b> boost (sliding refills it)</div>
+      <div class="dialogue-box">One lap of REDLINE’S RUN. Seven gates, two forked sections — outer line’s safe, inner cut’s got AIR. Beat me to the flag and keep the purse. Rerun it whenever your pride recovers.<br><br><b>W/S</b> throttle · <b>A/D</b> steer · <b>SPACE</b> jump · <b>C</b> drift · <b>SHIFT</b> boost (sliding refills it)</div>
       ${rows}
     </div></div>
     <div class="p-hint">E / ESC to close</div>`;
@@ -878,7 +878,7 @@ function interact(): void {
   if (vehicles.nearBuggy(player.position)) {
     vehicles.enter(camera);
     player.viewmodel.visible = false;
-    feedText('<b>THE JUNKSTALLION</b> — W/S drive · A/D steer · SPACE slide · SHIFT boost · E out', '#ffd23c');
+    feedText('<b>THE JUNKSTALLION</b> — W/S drive · A/D steer · SPACE jump · C drift · SHIFT boost · E out', '#ffd23c');
     return;
   }
   const p = loot.nearestItem(player.position);
@@ -1356,7 +1356,7 @@ canvas.addEventListener('click', () => {
   player, camera, state, enemySpawner, loot, questSystem, actionSkill, endless,
   startRunDebug: startRun,
   get world() { return world; },
-  gen: { generateWeapon, generateShield, generateGrenadeMod },
+  gen: { generateWeapon, generateShield, generateGrenadeMod, generateClassMod, generateRelic },
   equip: (w: import('./game/types').WeaponInstance) => {
     state.equippedWeapons[state.activeSlot] = w;
     player.equipWeapon(w, true);

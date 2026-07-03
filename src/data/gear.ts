@@ -76,3 +76,79 @@ export const RELIC_ARCHETYPES: RelicArchetype[] = [
 ];
 
 export const GRENADE_ELEMENTS: ElementId[] = ['ember', 'bile', 'volt', 'rime', 'blast'];
+
+// ------------------------------------------------------- gear legendaries
+// Named, red-texted gear that rolls whenever legendary-rarity gear drops —
+// the slots weapons always hogged. Flavor sourced from the far territories.
+export interface GearLegendaryDef {
+  id: string;
+  kind: 'shield' | 'grenade' | 'classmod' | 'relic';
+  name: string;
+  redText: string;
+  statMult: number;                       // on top of legendary rarity
+  shield?: { specialId: string; powerMult: number };
+  grenade?: { deliveryId: string; element: ElementId; damageMult: number };
+  classmod?: { archetypeId: string; extraPoint: boolean };
+  relic?: { passives: { stat: string; label: string; base: number }[] };
+}
+
+export const GEAR_LEGENDARIES: GearLegendaryDef[] = [
+  // ---- shields
+  {
+    id: 'gl_lantern', kind: 'shield', name: 'The Admiral’s Other Lantern', statMult: 1.2,
+    redText: '“Still lit. Still regulation.”',
+    shield: { specialId: 'amp', powerMult: 1.6 },
+  },
+  {
+    id: 'gl_barnacle', kind: 'shield', name: 'Barnacle Opinion', statMult: 1.25,
+    redText: '“It grew on you first.”',
+    shield: { specialId: 'spike', powerMult: 1.7 },
+  },
+  {
+    id: 'gl_glowshroom', kind: 'shield', name: 'Gloomgrove Umbrella', statMult: 1.15,
+    redText: '“The mushrooms are watching. Approvingly.”',
+    shield: { specialId: 'nova', powerMult: 1.6 },
+  },
+  // ---- grenade mods
+  {
+    id: 'gl_depthcharge', kind: 'grenade', name: 'Depth Charge', statMult: 1.2,
+    redText: '“The bottom of the sea says HI.”',
+    grenade: { deliveryId: 'bouncing', element: 'rime', damageMult: 1.35 },
+  },
+  {
+    id: 'gl_seamsong', kind: 'grenade', name: 'Seam Song', statMult: 1.2,
+    redText: '“dig. Dig. DIG.”',
+    grenade: { deliveryId: 'singularity', element: 'volt', damageMult: 1.3 },
+  },
+  {
+    id: 'gl_chowder', kind: 'grenade', name: 'Peg’s Chowder', statMult: 1.15,
+    redText: '“Ask about it. ASK.”',
+    grenade: { deliveryId: 'mirv', element: 'bile', damageMult: 1.25 },
+  },
+  // ---- class mods
+  {
+    id: 'gl_quartermistress', kind: 'classmod', name: 'Quartermistress’s Ledger', statMult: 1.3,
+    redText: '“The paperwork survived. It always does.”',
+    classmod: { archetypeId: 'cm_foreman', extraPoint: true },
+  },
+  {
+    id: 'gl_nightshift', kind: 'classmod', name: 'Night Shift Charter', statMult: 1.3,
+    redText: '“Sixty years on shift. No breaks.”',
+    classmod: { archetypeId: 'cm_shootist', extraPoint: true },
+  },
+  // ---- relics
+  {
+    id: 'gl_crownshard', kind: 'relic', name: 'Crown Shard', statMult: 1,
+    redText: '“A splinter of the Mother Lode’s crown. It hums when you’re winning.”',
+    relic: { passives: [{ stat: 'elemDamage', label: 'Elemental Damage', base: 0.2 }, { stat: 'skillCooldown', label: 'Action Skill Cooldown', base: 0.08 }] },
+  },
+  {
+    id: 'gl_dryboot', kind: 'relic', name: 'Peg’s Dry Boot', statMult: 1,
+    redText: '“One boot. Bone dry. A miracle on a string.”',
+    relic: { passives: [{ stat: 'maxHealth', label: 'Max Health', base: 0.16 }, { stat: 'lootLuck', label: 'Rare Drop Luck', base: 0.12 }] },
+  },
+];
+
+export function gearLegendariesFor(kind: GearLegendaryDef['kind']): GearLegendaryDef[] {
+  return GEAR_LEGENDARIES.filter((g) => g.kind === kind);
+}

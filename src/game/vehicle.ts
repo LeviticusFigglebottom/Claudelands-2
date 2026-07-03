@@ -227,6 +227,8 @@ export class Vehicle {
   private squashT = 0;
   private lastGroundY: number | null = null;
   private lastGroundVy = 0;
+  /** Visual-only: lifts the body to the axle midpoint on slopes/crests. */
+  private groundLift = 0;
 
   constructor(scheme: BuggyScheme, stats: VehicleStats = BUGGY_STATS) {
     this.stats = stats;
@@ -240,9 +242,10 @@ export class Vehicle {
     this.sparks = built.sparks;
   }
 
-  /** Current drift tier (0–3) for HUD + spark color. */
+  /** Current drift tier (0–3) for HUD + spark color. MK pacing: tiers come
+   *  slower and the slide builds gradually. */
   get driftTier(): number {
-    return this.driftCharge > 2.3 ? 3 : this.driftCharge > 1.35 ? 2 : this.driftCharge > 0.65 ? 1 : 0;
+    return this.driftCharge > 2.8 ? 3 : this.driftCharge > 1.7 ? 2 : this.driftCharge > 0.8 ? 1 : 0;
   }
 
   get forward(): THREE.Vector3 {
@@ -314,8 +317,10 @@ export class Vehicle {
       let steerCmd = this.steerSmooth;
       if (this.drifting) {
         const trim = clamp(this.steerSmooth * this.driftDir, -1, 1); // 1 = into the slide
-        steerCmd = this.driftDir * (0.72 + 0.5 * trim);
-        this.driftCharge += dt * (0.75 + 0.5 * Math.max(0, trim));
+        // gentler, more gradual arc than before — the slide eases in and the
+        // player shapes it, kart-style, instead of snapping sideways
+        steerCmd = this.driftDir * (0.52 + 0.34 * trim);
+        this.driftCharge += dt * (0.7 + 0.45 * Math.max(0, trim));
       }
       const rate = S.turnRate * (this.drifting ? 1.5 : 1) * steerAuth;
       const reversing = this.vel.dot(this.forward) < -0.5;
@@ -426,7 +431,15 @@ export class Vehicle {
         this.lastGroundVy = Math.max((g - this.lastGroundY) / dt, this.lastGroundVy - 30 * dt);
       }
       this.lastGroundY = g;
-    } else if (wasGrounded && this.lastGroundVy > 1.5) {
+    } else if (wasGrounded && this.lastGroundVy > 1.5 && (() => {
+      // only a REAL crest launches: the ground ahead must actually fall.
+      // Without this check, grid noise mid-slope popped the buggy airborne
+      // all the way up a hill — flat body, floating tires.
+      const sp = Math.hypot(this.vel.x, this.vel.z);
+      if (sp < 1) return false;
+      const ax = this.pos.x + (this.vel.x / sp) * 2.2, az = this.pos.z + (this.vel.z / sp) * 2.2;
+      return terrainHeight(ax, az) < g - 0.12;
+    })()) {
       // crest launch: the frame the ground falls away after a rising slope
       // inherits the slope's vertical momentum — hills throw you instead of
       // dropping you
@@ -532,18 +545,27 @@ export class Vehicle {
       fx.burst(back, sparkColor, 3, 2.5, 0.07, 0.35, 2);
     }
 
-    // terrain alignment (grounded) or held attitude (air)
+    // terrain alignment (grounded) or held attitude (air). Grounded pitch
+    // samples the actual axle heights so climbs read as CLIMBING — nose up,
+    // tires on the slope — instead of a flat body floating up the grade.
     let alignPitch = 0, alignRoll = 0;
     if (this.grounded) {
-      const n = terrainNormal(this.pos.x, this.pos.z);
       const f = this.forward, r = this.right;
-      alignPitch = (f.x * n.x + f.z * n.z) * 1.1;
-      alignRoll = -(r.x * n.x + r.z * n.z) * 1.1;
+      const hF = terrainHeight(this.pos.x + f.x * 1.15, this.pos.z + f.z * 1.15);
+      const hR = terrainHeight(this.pos.x - f.x * 1.15, this.pos.z - f.z * 1.15);
+      const hRt = terrainHeight(this.pos.x + r.x * 0.85, this.pos.z + r.z * 0.85);
+      const hLt = terrainHeight(this.pos.x - r.x * 0.85, this.pos.z - r.z * 0.85);
+      alignPitch = -Math.atan2(hF - hR, 2.3);
+      alignRoll = Math.atan2(hRt - hLt, 1.7);
+      // seat the body on the axle midpoint so the wheels track the slope
+      this.groundLift = (hF + hR) / 2 - terrainHeight(this.pos.x, this.pos.z);
     } else {
       alignPitch = clamp(-this.vel.y * 0.02, -0.28, 0.35); // nose follows the arc
+      this.groundLift = 0;
     }
 
     this.group.position.copy(this.pos);
+    this.group.position.y += Math.max(0, this.groundLift);
     this.group.rotation.set(0, this.yaw + this.driftYawVis, 0);
     this.bodyGroup.rotation.set(this.visPitch + alignPitch, 0, this.visRoll + alignRoll);
   }
@@ -612,15 +634,20 @@ class VehicleSystem {
   }
 
   private prevSpace = false;
+  private prevDriftKey = false;
 
   input(): VehicleInput {
+    // SPACE is the jump; C is the drift trigger (with its own little hop on
+    // press, Mario Kart style)
     const space = this.keys.has('Space');
-    const hop = space && !this.prevSpace;
+    const driftKey = this.keys.has('KeyC');
+    const hop = (space && !this.prevSpace) || (driftKey && !this.prevDriftKey);
     this.prevSpace = space;
+    this.prevDriftKey = driftKey;
     return {
       throttle: (this.keys.has('KeyW') ? 1 : 0) + (this.keys.has('KeyS') ? -1 : 0),
       steer: (this.keys.has('KeyA') ? 1 : 0) + (this.keys.has('KeyD') ? -1 : 0),
-      drift: space,
+      drift: driftKey,
       hop,
       boost: this.keys.has('ShiftLeft') || this.keys.has('ShiftRight'),
     };
@@ -673,7 +700,7 @@ class VehicleSystem {
         <div style="width:150px; height:9px; border:2px solid rgba(244,234,216,0.6); margin-top:6px; margin-left:auto;">
           <div id="drv-boost" style="height:100%; width:100%; background:#54d4ff;"></div>
         </div>
-        <div style="font-size:10px; opacity:0.75; margin-top:2px;">SPACE hop/drift — release for turbo · SHIFT burns the tank</div>`;
+        <div style="font-size:10px; opacity:0.75; margin-top:2px;">SPACE jump · hold C to drift, release for turbo · SHIFT burns the tank</div>`;
       document.getElementById('ui-root')?.appendChild(this.hud);
     }
     this.hud.style.display = v ? 'block' : 'none';
@@ -688,7 +715,7 @@ class VehicleSystem {
       const v = this.buggy;
       if (v.drifting) {
         // the bar becomes the drift charge, colored by tier
-        b.style.width = `${Math.round(Math.min(1, v.driftCharge / 2.3) * 100)}%`;
+        b.style.width = `${Math.round(Math.min(1, v.driftCharge / 2.8) * 100)}%`;
         b.style.background = ['#8a949e', '#54d4ff', '#ff8c2a', '#c06bff'][v.driftTier];
       } else {
         b.style.width = `${Math.round(v.boostMeter * 100)}%`;
