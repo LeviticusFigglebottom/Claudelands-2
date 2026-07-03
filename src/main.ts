@@ -52,7 +52,7 @@ import { announcer } from './game/announcer';
 import { playerVoice } from './game/playervoice';
 import { voice, voiceOf } from './audio/voice';
 import { shipTravel, PLANET_LOOKS } from './ui/shiptravel';
-import { prefs, onPrefsChanged } from './game/prefs';
+import { prefs, setPref, onPrefsChanged } from './game/prefs';
 import { CinematicSystem, bossCine, biomeCine, charCine, BOSS_EPITHETS, NPC_INTROS, type CineDef } from './ui/cinematics';
 import { feedPickup, feedText, bark, playWireLog, showInteract, setDownedOverlay, banner } from './ui/misc';
 import { itemCardHTML } from './ui/itemcard';
@@ -267,6 +267,24 @@ function switchMap(mapId: string, toX?: number, toZ?: number): void {
   fx.burst(player.position.clone().add(new THREE.Vector3(0, 1, 0)), 0x54d4ff, 40, 6, 0.14, 1, 4);
   playCine('map_' + WORLD.id, () => biomeCine(player.position.clone(), WORLD.name.toUpperCase(), WORLD.tagline));
   autosave();
+}
+
+/** EXTRAS cheats that land when a run starts or a save loads. */
+function applyExtrasCheats(): void {
+  if (prefs().cheatLevel && state.level < 25) {
+    state.level = 25;
+    player.recomputeVitals();
+    player.flesh = player.maxFlesh;
+    feedText('SKIP LEG DAY: reporting for duty at <b>level 25</b>.', '#c06bff');
+  }
+  if (prefs().cheatRich && state.money < 100000) {
+    state.money = 100000;
+    feedText('FAT STACKS: wallet topped up to <b>$100,000</b>.', '#d8b028');
+  }
+  if (prefs().cheatTravel) {
+    for (const st of allStations()) discoveredStations.add(st.poi.data ?? '');
+    feedText('ALREADY BEEN EVERYWHERE: every station lit.', '#54d4ff');
+  }
 }
 
 /** A revisit rebuilds every crate; re-haul the ones the ledger says are gone. */
@@ -795,6 +813,7 @@ function restoreSave(): boolean {
   player.flesh = player.maxFlesh;
   player.shield = player.maxShield;
   player.equipWeapon(state.activeWeapon, true);
+  applyExtrasCheats();
   return true;
 }
 
@@ -1343,6 +1362,7 @@ function startRun(mode: StartMode, classId: string, difficultyId: DifficultyId, 
     seenCines.add('map_claudelands'); // the full intro already covers the first biome
     document.getElementById('ui-root')?.classList.add('cine-on'); // HUD hides for the cutscene
     intro.start();
+    applyExtrasCheats();
     autosave();
     return;
   }
@@ -1356,6 +1376,7 @@ function startRun(mode: StartMode, classId: string, difficultyId: DifficultyId, 
     started = true;
     switchMap('brasshaven', 0, 54);
     feedText('VETERAN CONTRACT — the city knows your name. The Mayor is waiting.', '#ffd23c');
+    applyExtrasCheats();
     autosave();
     canvas.requestPointerLock();
     return;
@@ -1483,6 +1504,7 @@ canvas.addEventListener('click', () => {
   holocall, announcer, voice, playerVoice, audio, music,
   speakDebug: (text: string, who: string) => voice.speak(text, voiceOf(who)),
   voStats,
+  prefsDebug: { prefs, setPref },
   switchMapDebug: switchMap,
   skipIntro: () => { if (cinematicT >= 0) intro.end(); },
   cinema, seenCines, shipTravel,

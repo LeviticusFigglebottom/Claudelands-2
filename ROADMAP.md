@@ -1,5 +1,21 @@
 # ROADMAP
 
+## Pass 25 status — the EXTRAS tab
+
+A new main-menu tab of toys and regrets, all persisted in prefs:
+**GOTTA GO FAST** (x1.6 move speed, live), **SKIP LEG DAY** (runs load
+at level 25 minimum), **ALREADY BEEN EVERYWHERE** (every fast-travel
+station pre-discovered on load), **FAT STACKS** ($100k wallet floor on
+load), and **THUG MODE** — an audio-only novelty toggle that reroutes
+every player-character voiceline (all triggers, all four classes) to
+one unified pool of fourteen catastrophically over-the-top hype
+bellows, freshly baked through the VO pipeline with maximum-instability
+screaming direction. Flip it off and the class voices return instantly.
+
+Headless suite: `verify25.mjs` — 9 checks, all passing (tab + toggles +
+persistence, level/wallet/stations on a fresh run, measured x1.6 walk
+speed, thug routing on and off).
+
 ## Pass 24 status — the finale, and what answers it
 
 **The story ENDS on Veldt Minor**: cracking the Mother Lode (q26) now

@@ -9,7 +9,7 @@
 import { QUESTS, SIDE_QUESTS } from '../src/data/quests';
 import { WIRE_LOGS } from '../src/data/flavor';
 import { RITA_RACE_LINES } from '../src/data/race';
-import { PLAYER_LINES } from '../src/data/playerlines';
+import { PLAYER_LINES, THUG_LINES } from '../src/data/playerlines';
 import {
   ANNOUNCER_WAVE_START, ANNOUNCER_BOSS_WAVE, ANNOUNCER_WAVE_CLEAR,
   ANNOUNCER_PLAYER_DOWN, ANNOUNCER_SECOND_WIND, ANNOUNCER_STREAK, ANNOUNCER_WELCOME,
@@ -33,6 +33,7 @@ const VOICE_TAG: Record<string, string> = {
   kez: 'scrappy, energetic, grinning',
   tovah: 'deep, growling, menacing',
   faro: 'calm, weathered, quietly amused lighthouse keeper',
+  thug: 'absurdly over-the-top comedic bellowing, unhinged ecstatic hype-man screaming at full volume',
   wirelog: 'weary, haunted, distant',
 };
 
@@ -88,6 +89,9 @@ for (const set of Object.values(PLAYER_LINES)) {
     for (const line of lines) add(set.voiceId, line, line, tag);
   }
 }
+
+// ---- THUG MODE: one pool, every trigger, zero dignity
+for (const line of THUG_LINES) add('thug', line, line, 'screaming, ecstatic');
 
 // ---- BIG NAZDA: numbered templates bake number-free (voKey strips digits,
 // so "WAVE 12!" finds the "WAVE!" recording); {boss} expands per boss

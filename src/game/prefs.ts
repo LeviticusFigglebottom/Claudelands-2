@@ -14,6 +14,12 @@ export interface Prefs {
   characterVoices: boolean;  // procedural NPC speech + pit announcer
   fov: number;               // 60..100
   saturation: number;        // 0.8..1.5
+  // ---- EXTRAS (main-menu fun tab): cheats + novelty toggles
+  thugMode: boolean;         // player voicelines swap to the thug sauce pool
+  cheatSpeed: boolean;       // x1.6 move speed
+  cheatLevel: boolean;       // runs load at level 25+
+  cheatTravel: boolean;      // every fast-travel station pre-discovered
+  cheatRich: boolean;        // wallet floor $100k
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -28,6 +34,11 @@ export const DEFAULT_PREFS: Prefs = {
   characterVoices: true,
   fov: 75,
   saturation: 1.22,
+  thugMode: false,
+  cheatSpeed: false,
+  cheatLevel: false,
+  cheatTravel: false,
+  cheatRich: false,
 };
 
 const KEY = 'claudelands2.prefs';

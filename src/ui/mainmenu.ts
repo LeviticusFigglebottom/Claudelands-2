@@ -21,7 +21,7 @@ export interface MenuCallbacks {
   onRace: (trackId: string, tier: string) => void;
 }
 
-type Screen = 'press' | 'menu' | 'campaign' | 'select' | 'settings' | 'race';
+type Screen = 'press' | 'menu' | 'campaign' | 'select' | 'settings' | 'race' | 'extras';
 
 export class MainMenu {
   private root = document.getElementById('title-screen')!;
@@ -65,6 +65,7 @@ export class MainMenu {
       case 'select': this.renderSelect(); break;
       case 'settings': this.renderSettings(); break;
       case 'race': this.renderRace(); break;
+      case 'extras': this.renderExtras(); break;
     }
   }
 
@@ -100,12 +101,47 @@ export class MainMenu {
         <button class="mm-btn" id="mm-campaign">CAMPAIGN<span class="mm-sub">the claudelands contract — story, side jobs, four worlds</span></button>
         <button class="mm-btn" id="mm-endless">ENDLESS MODE<span class="mm-sub">the crucible — waves without end${best > 0 ? ` · best: wave ${best}` : ''}</span></button>
         <button class="mm-btn" id="mm-race">RACE<span class="mm-sub">any circuit, three laps — solo practice or a grid duel</span></button>
+        <button class="mm-btn" id="mm-extras">EXTRAS<span class="mm-sub">cheats, toggles, and one deeply cursed voice pack</span></button>
         <button class="mm-btn" id="mm-settings">SETTINGS<span class="mm-sub">look, feel, and how much the screen shakes</span></button>
       </div>`);
     this.root.querySelector('#mm-campaign')?.addEventListener('click', () => { audio.uiClick(); this.screen = 'campaign'; this.render(); });
     this.root.querySelector('#mm-endless')?.addEventListener('click', () => { audio.uiClick(); this.startMode = 'endless'; this.screen = 'select'; this.render(); });
     this.root.querySelector('#mm-race')?.addEventListener('click', () => { audio.uiClick(); this.screen = 'race'; this.render(); });
     this.root.querySelector('#mm-settings')?.addEventListener('click', () => { audio.uiClick(); this.screen = 'settings'; this.render(); });
+    this.root.querySelector('#mm-extras')?.addEventListener('click', () => { audio.uiClick(); this.screen = 'extras'; this.render(); });
+  }
+
+
+  // ---------------------------------------------------------- extras
+  private renderExtras(): void {
+    const rows: { key: keyof Prefs; name: string; sub: string }[] = [
+      { key: 'thugMode', name: 'THUG MODE', sub: 'your character\u2019s voicelines, replaced by the sauce. audio only. you did this to yourself.' },
+      { key: 'cheatSpeed', name: 'GOTTA GO FAST', sub: 'x1.6 move speed, always' },
+      { key: 'cheatLevel', name: 'SKIP LEG DAY', sub: 'campaign loads at level 25 minimum' },
+      { key: 'cheatTravel', name: 'ALREADY BEEN EVERYWHERE', sub: 'every fast-travel station pre-discovered on load' },
+      { key: 'cheatRich', name: 'FAT STACKS', sub: 'wallet floor of $100,000 on load' },
+    ];
+    this.chrome(`
+      <div class="mm-menu" style="max-width:640px;">
+        <div class="mm-section">EXTRAS — TOYS, CHEATS, AND REGRETS</div>
+        ${rows.map((r) => `
+          <div class="mm-slot">
+            <div class="mm-slot-head"><b>${r.name}</b></div>
+            <div class="mm-slot-sub">${r.sub}</div>
+            <div class="mm-slot-acts">
+              <button class="mm-slot-btn" data-extra="${r.key}">${prefs()[r.key] ? '\u25a0 ON' : '\u25a1 OFF'}</button>
+            </div>
+          </div>`).join('')}
+        <div class="mm-slot-sub" style="margin-top:8px;">cheats apply when a run starts or a save loads \u2014 speed and thug mode apply instantly.</div>
+      </div>`, 'menu');
+    this.root.querySelectorAll<HTMLButtonElement>('[data-extra]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        audio.uiClick();
+        const key = btn.dataset.extra as keyof Prefs;
+        setPref(key, !prefs()[key] as never);
+        this.render();
+      });
+    });
   }
 
   // ---------------------------------------------------------- race mode

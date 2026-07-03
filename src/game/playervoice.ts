@@ -5,9 +5,10 @@
 
 import { bus } from './state';
 import { voice, voiceOf } from '../audio/voice';
-import { PLAYER_LINES } from '../data/playerlines';
+import { PLAYER_LINES, THUG_LINES } from '../data/playerlines';
 import { PLAYER_CLASS } from '../data/classes';
 import { pick } from '../util/rng';
+import { prefs } from './prefs';
 
 interface Trigger { chance: number; cooldown: number; last: number }
 
@@ -67,6 +68,11 @@ class PlayerVoice {
     if (voice.speaking) return false; // never talk over story dialogue
     trig.last = this.t;
     this.globalGap = 2.5;
+    // THUG MODE: one glorious pool, every trigger, maximum volume
+    if (prefs().thugMode) {
+      voice.speak(pick(Math.random as never, THUG_LINES), voiceOf('thug'));
+      return true;
+    }
     voice.speak(pick(Math.random as never, lines), voiceOf(set.voiceId));
     return true;
   }

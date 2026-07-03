@@ -70,3 +70,23 @@ export const PLAYER_LINES: Record<string, PlayerLineSet> = {
     legendary: ['Worthy.', 'This will hurt them beautifully.', 'Heavy. GOOD.'],
   },
 };
+
+// ---- THUG MODE (Extras): every playable character's mouth is replaced by
+// one unified pool of catastrophically over-the-top hype bellows, in loving
+// tribute to a certain corner of the internet. Audio-only novelty toggle.
+export const THUG_LINES: string[] = [
+  'I\u2019M BOUT TO KUM!',
+  'THAT MIGHT JUST BE WHAT I NEED TO BUST!',
+  'OHHH YEAH! RIGHT THERE!',
+  'THE SAUCE IS LOOSE!',
+  'AIN\u2019T NOBODY READY FOR THIS SAUCE!',
+  'IT\u2019S TOO MUCH SAUCE!!',
+  'AW YEAH, THAT\u2019S THE SPOT!',
+  'WHO WANT THE SMOKE?!',
+  'SOMEBODY HOLD MY CHAIN!',
+  'GET THE CAMERA! GET THE CAMERA!',
+  'YEAH BOY! FULL POWER!!',
+  'LORD HAVE MERCY!!',
+  'THIS THE GOOD STUFF RIGHT HERE!',
+  'WOOOO! I\u2019M FEELIN\u2019 DANGEROUS!',
+];
