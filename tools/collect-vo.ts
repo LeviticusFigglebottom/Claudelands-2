@@ -107,6 +107,9 @@ const THUG_TAGS: Record<string, string> = {
   'A little elbow grease and we\u2019ll be a well-oiled machine!': 'chipper, absurdly enthusiastic',
   'AAAAAAAAAAAAAAAAAA!!': 'pure sustained screaming at the top of the lungs',
   'Another one down, another rope shot!': 'triumphant groaning shout',
+  'EXPOSEEEE ME! EXPOSEEEE ME!!': 'desperate dramatic wailing scream, drawn out',
+  'I\u2019M GOONING IN MY FUCKING PISS BRO!!': 'unhinged overwhelmed screaming',
+  'Enemy? Dead. Balloon knot? Heh\u2026 bred.': 'smug self-satisfied one-liner with a low chuckle',
 };
 for (const line of THUG_LINES) add('thug', line, line, THUG_TAGS[line] ?? 'screaming, ecstatic');
 

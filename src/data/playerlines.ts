@@ -88,4 +88,7 @@ export const THUG_LINES: string[] = [
   'A little elbow grease and we\u2019ll be a well-oiled machine!',
   'AAAAAAAAAAAAAAAAAA!!',
   'Another one down, another rope shot!',
+  'EXPOSEEEE ME! EXPOSEEEE ME!!',
+  'I\u2019M GOONING IN MY FUCKING PISS BRO!!',
+  'Enemy? Dead. Balloon knot? Heh\u2026 bred.',
 ];
