@@ -695,6 +695,8 @@ export class Enemy implements Damageable {
         });
       }
       fx.muzzleFlash(muzzle, targetPos.clone().sub(muzzle).normalize(), ELEMENTS[def.projectile.element].color, 0.7);
+      // the fight has two sides now: enemy fire is audible, attenuated by range
+      audio.enemyShot(this.position.distanceTo(hooks.playerPos()), def.projectile.arc === true);
     }
   }
 

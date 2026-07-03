@@ -47,6 +47,7 @@ import { RACE_DIFFICULTIES, RITA_GREETINGS, CHECKPOINTS } from './data/race';
 import { respawnCine } from './ui/respawn';
 import { holocall } from './ui/holocall';
 import { announcer } from './game/announcer';
+import { playerVoice } from './game/playervoice';
 import { voice, voiceOf } from './audio/voice';
 import { shipTravel, PLANET_LOOKS } from './ui/shiptravel';
 import { prefs, onPrefsChanged } from './game/prefs';
@@ -861,7 +862,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.code === 'KeyR') player.startReload();
-  if (e.code === 'KeyF') actionSkill.deploy(player.position, player.forward);
+  if (e.code === 'KeyF') { actionSkill.deploy(player.position, player.forward); playerVoice.onSkillCast(); }
   if (e.code === 'KeyG') player.throwGrenade();
   if (e.code.startsWith('Digit')) {
     const n = Number(e.code.slice(5)) - 1;
@@ -1074,6 +1075,7 @@ let started = false;
 function stepSim(dt: number): void {
   tickCombatClock(dt);
   statsys.update(dt);
+  playerVoice.update(dt);
   if (vehicles.driving && vehicles.buggy) {
     // the buggy IS the player while driving: physics owns position + camera
     vehicles.update(dt, { resolveCollision: (p, r) => world.resolveCollision(p, r), arenaHalf: WORLD.size / 2 }, race.frozen);
@@ -1387,7 +1389,7 @@ canvas.addEventListener('click', () => {
   enterPitDebug: () => enterPit(),
   leavePitDebug: () => leavePit(),
   interactDebug: () => interact(),
-  holocall, announcer, voice,
+  holocall, announcer, voice, playerVoice, audio, music,
   speakDebug: (text: string, who: string) => voice.speak(text, voiceOf(who)),
   switchMapDebug: switchMap,
   skipIntro: () => { if (cinematicT >= 0) intro.end(); },

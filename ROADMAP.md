@@ -1,5 +1,63 @@
 # ROADMAP
 
+## Pass 17 status — the sound pass
+
+**Gunshots are layered instruments now**: every shot = transient snap +
+midrange body + sub thump + a tiny action-cycling tick, where the WEAPON
+TYPE shapes the body (pistol crack, SMG snap, shotgun boom with pellet
+spray, sniper crack with a rolling canyon tail and distant slap-back,
+launcher tube-whump with rocket hiss) and the MANUFACTURER voices the
+character on top (Vulkram chest, Lumen zap edge, Ratworks loose-parts
+rattle, Aetheric harmonic bloom, Cordwood black-powder + smoke hiss,
+Briskco springy pop). Enemies are finally AUDIBLE: their fire plays a
+distance-attenuated report (hollow TOONK for lobbers), rate-limited so a
+firing line doesn't turn to mud.
+
+**Hits/kills**: flesh thock under the confirm tick, crits ring a bright
+ping over it, kills land a body-drop whump + a little soul-leaves-body
+chime.
+
+**Characteristic reloads**: the weapon type choreographs the hands, with
+staged foley keyed to the animation phases — mag-fed guns EJECT (roll to
+the side, mag physically drops), SEAT (fresh mag up, palm slap), RACK
+(charging handle back-forward); shotguns cradle and thumb shells in one
+at a time (each with its own press-click) then PUMP; snipers lift the
+bolt, draw, feed, and drive it home. Launchers keep the simple tip-back,
+as specified. Aetheric keeps its phial-recharge identity, Briskco still
+throws the whole gun, Ratworks rattles through everything, Vulkram seats
+HARD at the end.
+
+**Player characters have voices**: Harlan (dry workshop baritone), Sable
+(cool charged alto), Kez (quick bright), and Tovah (gravel avalanche)
+speak short class-written lines on kills, multikills, crits, skill
+casts, big hurts, downs, second winds, level-ups, and legendary drops
+(~26 lines each, all original) — rationed by per-trigger chances,
+cooldowns, and a global gap so it reads as personality, not noise, and
+never talks over story dialogue. Wire logs are READ by a ruined voice
+now instead of radio garble (the garble stays as the voices-off
+fallback).
+
+**The voice engine got a mouth**: syllables now use the word's REAL
+vowels for formant selection and the REAL leading consonant for onset
+transients (sibilant hiss, plosive pop, nasal hum), plus a fixed third
+"presence" formant — words carry their own shape instead of dissolving
+into beeps.
+
+**Element procs read like events**: fresh statuses bang a per-element
+earcon (fire FWOOSH-crackle, acid hiss-bubble, arc-weld zap-buzz, rime
+crystal ring), pop an element-colored burst at chest height, and float a
+big IGNITED!/MELTING!/SHOCKED!/CHILLED! label; the DoT flames now ride
+the torso at ~2x the density instead of dribbling at the boots.
+Refreshing a status stays quiet so sustained elemental fire doesn't
+scream. (Statuses always worked — now you can tell.)
+
+**Music grew arrangement**: bar-aware harmony (i–VI–III–VII loop), a
+breathing detuned-saw pad under combat, a wiry pentatonic lead riff that
+phrases every other bar, drum fills on the turnaround, and boss risers
+sweeping into each phrase.
+
+Headless suite: `verify18.mjs` — 15 checks, all passing.
+
 ## Pass 16 status — second QoL sweep
 
 **Shipbreak, actually moved this time**: the wreck field now sits in the

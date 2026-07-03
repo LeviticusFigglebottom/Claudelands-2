@@ -52,6 +52,13 @@ export const VOICES: Record<string, VoiceProfile> = {
   // salt-cured quartermaster: low, gravelly, unhurried — every word an entry in a ledger
   peg: { id: 'peg', basePitch: 122, range: 0.2, rate: 4.8, wave: 'sawtooth', formantShift: 0.88, breath: 0.26, vibrato: 2, drawl: 1.2, gain: 0.16 },
   announcer: { id: 'announcer', basePitch: 105, range: 0.55, rate: 4.2, wave: 'sawtooth', formantShift: 0.88, breath: 0.06, vibrato: 5, drawl: 1.45, gain: 0.2, echo: true },
+  // ---- the playable characters
+  harlan: { id: 'harlan', basePitch: 116, range: 0.24, rate: 5.6, wave: 'sawtooth', formantShift: 0.94, breath: 0.14, vibrato: 0, drawl: 1.05, gain: 0.15 },   // Gunsmith: dry workshop baritone
+  sable: { id: 'sable', basePitch: 172, range: 0.3, rate: 5.2, wave: 'triangle', formantShift: 1.04, breath: 0.12, vibrato: 3, drawl: 1.12, gain: 0.15 },     // Stormcaller: cool, charged
+  kez: { id: 'kez', basePitch: 205, range: 0.42, rate: 7.4, wave: 'sawtooth', formantShift: 1.12, breath: 0.1, vibrato: 2, drawl: 0.8, gain: 0.14 },          // Houndmaster: quick, bright
+  tovah: { id: 'tovah', basePitch: 96, range: 0.28, rate: 4.4, wave: 'square', formantShift: 0.86, breath: 0.22, vibrato: 0, drawl: 1.3, gain: 0.16 },        // Ravager: gravel avalanche
+  // dead miners, drowned sailors, salvage foremen — the wire remembers them
+  wirelog: { id: 'wirelog', basePitch: 138, range: 0.3, rate: 4.9, wave: 'sawtooth', formantShift: 0.95, breath: 0.28, vibrato: 2, drawl: 1.18, gain: 0.13 },
 };
 
 export function voiceOf(id: string): VoiceProfile {
@@ -118,8 +125,8 @@ class VoiceSystem {
 
       for (const word of words) {
         const caps = word.length > 2 && word === word.toUpperCase() && /[A-Z]/.test(word);
-        const syls = countSyllables(word);
-        for (let s = 0; s < syls; s++) {
+        const chunks = syllableChunks(word);
+        for (let s = 0; s < chunks.length; s++) {
           const p = sylIdx / sylTotal; // progress through the sentence
           let contour =
             mood === 'rise' ? 0.94 + Math.pow(p, 2.2) * 0.42
@@ -131,8 +138,8 @@ class VoiceSystem {
           const pitch = profile.basePitch * contour * stress * jitter * (caps ? 1.28 : 1);
           const dur = (1 / profile.rate) * profile.drawl * (0.72 + Math.random() * 0.5) * (mood === 'bang' ? 1.08 : 1);
           const gain = profile.gain * (caps ? 1.6 : 1) * (mood === 'bang' ? 1.25 : 1) * (0.85 + Math.random() * 0.3);
-          this.syllable(ctx, sink, out, profile, t, dur, pitch, gain);
-          if (profile.echo) this.syllable(ctx, out, out, profile, t, dur, pitch, gain); // dry + wet
+          this.syllable(ctx, sink, out, profile, t, dur, pitch, gain, chunks[s]);
+          if (profile.echo) this.syllable(ctx, out, out, profile, t, dur, pitch, gain, chunks[s]); // dry + wet
           t += dur * (0.82 + Math.random() * 0.2);
           sylIdx++;
         }
@@ -146,9 +153,65 @@ class VoiceSystem {
     return t - startT;
   }
 
-  /** One vowel: osc (+breath) through two formant filters, soft envelope. */
-  private syllable(ctx: AudioContext, sink: AudioNode, _out: AudioNode, profile: VoiceProfile, t0: number, dur: number, pitch: number, gain: number): void {
-    const [f1, f2] = VOWELS[Math.floor(Math.random() * VOWELS.length)];
+  /** One syllable: the chunk's REAL vowel picks the formants and its real
+   *  leading consonant shapes the onset — words keep their own mouth-feel
+   *  instead of dissolving into random beeps. */
+  private syllable(ctx: AudioContext, sink: AudioNode, _out: AudioNode, profile: VoiceProfile, t0: number, dur: number, pitch: number, gain: number, chunk = ''): void {
+    const lower = chunk.toLowerCase();
+    const vowelChar = (lower.match(/[aeiouy]/) ?? ['a'])[0];
+    const vowelIdx = vowelChar === 'a' ? 0 : vowelChar === 'e' ? 1 : (vowelChar === 'i' || vowelChar === 'y') ? 2 : vowelChar === 'o' ? 3 : 4;
+    const [f1, f2] = VOWELS[vowelIdx];
+
+    // ---- consonant onset from the chunk's actual first letter
+    const onset = lower.match(/^[^aeiouy]+/)?.[0] ?? '';
+    if (onset) {
+      const c = onset[0];
+      if ('szfcx'.includes(c) || onset.startsWith('sh') || onset.startsWith('ch')) {
+        // sibilant: a real hiss leading into the vowel
+        const hiss = ctx.createBufferSource();
+        hiss.buffer = this.noiseBuffer(ctx);
+        hiss.loop = true;
+        const hf = ctx.createBiquadFilter();
+        hf.type = 'bandpass';
+        hf.frequency.value = c === 'f' ? 3000 : 5200;
+        hf.Q.value = 1.2;
+        const hg = ctx.createGain();
+        const hStart = Math.max(0, t0 - 0.05);
+        hg.gain.setValueAtTime(0.0001, hStart);
+        hg.gain.exponentialRampToValueAtTime(gain * 0.55, hStart + 0.02);
+        hg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.03);
+        hiss.connect(hf); hf.connect(hg); hg.connect(sink);
+        hiss.start(hStart); hiss.stop(t0 + 0.05);
+        this.live.push(hiss);
+      } else if ('ptkbdg'.includes(c)) {
+        // plosive: a tight pop right on the beat
+        const pop = ctx.createBufferSource();
+        pop.buffer = this.noiseBuffer(ctx);
+        const pf = ctx.createBiquadFilter();
+        pf.type = 'bandpass';
+        pf.frequency.value = 'pb'.includes(c) ? 700 : 'td'.includes(c) ? 1800 : 2600;
+        pf.Q.value = 1;
+        const pg = ctx.createGain();
+        pg.gain.setValueAtTime(gain * 0.8, t0);
+        pg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.02);
+        pop.connect(pf); pf.connect(pg); pg.connect(sink);
+        pop.start(t0); pop.stop(t0 + 0.03);
+        this.live.push(pop);
+      } else if ('mn'.includes(c)) {
+        // nasal: a soft low hum easing in
+        const hum = ctx.createOscillator();
+        hum.type = 'sine';
+        hum.frequency.value = Math.min(pitch, 250);
+        const hg2 = ctx.createGain();
+        const hStart2 = Math.max(0, t0 - 0.035);
+        hg2.gain.setValueAtTime(0.0001, hStart2);
+        hg2.gain.exponentialRampToValueAtTime(gain * 0.5, t0);
+        hg2.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.04);
+        hum.connect(hg2); hg2.connect(sink);
+        hum.start(hStart2); hum.stop(t0 + 0.06);
+        this.live.push(hum);
+      }
+    }
     const osc = ctx.createOscillator();
     osc.type = profile.wave;
     const p = clamp(pitch, 50, 600);
@@ -171,12 +234,20 @@ class VoiceSystem {
     env.gain.setValueAtTime(gain, t0 + Math.max(0.03, dur - 0.05));
     env.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
 
-    for (const [freq, bw] of [[f1, 90], [f2, 140]] as const) {
+    // three formants: the third is fixed "presence" that keeps the voice
+    // sounding like a throat instead of a filter bank
+    for (const [freq, bw, g2] of [[f1, 90, 1], [f2, 140, 1], [2650, 320, 0.35]] as const) {
       const bp = ctx.createBiquadFilter();
       bp.type = 'bandpass';
       bp.frequency.value = freq * profile.formantShift;
       bp.Q.value = freq / bw;
-      osc.connect(bp); bp.connect(env);
+      if (g2 < 1) {
+        const fg = ctx.createGain();
+        fg.gain.value = g2;
+        osc.connect(bp); bp.connect(fg); fg.connect(env);
+      } else {
+        osc.connect(bp); bp.connect(env);
+      }
     }
     env.connect(sink);
     osc.start(t0); osc.stop(t0 + dur + 0.02);
@@ -203,20 +274,6 @@ class VoiceSystem {
       }
     }
 
-    // occasional consonant onset: a 20ms click of filtered noise
-    if (Math.random() < 0.3) {
-      const click = ctx.createBufferSource();
-      click.buffer = this.noiseBuffer(ctx);
-      const hf = ctx.createBiquadFilter();
-      hf.type = 'highpass';
-      hf.frequency.value = 1800;
-      const cg = ctx.createGain();
-      cg.gain.setValueAtTime(gain * 0.5, t0 - 0.005 > 0 ? t0 - 0.005 : t0);
-      cg.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.025);
-      click.connect(hf); hf.connect(cg); cg.connect(sink);
-      click.start(t0); click.stop(t0 + 0.04);
-      this.live.push(click);
-    }
   }
 
   private noiseCache: AudioBuffer | null = null;
@@ -234,6 +291,14 @@ class VoiceSystem {
 function countSyllables(word: string): number {
   const m = word.toLowerCase().match(/[aeiouy]+/g);
   return Math.max(1, Math.min(m ? m.length : 1, 5));
+}
+
+/** Split a word into pronounceable chunks: leading consonants + vowel group
+ *  (+ trailing consonants on the last chunk). Aligned with countSyllables. */
+function syllableChunks(word: string): string[] {
+  const m = word.match(/[^aeiouyAEIOUY]*[aeiouyAEIOUY]+/g);
+  if (!m || m.length === 0) return [word || 'a'];
+  return m.slice(0, 5);
 }
 
 export const voice = new VoiceSystem();

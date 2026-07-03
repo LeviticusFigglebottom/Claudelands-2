@@ -76,38 +76,73 @@ export class AudioSystem {
 
   // ---------------------------------------------------------------- weapons
 
-  shot(style: ShotStyle, pitch = 1): void {
+  /** Layered gunshot: manufacturer voices the CHARACTER, weapon type shapes
+   *  the BODY (snap vs boom vs crack-and-tail). Every shot = transient snap
+   *  + midrange body + sub thump + mechanical action tick. */
+  shot(style: ShotStyle, pitch = 1, wtype = 'ar'): void {
     if (!this.ctx) return;
     const t = this.now();
+
+    // ---- type body: envelope + sub weight
+    switch (wtype) {
+      case 'pistol':
+        this.noise(t, 0.07, 0.55, 'bandpass', 1700 * pitch, 1, 400);
+        this.tone(t, 0.07, 0.35, 'sine', 150 * pitch, 60);
+        break;
+      case 'smg':
+        this.noise(t, 0.05, 0.45, 'bandpass', 2100 * pitch, 1.2, 700);
+        this.tone(t, 0.05, 0.25, 'sine', 170 * pitch, 80);
+        break;
+      case 'shotgun':
+        this.noise(t, 0.3, 0.95, 'lowpass', 1100 * pitch, 1, 90);       // the BOOM
+        this.noise(t, 0.12, 0.5, 'highpass', 2400, 0.7);               // pellet spray
+        this.tone(t, 0.22, 0.65, 'sine', 95 * pitch, 32);
+        break;
+      case 'sniper':
+        this.noise(t, 0.06, 0.9, 'highpass', 2600, 0.8);               // supersonic crack
+        this.tone(t, 0.14, 0.5, 'sine', 130 * pitch, 40);
+        this.noise(t + 0.05, 0.55, 0.28, 'bandpass', 900 * pitch, 1.4, 130); // rolling canyon tail
+        this.noise(t + 0.24, 0.18, 0.1, 'bandpass', 600, 2, 200);      // distant slap-back
+        break;
+      case 'launcher':
+        this.noise(t, 0.35, 0.7, 'lowpass', 500 * pitch, 1, 80);       // tube WHUMP
+        this.noise(t + 0.04, 0.45, 0.3, 'bandpass', 1200, 1, 2600);    // rocket hiss away
+        this.tone(t, 0.2, 0.5, 'sine', 70 * pitch, 30);
+        break;
+      default: // ar
+        this.noise(t, 0.09, 0.6, 'bandpass', 1500 * pitch, 1, 300);
+        this.tone(t, 0.1, 0.4, 'sine', 140 * pitch, 50);
+    }
+
+    // ---- manufacturer character on top
     switch (style) {
-      case 'heavy': // VULKRAM: cannon thump
-        this.noise(t, 0.22, 0.9, 'lowpass', 900 * pitch, 1, 120);
-        this.tone(t, 0.16, 0.7, 'sine', 120 * pitch, 38);
-        this.noise(t, 0.05, 0.5, 'highpass', 2500, 1);
+      case 'heavy': // VULKRAM: extra cannon chest
+        this.tone(t, 0.16, 0.5, 'sine', 110 * pitch, 36);
+        this.noise(t, 0.05, 0.4, 'highpass', 2500, 1);
         break;
-      case 'clean': // Lumen: precise zap-crack
-        this.tone(t, 0.07, 0.4, 'square', 1900 * pitch, 500);
-        this.noise(t, 0.06, 0.45, 'bandpass', 4200 * pitch, 2, 1500);
+      case 'clean': // Lumen: precise zap edge
+        this.tone(t, 0.06, 0.3, 'square', 1900 * pitch, 500);
         break;
-      case 'junk': // Ratworks: rattly bang
-        this.noise(t, 0.09, 0.7, 'bandpass', 1400 * pitch, 0.7, 300);
-        this.tone(t, 0.05, 0.35, 'sawtooth', 300 * pitch, 90);
-        this.noise(t + 0.03, 0.04, 0.2, 'highpass', 5000, 1); // loose-parts rattle
+      case 'junk': // Ratworks: loose-parts rattle after every bang
+        this.tone(t, 0.04, 0.25, 'sawtooth', 300 * pitch, 90);
+        this.noise(t + 0.035, 0.05, 0.22, 'highpass', 4800, 1);
+        this.tone(t + 0.05, 0.03, 0.08, 'square', 2600 + Math.random() * 800, 1400);
         break;
-      case 'arcane': // Aetheric: harmonic pulse
-        this.tone(t, 0.14, 0.35, 'sine', 880 * pitch, 220);
-        this.tone(t, 0.1, 0.25, 'triangle', 1320 * pitch, 330);
-        this.noise(t, 0.08, 0.3, 'bandpass', 3000 * pitch, 3, 800);
+      case 'arcane': // Aetheric: harmonic bloom
+        this.tone(t, 0.14, 0.28, 'sine', 880 * pitch, 220);
+        this.tone(t, 0.1, 0.2, 'triangle', 1320 * pitch, 330);
         break;
-      case 'antique': // Cordwood: sharp black-powder crack
-        this.noise(t, 0.12, 0.85, 'bandpass', 2000 * pitch, 0.8, 250);
-        this.tone(t, 0.09, 0.5, 'sine', 180 * pitch, 55);
+      case 'antique': // Cordwood: black-powder crack + smoke hiss
+        this.noise(t, 0.1, 0.5, 'bandpass', 2000 * pitch, 0.8, 250);
+        this.noise(t + 0.08, 0.2, 0.1, 'highpass', 3600, 1);
         break;
-      case 'plastic': // Briskco: cheap pop
-        this.tone(t, 0.05, 0.5, 'square', 700 * pitch, 200);
-        this.noise(t, 0.05, 0.4, 'highpass', 3000, 1);
+      case 'plastic': // Briskco: cheap pop, springy overtone
+        this.tone(t, 0.05, 0.4, 'square', 700 * pitch, 200);
+        this.tone(t + 0.02, 0.06, 0.12, 'triangle', 1800 * pitch, 900);
         break;
     }
+    // ---- action tick: the gun itself cycling (tiny, sells the machine)
+    this.tone(t + 0.045, 0.025, 0.09, 'square', 3200 + Math.random() * 600, 1800);
   }
 
   reloadClack(stage: 0 | 1): void {
@@ -117,9 +152,69 @@ export class AudioSystem {
     else { this.noise(t, 0.06, 0.4, 'bandpass', 1500, 4, 700); this.tone(t, 0.05, 0.2, 'square', 800, 1200); }
   }
 
+  /** Staged reload foley: each mechanical beat of a characteristic reload. */
+  reloadStage(kind: 'magout' | 'magin' | 'rack' | 'shell' | 'pump' | 'boltopen' | 'boltclose' | 'spin'): void {
+    if (!this.ctx) return;
+    const t = this.now();
+    switch (kind) {
+      case 'magout': // release catch + mag sliding free
+        this.tone(t, 0.03, 0.2, 'square', 1900, 900);
+        this.noise(t + 0.02, 0.09, 0.28, 'bandpass', 700, 2, 260);
+        break;
+      case 'magin': // mag seat + palm slap
+        this.noise(t, 0.05, 0.3, 'bandpass', 500, 2, 900);
+        this.tone(t + 0.04, 0.05, 0.3, 'square', 420, 180);
+        this.noise(t + 0.04, 0.06, 0.35, 'lowpass', 800, 1, 200);
+        break;
+      case 'rack': // charging handle back-forward
+        this.noise(t, 0.05, 0.3, 'bandpass', 1600, 3, 800);
+        this.tone(t + 0.07, 0.04, 0.32, 'square', 900, 1500);
+        this.noise(t + 0.07, 0.04, 0.3, 'bandpass', 2200, 3, 1100);
+        break;
+      case 'shell': // one shell pressed into a tube
+        this.tone(t, 0.03, 0.18, 'square', 1400 + Math.random() * 300, 700);
+        this.noise(t + 0.02, 0.05, 0.26, 'bandpass', 900, 3, 420);
+        break;
+      case 'pump': // fore-end pump: shk-SHK
+        this.noise(t, 0.06, 0.35, 'bandpass', 1100, 2, 500);
+        this.noise(t + 0.09, 0.06, 0.42, 'bandpass', 1500, 2, 650);
+        this.tone(t + 0.09, 0.04, 0.2, 'square', 700, 1100);
+        break;
+      case 'boltopen': // bolt lifted + drawn back
+        this.tone(t, 0.04, 0.24, 'square', 1100, 1700);
+        this.noise(t + 0.05, 0.08, 0.26, 'bandpass', 800, 2, 350);
+        break;
+      case 'boltclose': // bolt driven home + locked
+        this.noise(t, 0.06, 0.3, 'bandpass', 900, 2, 1500);
+        this.tone(t + 0.06, 0.04, 0.3, 'square', 1300, 800);
+        break;
+      case 'spin': // cylinder / drum spin-up
+        for (let i = 0; i < 7; i++) this.tone(t + i * 0.035, 0.02, 0.1 - i * 0.008, 'square', 2400 - i * 120, 1800);
+        break;
+    }
+  }
+
   dryFire(): void {
     if (!this.ctx) return;
     this.tone(this.now(), 0.05, 0.25, 'square', 320, 240);
+  }
+
+  /** Incoming fire: a muffled report scaled by distance (they shoot BACK). */
+  private enemyShotT = 0;
+  enemyShot(distance: number, arc = false): void {
+    if (!this.ctx || distance > 70) return;
+    const t = this.now();
+    if (t - this.enemyShotT < 0.06) return; // don't stack a firing line into mud
+    this.enemyShotT = t;
+    const vol = clamp(1 - distance / 70, 0.08, 1) * 0.5;
+    if (arc) {
+      // lobber: a hollow TOONK
+      this.tone(t, 0.09, vol * 0.8, 'sine', 220, 90);
+      this.noise(t, 0.08, vol * 0.5, 'lowpass', 600, 1, 150);
+    } else {
+      this.noise(t, 0.06, vol, 'bandpass', 1300 - distance * 8, 1, 300);
+      this.tone(t, 0.06, vol * 0.6, 'sine', 140, 60);
+    }
   }
 
   gunThrow(): void { // Briskco reload-toss whoosh
@@ -140,15 +235,24 @@ export class AudioSystem {
   hit(crit: boolean): void {
     if (!this.ctx) return;
     const t = this.now();
-    if (crit) { this.tone(t, 0.07, 0.3, 'square', 1500, 2200); this.tone(t, 0.09, 0.2, 'square', 2000, 3000); }
-    else this.tone(t, 0.04, 0.18, 'square', 900, 1100);
+    // impact body: a meaty thock underneath the confirm tick
+    this.noise(t, 0.045, crit ? 0.3 : 0.18, 'lowpass', 900, 1, 250);
+    if (crit) {
+      this.tone(t, 0.06, 0.28, 'square', 1500, 2300);
+      this.tone(t + 0.015, 0.1, 0.22, 'triangle', 2100, 3200); // the bright PING
+      this.noise(t, 0.05, 0.15, 'highpass', 5000, 1);
+    } else {
+      this.tone(t, 0.035, 0.16, 'square', 950, 1150);
+    }
   }
 
   kill(): void {
     if (!this.ctx) return;
     const t = this.now();
-    this.tone(t, 0.12, 0.3, 'square', 500, 900);
+    this.noise(t, 0.12, 0.3, 'lowpass', 600, 1, 120);            // body drop
+    this.tone(t, 0.1, 0.28, 'square', 500, 900);
     this.tone(t + 0.06, 0.14, 0.3, 'square', 750, 1300);
+    this.tone(t + 0.06, 0.18, 0.1, 'sine', 1500, 2600);          // little soul-leaves-body chime
   }
 
   elemental(kind: string): void {
@@ -160,6 +264,37 @@ export class AudioSystem {
       case 'volt': for (let i = 0; i < 4; i++) this.tone(t + i * 0.03, 0.03, 0.2, 'square', 2400 + Math.random() * 2000, 900); break;
       case 'rime': this.tone(t, 0.25, 0.2, 'sine', 1900, 2600, 0.05); this.tone(t, 0.25, 0.12, 'sine', 2533, 3400, 0.05); break;
       case 'blast': this.explosion(false); break;
+    }
+  }
+
+  /** A status PROC — loud, distinct per element, unmistakable. The subtle
+   *  elemental() sizzle stays for ambient DoT ticks; this is the ignition. */
+  statusApply(kind: string): void {
+    if (!this.ctx) return;
+    const t = this.now();
+    switch (kind) {
+      case 'ember': // FWOOSH-crackle
+        this.noise(t, 0.4, 0.45, 'bandpass', 600, 1, 2400);
+        this.noise(t + 0.12, 0.35, 0.25, 'bandpass', 2200, 1.4, 1100);
+        for (let i = 0; i < 5; i++) this.tone(t + 0.1 + i * 0.06, 0.02, 0.12, 'square', 2800 + Math.random() * 1600, 1500);
+        break;
+      case 'bile': // acid HISSSS + fat bubbles
+        this.noise(t, 0.55, 0.4, 'bandpass', 1400, 1.2, 350);
+        for (let i = 0; i < 4; i++) this.tone(t + 0.08 + i * 0.11, 0.08, 0.16, 'sine', 380 - i * 40, 120);
+        break;
+      case 'volt': // arc-weld ZAP-buzz
+        this.noise(t, 0.08, 0.4, 'highpass', 3500, 1);
+        for (let i = 0; i < 7; i++) this.tone(t + i * 0.035, 0.03, 0.22 - i * 0.02, 'square', 2200 + Math.random() * 2600, 800);
+        this.tone(t, 0.3, 0.12, 'sawtooth', 110, 95);
+        break;
+      case 'rime': // crystal ring + freeze crackle
+        this.tone(t, 0.4, 0.28, 'sine', 2200, 3400, 0.01);
+        this.tone(t + 0.03, 0.45, 0.18, 'sine', 2933, 4200, 0.01);
+        this.noise(t + 0.05, 0.3, 0.16, 'highpass', 5500, 1);
+        break;
+      case 'blast':
+        this.explosion(false);
+        break;
     }
   }
 

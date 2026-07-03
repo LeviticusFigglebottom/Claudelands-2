@@ -11,6 +11,7 @@ import { rarityById } from '../data/rarity';
 import type { ItemInstance } from './types';
 import { fx } from './particles';
 import { audio } from '../audio/synth';
+import { playerVoice } from './playervoice';
 import { state, bus } from './state';
 import { statsys } from './stats';
 import { toonMat, glowMat } from '../render/toon';
@@ -115,6 +116,7 @@ export class LootSystem {
     };
     this.pickups.push(p);
     audio.lootSting(rarity.tier);
+    if (rarity.tier >= 4) playerVoice.onLegendary();
   }
 
   spawnCash(pos: THREE.Vector3, amount: number): void {

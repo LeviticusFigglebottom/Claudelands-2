@@ -21,6 +21,7 @@ import { ELEMENTS } from '../data/elements';
 import { clamp, damp, lerp } from '../util/maff';
 import { LEGENDARIES } from '../data/legendaries';
 import { actionSkill } from './actionskill';
+import { playerVoice } from './playervoice';
 import { difficulty } from './settings';
 import type { StaticHit, ExplosiveBarrel } from './world';
 
@@ -69,6 +70,7 @@ export class Player implements Damageable {
   private gunMesh: THREE.Group | null = null;
   private magazine = 0;
   private reloadT = -1;
+  private reloadCues = new Set<string>();
   private magDropped = false;
   private swapT = -1;
   private fireTimer = 0;
@@ -204,6 +206,7 @@ export class Player implements Damageable {
     if (hadShield && this.shield <= 0 && sh?.special?.id === 'nova') {
       splashDamage(this.position.clone(), 5, sh.special.power, 'blast', { source: 'player' });
     }
+    if (this.flesh > 0 && this.flesh < this.maxFlesh * 0.35) playerVoice.onBigHurt();
     if (this.flesh <= 0 && !this.downed) this.enterDowned();
   }
 
@@ -382,7 +385,16 @@ export class Player implements Damageable {
     }
   }
 
-  /** Manufacturer-flavored reload keyframes. Phase f in [0,1]. */
+  /** One-shot foley cue keyed to a phase threshold. */
+  private cue(id: string, f: number, at: number): boolean {
+    if (f >= at && !this.reloadCues.has(id)) { this.reloadCues.add(id); return true; }
+    return false;
+  }
+
+  /** Characteristic reloads: the WEAPON TYPE choreographs the hands — mags
+   *  drop and seat, shells feed one by one, bolts cycle — and the maker adds
+   *  its own spice on top. Launchers keep the simple tip-back (for now).
+   *  Phase f in [0,1]; staged foley fires off phase thresholds. */
   private animateReload(dt: number, w: WeaponInstance): void {
     const maker = makerById(w.maker);
     const total = w.stats.reloadTime * statsys.reduction('reloadSpeed');
@@ -390,52 +402,94 @@ export class Player implements Damageable {
     const f = clamp(this.reloadT / total, 0, 1);
     const vm = this.viewmodel;
 
-    // physical mag drop partway through, for mag-fed styles
-    if (!this.magDropped && f > 0.3 && (maker.reloadStyle === 'smooth_snap' || maker.reloadStyle === 'slap_rattle' || maker.reloadStyle === 'heavy_clunk')) {
-      this.magDropped = true;
-      this.camera.updateMatrixWorld(true);
-      debris.droppedMag(vm.localToWorld(new THREE.Vector3(0, -0.15, -0.25)));
-    }
-
-    switch (maker.reloadStyle) {
-      case 'heavy_clunk': { // VULKRAM: slow tilt, hard seat at the end
-        vm.rotation.x += Math.sin(f * Math.PI) * -0.7;
-        vm.position.y -= Math.sin(f * Math.PI) * 0.18;
-        if (f > 0.85) vm.position.y += Math.sin((f - 0.85) / 0.15 * Math.PI) * 0.03; // the CHUNK
-        break;
+    if (maker.reloadStyle === 'hum_glow') {
+      // ÆTHERIC keeps its identity: the phial recharges, no moving parts
+      vm.rotation.z += Math.sin(f * Math.PI) * 0.6;
+      vm.position.y -= Math.sin(f * Math.PI) * 0.08;
+      if (this.cue('hum', f, 0.15)) audio.reloadStage('magout');
+      if (this.cue('hum2', f, 0.8)) audio.reloadStage('magin');
+      if (Math.random() < 8 * dt) {
+        this.camera.updateMatrixWorld(true);
+        fx.emit(vm.localToWorld(new THREE.Vector3(0, 0, -0.3)), new THREE.Vector3(0, 0.4, 0), ELEMENTS[w.element].color, 0.05, 0.4, 0);
       }
-      case 'smooth_snap': { // LUMEN: quick clean dip
-        vm.rotation.x += Math.sin(f * Math.PI) * -0.45;
-        vm.position.y -= Math.sin(f * Math.PI) * 0.1;
-        break;
+    } else if (w.type === 'shotgun') {
+      // ---- shell-by-shell: cradle the gun, thumb rounds in, PUMP
+      const shells = clamp(Math.round(w.stats.magSize * 0.7), 2, 6);
+      const cradle = Math.min(1, f / 0.12);
+      vm.rotation.z += 0.4 * Math.sin(Math.min(cradle, (1 - f) / 0.1) * Math.PI * 0.5);
+      vm.rotation.x += -0.18 * cradle;
+      if (f >= 0.12 && f < 0.84) {
+        const seg = (f - 0.12) / (0.72 / shells);
+        const k = Math.floor(seg);
+        const local = seg - k;
+        vm.position.y -= 0.055 * Math.sin(local * Math.PI);
+        vm.rotation.x += -0.06 * Math.sin(local * Math.PI);
+        if (this.cue(`shell${k}`, f, 0.12 + k * (0.72 / shells))) audio.reloadStage('shell');
       }
-      case 'slap_rattle': { // RATWORKS: two angry dips
-        vm.rotation.x += Math.sin(f * Math.PI * 2) * -0.5;
-        vm.position.y -= Math.abs(Math.sin(f * Math.PI * 2)) * 0.12;
-        vm.rotation.z += Math.sin(f * Math.PI * 4) * 0.06;
-        break;
+      if (f >= 0.84) {
+        const p = (f - 0.84) / 0.16;
+        vm.position.z += 0.09 * Math.sin(p * Math.PI);         // fore-end pull
+        vm.rotation.x += -0.08 * Math.sin(p * Math.PI);
+        if (this.cue('pump', f, 0.86)) audio.reloadStage('pump');
       }
-      case 'hum_glow': { // ÆTHERIC: slow roll while the phial recharges
-        vm.rotation.z += Math.sin(f * Math.PI) * 0.6;
-        vm.position.y -= Math.sin(f * Math.PI) * 0.08;
-        if (Math.random() < 8 * dt) {
+    } else if (w.type === 'sniper') {
+      // ---- bolt cycle: lift + draw, feed, drive home, settle
+      if (f < 0.22) {
+        const p = f / 0.22;
+        vm.rotation.z += 0.32 * Math.sin(p * Math.PI);          // bolt lift
+        vm.position.z += 0.07 * Math.sin(p * Math.PI);          // draw back
+        if (this.cue('bo', f, 0.05)) audio.reloadStage('boltopen');
+      } else if (f < 0.66) {
+        const p = (f - 0.22) / 0.44;
+        vm.rotation.x += -0.5 * Math.sin(p * Math.PI);
+        vm.position.y -= 0.2 * Math.sin(p * Math.PI);
+        if (this.cue('mo', f, 0.28)) audio.reloadStage('magout');
+        if (this.cue('drop', f, 0.34)) {
           this.camera.updateMatrixWorld(true);
-          fx.emit(vm.localToWorld(new THREE.Vector3(0, 0, -0.3)), new THREE.Vector3(0, 0.4, 0), ELEMENTS[w.element].color, 0.05, 0.4, 0);
+          debris.droppedMag(vm.localToWorld(new THREE.Vector3(0, -0.15, -0.25)));
         }
-        break;
+        if (this.cue('mi', f, 0.58)) audio.reloadStage('magin');
+      } else {
+        const p = (f - 0.66) / 0.34;
+        vm.position.z += 0.07 * Math.sin(p * Math.PI) * (p < 0.5 ? -1 : 0.4); // drive forward
+        vm.rotation.z += 0.2 * Math.sin(p * Math.PI);
+        if (this.cue('bc', f, 0.7)) audio.reloadStage('boltclose');
       }
-      case 'lever_flick': { // CORDWOOD: forward flip-cock
-        vm.rotation.x += Math.sin(f * Math.PI) * (f < 0.5 ? 1.6 : 0.4) * -1;
-        vm.position.z += Math.sin(f * Math.PI) * 0.08;
-        break;
-      }
-      default: { // toss_new handled by throwGunReload; generic dip fallback
-        vm.rotation.x += Math.sin(f * Math.PI) * -0.9;
-        vm.position.y -= Math.sin(f * Math.PI) * 0.15;
+    } else if (w.type === 'launcher') {
+      // ---- retained: the simple heavy tip-back (a launcher IS a pipe)
+      vm.rotation.x += Math.sin(f * Math.PI) * -0.7;
+      vm.position.y -= Math.sin(f * Math.PI) * 0.18;
+      if (f > 0.85) vm.position.y += Math.sin((f - 0.85) / 0.15 * Math.PI) * 0.03;
+      if (this.cue('seat', f, 0.55)) audio.reloadClack(1);
+    } else {
+      // ---- mag cycle (pistol / smg / ar): EJECT, SEAT, RACK
+      const amp = w.type === 'pistol' ? 0.72 : w.type === 'smg' ? 0.85 : 1;
+      if (f < 0.32) {
+        const p = f / 0.32;
+        vm.rotation.z += -0.3 * amp * Math.sin(p * Math.PI);    // roll to eject side
+        vm.rotation.x += -0.22 * amp * Math.sin(p * Math.PI);
+        if (this.cue('mo', f, 0.08)) audio.reloadStage('magout');
+        if (this.cue('drop', f, 0.24)) {
+          this.camera.updateMatrixWorld(true);
+          debris.droppedMag(vm.localToWorld(new THREE.Vector3(0, -0.15, -0.25)));
+        }
+      } else if (f < 0.68) {
+        const p = (f - 0.32) / 0.36;
+        vm.position.y -= 0.17 * amp * Math.sin(p * Math.PI);    // fresh mag comes up
+        vm.rotation.x += -0.3 * amp * Math.sin(p * Math.PI);
+        if (this.cue('mi', f, 0.6)) audio.reloadStage('magin');
+      } else {
+        const p = (f - 0.68) / 0.32;
+        vm.position.z += 0.08 * amp * Math.sin(p * Math.PI) * (p < 0.5 ? 1 : -0.4); // rack back-forward
+        vm.rotation.z += 0.08 * amp * Math.sin(p * Math.PI);
+        if (this.cue('rack', f, 0.76)) audio.reloadStage('rack');
       }
     }
 
-    if (this.reloadT > total * 0.55 && this.reloadT - dt <= total * 0.55) audio.reloadClack(1);
+    // maker spice on top of the type choreography
+    if (maker.reloadStyle === 'slap_rattle') vm.rotation.z += Math.sin(f * Math.PI * 6) * 0.03; // Ratworks never stops rattling
+    if (maker.reloadStyle === 'heavy_clunk' && f > 0.9) vm.position.y += Math.sin((f - 0.9) / 0.1 * Math.PI) * 0.02; // Vulkram seats HARD
+
     if (f >= 1) this.finishReload();
   }
 
@@ -525,7 +579,7 @@ export class Player implements Damageable {
     juice.kickRecoil(0.02 * punch * recoilScale * (w.stats.recoil ?? 1), 0.05 * punch * recoilScale);
     juice.kickFov(JUICE.fovKickFire * punch);
     juice.addTrauma(0.05 * punch);
-    audio.shot(maker.shotSound, 0.95 + Math.random() * 0.1);
+    audio.shot(maker.shotSound, 0.95 + Math.random() * 0.1, w.type);
     fx.muzzleFlash(muzzle, camDir, w.element !== 'kinetic' ? ELEMENTS[w.element].color : 0xffd23c, punch);
     if (maker.gimmick !== 'always_elemental') {
       const rightDir = new THREE.Vector3(-camDir.z, 0.2, camDir.x).normalize();
@@ -663,7 +717,9 @@ export class Player implements Damageable {
     }
     this.reloadT = 0;
     this.magDropped = false;
+    this.reloadCues.clear();
     audio.reloadClack(0);
+    playerVoice.onReloadGrumble();
   }
 
   private finishReload(): void {
@@ -697,6 +753,7 @@ export class Player implements Damageable {
       mesh: thrownMesh,
     });
     this.reloadT = 0;
+    this.reloadCues.clear();
     this.magDropped = true; // no mag to drop — the whole gun left
     audio.reloadClack(0);
   }

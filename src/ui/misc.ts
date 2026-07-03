@@ -5,6 +5,7 @@ import type { ItemInstance } from '../game/types';
 import { rarityById } from '../data/rarity';
 import { WIRE_LOGS } from '../data/flavor';
 import { audio } from '../audio/synth';
+import { voice, VOICES } from '../audio/voice';
 
 export function feedPickup(item: ItemInstance): void {
   const rarity = rarityById(item.rarity);
@@ -49,8 +50,10 @@ export function playWireLog(logId: string): boolean {
     const el = document.createElement('div');
     el.innerHTML = `<span class="subtitle-line"><span class="speaker">${log.speaker}:</span> ${line}</span>`;
     subRoot().appendChild(el);
-    const dur = 1400 + line.length * 45;
-    audio.radioVoice(Math.min(dur / 1000, 3.2));
+    // a real (dead) voice reads the wire; radio garble only when voices are off
+    const spoken = voice.speak(line, VOICES.wirelog);
+    const dur = spoken > 0 ? spoken * 1000 + 500 : 1400 + line.length * 45;
+    if (spoken === 0) audio.radioVoice(Math.min(dur / 1000, 3.2));
     setTimeout(() => { el.remove(); showNext(); }, dur);
   };
   showNext();

@@ -39,7 +39,7 @@ export interface HitOpts {
   source?: 'player' | 'turret' | 'enemy' | 'world';
 }
 
-export type NumberSpawner = (worldPos: THREE.Vector3, amount: number, element: ElementId, crit: boolean, kind?: 'damage' | 'heal' | 'immune') => void;
+export type NumberSpawner = (worldPos: THREE.Vector3, amount: number, element: ElementId, crit: boolean, kind?: 'damage' | 'heal' | 'immune' | 'status') => void;
 
 let spawnNumber: NumberSpawner = () => {};
 export function setNumberSpawner(fn: NumberSpawner): void { spawnNumber = fn; }
@@ -135,9 +135,14 @@ export function applyDamage(target: Damageable, baseAmount: number, element: Ele
   return total;
 }
 
+const STATUS_LABEL: Record<string, string> = {
+  ember: 'IGNITED!', bile: 'MELTING!', volt: 'SHOCKED!', rime: 'CHILLED!', blast: 'ROCKED!',
+};
+
 export function procStatus(target: Damageable, element: ElementId, dps: number): void {
   const e = ELEMENTS[element];
   if (e.dotDuration <= 0 && !e.slows) return;
+  const already = target.statuses.some((s) => s.element === element) || (e.slows && target.slowUntil > gameTime);
   if (e.slows) target.slowUntil = gameTime + e.dotDuration;
   if (e.dotFraction > 0) {
     const existing = target.statuses.find((s) => s.element === element);
@@ -148,21 +153,43 @@ export function procStatus(target: Damageable, element: ElementId, dps: number):
       target.statuses.push({ element, dps, remaining: e.dotDuration });
     }
   }
-  audio.elemental(element);
+  // the PROC is an event — make it read like one (fresh applications only;
+  // refreshes stay quiet so sustained fire doesn't scream)
+  if (!already) {
+    audio.statusApply(element);
+    const chest = target.position.clone();
+    chest.y += 1.2;
+    fx.burst(chest, e.color, 16, 3.5, 0.11, 0.55, 2);
+    spawnNumber(target.position.clone().add(new THREE.Vector3(0, 2.1, 0)), 0, element, false, 'status');
+  } else {
+    audio.elemental(element);
+  }
 }
 
 /** Tick DoTs + status VFX for one target. Call per frame per enemy. */
 export function tickStatuses(target: Damageable, dt: number): void {
   if (!target.alive) return;
+  const lifted = new THREE.Vector3();
   for (let i = target.statuses.length - 1; i >= 0; i--) {
     const s = target.statuses[i];
     s.remaining -= dt;
     applyDamage(target, s.dps * dt, s.element, { noNumbers: Math.random() > 0.06, noChain: true, source: 'world' });
-    if (Math.random() < 12 * dt) fx.statusFlames(target.position, s.element);
+    // burning bodies BURN: flames ride the torso, not the boots
+    if (Math.random() < 26 * dt) {
+      lifted.copy(target.position);
+      lifted.y += 0.5 + Math.random() * 1.1;
+      fx.statusFlames(lifted, s.element);
+    }
     if (s.remaining <= 0) target.statuses.splice(i, 1);
   }
-  if (target.slowUntil > gameTime && Math.random() < 8 * dt) fx.statusFlames(target.position, 'rime');
+  if (target.slowUntil > gameTime && Math.random() < 14 * dt) {
+    lifted.copy(target.position);
+    lifted.y += 0.4 + Math.random() * 0.9;
+    fx.statusFlames(lifted, 'rime');
+  }
 }
+
+export function statusLabelFor(element: string): string { return STATUS_LABEL[element] ?? 'AFFLICTED!'; }
 
 export function slowFactor(target: Damageable): number {
   return target.slowUntil > gameTime ? 1 - RIME_SLOW : 1;
