@@ -1,8 +1,10 @@
 // Offline VO line collector — bundled with rolldown and run in Node by
 // tools/bake-vo.mjs. Walks every data source that feeds voice.speak() and
-// emits { voice, key, speak } entries: `key` is the runtime display text
-// whose voKey() must match, `speak` is what the TTS actually reads (they
-// differ only for numbered announcer templates, which bake number-free).
+// emits { voice, hash, speak } entries: `hash` keys the runtime display text
+// (via the shared voKey), `speak` is what the TTS performs — the same words
+// DECORATED with eleven_v3 direction tags ([shouting], [gravelly], ...) so
+// every read is an acted take, not narration. Tags are direction only; the
+// model doesn't speak them, and they never appear in subtitles.
 
 import { QUESTS, SIDE_QUESTS } from '../src/data/quests';
 import { WIRE_LOGS } from '../src/data/flavor';
@@ -14,16 +16,44 @@ import {
 } from '../src/data/announcerlines';
 import { voKey } from '../src/audio/votext';
 
+// ---- the standing character direction, prefixed to every one of their lines
+const VOICE_TAG: Record<string, string> = {
+  quibb: 'gruff, gravelly old foreman',
+  zaza: 'theatrical, dramatic fortune-teller',
+  mayor: 'smug, oily politician',
+  brann: 'fast-talking, businesslike',
+  mirelle: 'soft, wistful, haunted',
+  okto: 'slow, solemn, reverent',
+  juno: 'excited, rapid-fire, nerdy',
+  rita: 'cocky, teasing drawl',
+  peg: 'dry, gravelly, deadpan',
+  announcer: 'shouting, unhinged carnival barker',
+  harlan: 'dry, sardonic, unimpressed',
+  sable: 'cool, focused intensity',
+  kez: 'scrappy, energetic, grinning',
+  tovah: 'deep, growling, menacing',
+  wirelog: 'weary, haunted, distant',
+};
+
+/** A line that's clearly yelled gets extra heat on top of the base read. */
+function heatOf(text: string): string | null {
+  const bangs = (text.match(/!/g) ?? []).length;
+  const caps = /\b[A-Z]{4,}\b/.test(text);
+  return bangs >= 2 || (bangs >= 1 && caps) ? 'shouting' : null;
+}
+
 interface Entry { voice: string; hash: string; speak: string }
 const entries: Entry[] = [];
 const seen = new Set<string>();
 
-function add(voice: string, key: string, speak = key): void {
+function add(voice: string, key: string, speakText = key, extraTag?: string | null): void {
   const hash = voKey(key);
   const k = `${voice}:${hash}`;
   if (seen.has(k)) return;
   seen.add(k);
-  entries.push({ voice, hash, speak });
+  const terms = [VOICE_TAG[voice], extraTag ?? heatOf(speakText)].filter(Boolean).join(', ').split(', ');
+  const tags = [...new Set(terms)].join(', ');
+  entries.push({ voice, hash, speak: `[${tags}] ${speakText}` });
 }
 
 // ---- quests: every giver line, spoken over holocall and at the desk
@@ -36,17 +66,26 @@ for (const q of [...QUESTS, ...SIDE_QUESTS]) {
 // ---- wire spools: one narrator reads all the dead
 for (const log of WIRE_LOGS) for (const line of log.lines) add('wirelog', line);
 
-// ---- Rita's race commentary
-for (const pool of Object.values(RITA_RACE_LINES)) for (const line of pool) add('rita', line);
+// ---- Rita's race commentary, keyed by outcome
+const RITA_MOOD: Record<string, string> = {
+  start: 'teasing', playerWins: 'grudging respect, amused', ritaWins: 'gloating', dnf: 'deadpan',
+};
+for (const [pool, lines] of Object.entries(RITA_RACE_LINES)) {
+  for (const line of lines) add('rita', line, line, RITA_MOOD[pool] ?? null);
+}
 
-// ---- the playable characters' combat chatter
+// ---- the playable characters: acting notes per trigger
+const TRIGGER_TAG: Record<string, string> = {
+  kill: 'smug', multikill: 'gleeful shout', crit: 'satisfied',
+  skill: 'battle cry', reload: 'muttering, annoyed', hurt: 'strained, in pain',
+  downed: 'desperate, gasping', secondwind: 'triumphant shout',
+  levelup: 'pleased', legendary: 'awed, delighted',
+};
 for (const set of Object.values(PLAYER_LINES)) {
-  const walk = (v: unknown): void => {
-    if (typeof v === 'string') { if (v.length > 3 && v !== set.voiceId) add(set.voiceId, v); return; }
-    if (Array.isArray(v)) { v.forEach(walk); return; }
-    if (v && typeof v === 'object') Object.values(v).forEach(walk);
-  };
-  walk(set);
+  for (const [trigger, tag] of Object.entries(TRIGGER_TAG)) {
+    const lines = (set as unknown as Record<string, string[]>)[trigger] ?? [];
+    for (const line of lines) add(set.voiceId, line, line, tag);
+  }
 }
 
 // ---- BIG NAZDA: numbered templates bake number-free (voKey strips digits,
@@ -60,13 +99,16 @@ const deNumber = (s: string): string =>
 // KEY from runtime-shaped text (a digit where the number goes — voKey strips
 // digits, so any wave number matches); SPEAK the tidied number-free line
 const runtimeShape = (s: string): string => s.replace(/\{(n|next|k)\}/g, '7');
-for (const t of [...ANNOUNCER_WAVE_START, ...ANNOUNCER_WAVE_CLEAR, ...ANNOUNCER_PLAYER_DOWN, ...ANNOUNCER_SECOND_WIND, ...ANNOUNCER_STREAK]) {
+for (const t of [...ANNOUNCER_WAVE_START, ...ANNOUNCER_WAVE_CLEAR, ...ANNOUNCER_SECOND_WIND, ...ANNOUNCER_STREAK]) {
   add('announcer', runtimeShape(t), deNumber(t));
+}
+for (const t of ANNOUNCER_PLAYER_DOWN) {
+  add('announcer', runtimeShape(t), deNumber(t), 'shouting, mock concern');
 }
 for (const t of ANNOUNCER_BOSS_WAVE) {
   for (const boss of BOSS_NAMES) {
     const withBoss = t.replace('{boss}', boss);
-    add('announcer', runtimeShape(withBoss), deNumber(withBoss));
+    add('announcer', runtimeShape(withBoss), deNumber(withBoss), 'shouting, building to a frenzy');
   }
 }
 add('announcer', ANNOUNCER_WELCOME);

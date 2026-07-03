@@ -23,27 +23,28 @@ if (!KEY) { console.error('XI_KEY env var required'); process.exit(1); }
 const LINES_PATH = process.argv[2];
 if (!LINES_PATH) { console.error('usage: node tools/bake-vo.mjs volines.json'); process.exit(1); }
 
-const MODEL = 'eleven_multilingual_v2';
+const MODEL = 'eleven_v3';
 const FORMAT = 'mp3_44100_64'; // 64kbps CBR mono — 8000 bytes/second
 
-// ---- the cast: ElevenLabs premade voices + per-character delivery settings.
-// stability low = more emotional swing; style high = more performance.
+// ---- the cast: ElevenLabs premade voices on eleven_v3. Stability is
+// discrete on v3 (0.0 creative / 0.5 natural / 1.0 robust); the acting
+// itself comes from the [direction tags] the collector bakes into each line.
 const CAST = {
-  quibb:     { id: 'pqHfZKP75CvOlQylNhV4', name: 'Bill',    stability: 0.40, style: 0.35 }, // weathered old foreman
-  zaza:      { id: 'pFZP5JQG7iQjIQuC4Bku', name: 'Lily',    stability: 0.32, style: 0.60 }, // theatrical mystic
-  mayor:     { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George',  stability: 0.42, style: 0.45 }, // oily charming politician
-  brann:     { id: 'TX3LPaxmHKxFdv7VOQHJ', name: 'Liam',    stability: 0.38, style: 0.50 }, // rapid-fire merchant
-  mirelle:   { id: 'hpp4J3VqNfWAUOO0d1Us', name: 'Bella',   stability: 0.50, style: 0.30 }, // soft, wistful
-  okto:      { id: 'nPczCjzI2devNBz1zQrb', name: 'Brian',   stability: 0.60, style: 0.25 }, // slow chanting brother
-  juno:      { id: 'cgSgspJ2msm6clMCkdW9', name: 'Jessica', stability: 0.30, style: 0.60 }, // excitable field scientist
-  rita:      { id: 'FGY2WhTYpPnrIDTdsKH5', name: 'Laura',   stability: 0.32, style: 0.60 }, // cocky pit racer
-  peg:       { id: 'XrExE9yKIg1WjnnlVkGX', name: 'Matilda', stability: 0.45, style: 0.35 }, // dry salt-cured quartermistress
-  announcer: { id: 'N2lVS1w4EtoT3dr4eOWO', name: 'Callum',  stability: 0.22, style: 0.85 }, // unhinged carnival barker
-  harlan:    { id: 'iP95p4xoKVk53GoZ742B', name: 'Chris',   stability: 0.42, style: 0.35 }, // dry workshop baritone
-  sable:     { id: 'Xb7hH8MSUJpSbSDYk0k2', name: 'Alice',   stability: 0.50, style: 0.30 }, // cool, charged stormcaller
-  kez:       { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah',   stability: 0.32, style: 0.55 }, // quick bright hound-handler
-  tovah:     { id: 'SAz9YHcvj6GT2YYXdXww', name: 'River',   stability: 0.45, style: 0.40 }, // low gravel avalanche
-  wirelog:   { id: 'CwhRBWXzGAHq8TQ4Fs17', name: 'Roger',   stability: 0.50, style: 0.30 }, // the wire remembers the dead
+  quibb:     { id: 'pqHfZKP75CvOlQylNhV4', name: 'Bill',    stability: 0.0 }, // weathered old foreman
+  zaza:      { id: 'pFZP5JQG7iQjIQuC4Bku', name: 'Lily',    stability: 0.0 }, // theatrical mystic
+  mayor:     { id: 'JBFqnCBsd6RMkjVDRZzb', name: 'George',  stability: 0.0 }, // oily charming politician
+  brann:     { id: 'TX3LPaxmHKxFdv7VOQHJ', name: 'Liam',    stability: 0.5 }, // rapid-fire merchant
+  mirelle:   { id: 'hpp4J3VqNfWAUOO0d1Us', name: 'Bella',   stability: 0.5 }, // soft, wistful
+  okto:      { id: 'nPczCjzI2devNBz1zQrb', name: 'Brian',   stability: 0.5 }, // slow chanting brother
+  juno:      { id: 'cgSgspJ2msm6clMCkdW9', name: 'Jessica', stability: 0.0 }, // excitable field scientist
+  rita:      { id: 'FGY2WhTYpPnrIDTdsKH5', name: 'Laura',   stability: 0.0 }, // cocky pit racer
+  peg:       { id: 'XrExE9yKIg1WjnnlVkGX', name: 'Matilda', stability: 0.5 }, // dry salt-cured quartermistress
+  announcer: { id: 'N2lVS1w4EtoT3dr4eOWO', name: 'Callum',  stability: 0.0 }, // unhinged carnival barker
+  harlan:    { id: 'iP95p4xoKVk53GoZ742B', name: 'Chris',   stability: 0.5 }, // dry workshop baritone
+  sable:     { id: 'Xb7hH8MSUJpSbSDYk0k2', name: 'Alice',   stability: 0.5 }, // cool, charged stormcaller
+  kez:       { id: 'EXAVITQu4vr4xnSDxMaL', name: 'Sarah',   stability: 0.0 }, // quick bright hound-handler
+  tovah:     { id: 'SAz9YHcvj6GT2YYXdXww', name: 'River',   stability: 0.0 }, // low gravel avalanche
+  wirelog:   { id: 'CwhRBWXzGAHq8TQ4Fs17', name: 'Roger',   stability: 0.5 }, // the wire remembers the dead
 };
 
 const { entries } = JSON.parse(readFileSync(LINES_PATH, 'utf8'));
@@ -68,7 +69,7 @@ async function bakeOne(e, attempt = 0) {
   const body = JSON.stringify({
     text: e.speak,
     model_id: MODEL,
-    voice_settings: { stability: cast.stability, similarity_boost: 0.8, style: cast.style, use_speaker_boost: true },
+    voice_settings: { stability: cast.stability },
   });
   let status = 0;
   try {

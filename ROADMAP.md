@@ -2,13 +2,20 @@
 
 ## Pass 21 status — everybody gets a real voice
 
-**Full recorded voice-over**: all 384 fixed character lines (~25.6k
-characters) are now performed by real neural TTS (ElevenLabs
-multilingual v2) — quest briefings/accepts/completes for every giver,
+**Full recorded voice-over**: all 384 fixed character lines are now
+PERFORMED by real neural TTS (ElevenLabs **eleven_v3**, the expressive
+performance model — re-baked from the initial multilingual_v2 pass,
+which read too clean/narratorial for the game) — quest briefings/accepts/completes for every giver,
 all 64 wire-spool logs, Rita's race commentary, BIG NAZDA's entire
 announcer book, and the four playable characters' combat chatter.
-Fifteen cast voices with per-character delivery settings (the announcer
-runs stability 0.22 / style 0.85; Brother Okto chants at 0.6/0.25).
+Fifteen cast voices, each with standing character direction baked into
+every line as v3 audio tags ([gruff, gravelly old foreman],
+[shouting, unhinged carnival barker], [theatrical, dramatic
+fortune-teller]...) plus per-context acting notes: player combat lines
+are tagged by trigger (downed = [desperate, gasping], legendary drop =
+[awed, delighted], reload grumbles = [muttering, annoyed]), Rita's race
+lines by outcome ([gloating] vs [grudging respect]), and yelled lines
+get [shouting] heat automatically.
 
 **How it plugs in**: `tools/collect-vo.ts` walks the data files and
 emits every voiced line; `tools/bake-vo.mjs` renders them to
