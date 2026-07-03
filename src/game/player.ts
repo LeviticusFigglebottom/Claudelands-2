@@ -161,12 +161,27 @@ export class Player implements Damageable {
     this.flesh = Math.min(this.flesh, this.maxFlesh);
   }
 
+  /** ADS pose, fitted per weapon on equip: sights land ON the camera axis. */
+  private adsY = -0.145;
+  private adsZ = -0.4;
+
   equipWeapon(w: WeaponInstance | null, instant = false): void {
     this.resetReloadProps();
     if (this.gunMesh) { this.viewmodel.remove(this.gunMesh); this.gunMesh = null; }
     if (w) {
       this.gunMesh = buildGunMesh(w);
+      // fit the ADS pose to THIS gun's real silhouette: the receiver's top
+      // edge grazes the camera axis (so the reticle rides on the sight line
+      // for every archetype), and longer/taller guns sit farther back so a
+      // launcher doesn't swallow the screen. Measured BEFORE parenting —
+      // setFromObject works in world space.
+      const bb = new THREE.Box3().setFromObject(this.gunMesh);
       this.viewmodel.add(this.gunMesh);
+      // the gun's TALLEST point rides just under the camera axis: the
+      // reticle sits directly on the silhouette for every archetype, and
+      // nothing ever occludes the aim point
+      this.adsY = -(bb.max.y + 0.015);
+      this.adsZ = -0.36 - Math.max(0, -bb.min.z) * 0.28;
       this.magazine = w.stats.magSize;
       this.reloadT = -1;
       if (!instant) this.swapT = 0.35;
@@ -371,7 +386,7 @@ export class Player implements Damageable {
     this.camera.rotation.set(this.pitch - juice.recoilPitch, this.yaw, roll + sprintRoll, 'YXZ');
 
     // viewmodel pose: hip/ads lerp + sway + bob + land dip
-    const vmAds = new THREE.Vector3(0, -0.145, -0.4);
+    const vmAds = new THREE.Vector3(0, this.adsY, this.adsZ);
     const vmHip = new THREE.Vector3(0.28, -0.26, -0.5);
     this.viewmodel.position.lerpVectors(vmHip, vmAds, this.adsAmount);
     this.viewmodel.position.z += juice.recoilBack;

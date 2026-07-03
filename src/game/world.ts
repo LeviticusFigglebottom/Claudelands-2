@@ -125,7 +125,13 @@ export class World {
   districtAt(x: number, z: number): DistrictDef | null { return districtAt(x, z); }
 
   // ------------------------------------------------------------------ sky
+  /** Dome, sun disc, and clouds ride this anchor, which follows the camera:
+   *  on big maps a fixed dome's far wall drifts past the camera far plane
+   *  (700) and clips to raw black — the flickering "black box" horizon. */
+  private skyAnchor = new THREE.Group();
+
   private buildSky(scene: THREE.Scene): void {
+    this.group.add(this.skyAnchor);
     const geo = new THREE.SphereGeometry(560, 16, 12);
     const top = new THREE.Color(WORLD.skyTop);
     const horizon = new THREE.Color(WORLD.skyHorizon);
@@ -139,7 +145,7 @@ export class World {
     geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     const sky = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false }));
     sky.layers.set(FX_LAYER);
-    this.group.add(sky);
+    this.skyAnchor.add(sky);
 
     // sun disc (blooms nicely)
     const sunDisc = new THREE.Mesh(new THREE.CircleGeometry(26, 20), glowMat(0xfff2d0, 0.9));
@@ -147,7 +153,7 @@ export class World {
     sunDisc.lookAt(0, 0, 0);
     sunDisc.layers.set(FX_LAYER);
     (sunDisc.material as THREE.MeshBasicMaterial).fog = false;
-    this.group.add(sunDisc);
+    this.skyAnchor.add(sunDisc);
 
     const cloudMat = flatMat(0xf4ead8, cloudTexture());
     cloudMat.transparent = true; cloudMat.opacity = 0.85; cloudMat.fog = false;
@@ -161,7 +167,7 @@ export class World {
       cloud.lookAt(0, cloud.position.y, 0);
       cloud.layers.set(FX_LAYER);
       cloud.name = 'cloud';
-      this.group.add(cloud);
+      this.skyAnchor.add(cloud);
     }
 
     scene.fog = new THREE.Fog(WORLD.fog.color, WORLD.fog.near, WORLD.fog.far);
@@ -204,6 +210,7 @@ export class World {
   followSun(playerPos: THREE.Vector3): void {
     this.sun.position.copy(playerPos).add(this.sunOffset);
     this.sun.target.position.copy(playerPos);
+    this.skyAnchor.position.set(playerPos.x, 0, playerPos.z);
   }
 
   // ------------------------------------------------------------------ terrain
