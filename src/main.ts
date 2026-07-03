@@ -43,7 +43,7 @@ import { IntroOverlay, INTRO_PATH } from './ui/intro';
 import { endless } from './game/endless';
 import { vehicles } from './game/vehicle';
 import { race, formatRaceTime } from './game/race';
-import { RACE_DIFFICULTIES, RITA_GREETINGS, CHECKPOINTS } from './data/race';
+import { RACE_DIFFICULTIES, RITA_GREETINGS, CHECKPOINTS, TRACKS, trackById } from './data/race';
 import { respawnCine } from './ui/respawn';
 import { holocall } from './ui/holocall';
 import { announcer } from './game/announcer';
@@ -206,7 +206,7 @@ function dropBossLoot(enemy: Enemy): void {
 }
 
 // ---------------------------------------------------------------- game mode
-let gameMode: 'campaign' | 'endless' = 'campaign';
+let gameMode: 'campaign' | 'endless' | 'race' = 'campaign';
 
 // ---------------------------------------------------------------- map manager
 const discoveredStations = new Set<string>(['Gutterlight Plaza']);
@@ -439,18 +439,18 @@ function renderFastTravel(panel: HTMLElement): void {
 function renderRacePanel(panel: HTMLElement): void {
   const store = race.store();
   const rows = RACE_DIFFICULTIES.map((d) => {
-    const best = store.best[d.id];
+    const best = store.best[`redline:${d.id}`] ?? store.best[d.id];
     return `
       <button class="ft-row" data-diff="${d.id}">
-        <b>${d.name}</b> — $${d.rewardCash} · ${d.rewardXp} XP${d.firstWinItem && !store.wins[d.id] ? ` · first win: <b>${d.firstWinItem.toUpperCase()} GEAR</b>` : ''}
-        <div style="opacity:0.72; font-size:12px; font-weight:400;">${d.blurb}${best ? ` · best: ${formatRaceTime(best)}` : ''}${store.wins[d.id] ? ' · ✔ beaten' : ''}</div>
+        <b>${d.name}</b> — $${d.rewardCash} · ${d.rewardXp} XP${d.firstWinItem && !(store.wins[`redline:${d.id}`] ?? store.wins[d.id]) ? ` · first win: <b>${d.firstWinItem.toUpperCase()} GEAR</b>` : ''}
+        <div style="opacity:0.72; font-size:12px; font-weight:400;">${d.blurb}${best ? ` · best: ${formatRaceTime(best)}` : ''}${(store.wins[`redline:${d.id}`] ?? store.wins[d.id]) ? ' · ✔ beaten' : ''}</div>
       </button>`;
   }).join('');
   panel.innerHTML = `
     <h1>REDLINE RITA</h1>
     <div class="p-sub">${pick(Math.random as never, RITA_GREETINGS)}</div>
     <div class="p-body"><div style="flex:1; max-width:560px; display:flex; flex-direction:column; gap:8px;">
-      <div class="dialogue-box">One lap of REDLINE’S RUN. Seven gates, two forked sections — outer line’s safe, inner cut’s got AIR. Beat me to the flag and keep the purse. Rerun it whenever your pride recovers.<br><br><b>W/S</b> throttle · <b>A/D</b> steer · <b>SPACE</b> jump · <b>C</b> drift · <b>SHIFT</b> boost (sliding refills it)</div>
+      <div class="dialogue-box">THREE LAPS of REDLINE’S RUN. Seven gates, two forked sections — outer line’s safe, inner cut’s got AIR. Beat me to the flag and keep the purse. Rerun it whenever your pride recovers.<br><br><b>W/S</b> throttle · <b>A/D</b> steer · <b>SPACE</b> jump · <b>E</b> drift · <b>SHIFT</b> boost (sliding refills it)</div>
       ${rows}
     </div></div>
     <div class="p-hint">E / ESC to close</div>`;
@@ -460,7 +460,7 @@ function renderRacePanel(panel: HTMLElement): void {
       if (!d) return;
       audio.uiClick();
       setPanel('none');
-      race.start(d);
+      race.start(d, trackById('redline'));
     });
   });
 }
@@ -851,8 +851,8 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (vehicles.driving) {
-    // behind the wheel: E climbs out, everything else is pedals
-    if (e.code === 'KeyE') {
+    // behind the wheel: F climbs out (E is the drift), everything else is pedals
+    if (e.code === 'KeyF') {
       if (vehicles.raceLock) { feedText('Mid-race! Finish it or crash with dignity.', '#ff8c5a'); return; }
       const out = vehicles.exit();
       if (out) player.position.copy(out);
@@ -879,7 +879,7 @@ function interact(): void {
   if (vehicles.nearBuggy(player.position)) {
     vehicles.enter(camera);
     player.viewmodel.visible = false;
-    feedText('<b>THE JUNKSTALLION</b> — W/S drive · A/D steer · SPACE jump · C drift · SHIFT boost · E out', '#ffd23c');
+    feedText('<b>THE JUNKSTALLION</b> — W/S drive · A/D steer · SPACE jump · E drift · SHIFT boost · F out', '#ffd23c');
     return;
   }
   const p = loot.nearestItem(player.position);
@@ -975,7 +975,7 @@ function updatePrompts(): void {
   if (openPanel !== 'none' || cinematicT >= 0) { hoverCard.innerHTML = ''; showInteract(null); return; }
   if (vehicles.driving) {
     hoverCard.innerHTML = '';
-    showInteract(vehicles.raceLock ? null : 'CLIMB OUT');
+    showInteract(vehicles.raceLock ? null : 'CLIMB OUT', 'F');
     return;
   }
   if (vehicles.nearBuggy(player.position)) {
@@ -1043,7 +1043,7 @@ function routeHopTo(targetMapId: string): { x: number; z: number } | null {
 /** Active-map quest point: the objective if it's here, otherwise the first
  *  hop of the walking route toward its map (zone exit / ship pad). */
 function questPointOnMap(): { x: number; z: number } | null {
-  if (gameMode === 'endless') return null;
+  if (gameMode !== 'campaign') return null;
   const qm = questSystem.markerPos();
   if (!qm) return null;
   if (qm.mapId === activeMap().id) return { x: qm.x, z: qm.z };
@@ -1322,6 +1322,35 @@ function startRun(mode: StartMode, classId: string, difficultyId: DifficultyId, 
   canvas.requestPointerLock();
 }
 
+/** RACE mode: straight from the menu onto a circuit — practice (solo clock)
+ *  or a full grid race against any AI tier. Never touches campaign saves. */
+function startRaceMode(trackId: string, tier: string): void {
+  const track = trackById(trackId);
+  document.getElementById('ui-root')?.classList.remove('cine-on');
+  gameMode = 'race';
+  setPlayerClass('gunsmith');
+  hud.setCharacter();
+  giveVeteranKit();
+  seenCines.add('map_claudelands');
+  seenCines.add('map_' + track.mapId);
+  started = true;
+  switchMap(track.mapId);
+  document.getElementById('quest-tracker')!.innerHTML = '';
+  // grid up once the map exists: climb in, roll the countdown
+  const buggy = vehicles.buggy;
+  if (buggy) {
+    player.position.copy(buggy.pos);
+    vehicles.enter(camera);
+    player.viewmodel.visible = false;
+  }
+  const diff = RACE_DIFFICULTIES.find((d) => d.id === tier) ?? RACE_DIFFICULTIES[0];
+  race.start(diff, track, tier === 'practice');
+  feedText(tier === 'practice'
+    ? `<b>${track.name}</b> — ${track.laps} laps against the clock. F climbs out when you're done.`
+    : `<b>${track.name}</b> — ${track.laps} laps vs ${diff.name}. Good luck.`, '#ffd23c');
+  canvas.requestPointerLock();
+}
+
 // HUD hides behind the menu; the attract world pre-warms so enemies are
 // already wandering in the first shot.
 document.getElementById('ui-root')?.classList.add('cine-on');
@@ -1330,6 +1359,7 @@ for (let i = 0; i < 240; i++) enemySpawner.update(0.05);
 mainMenu.show({
   hasSave: () => hasSave(),
   bestWave: () => endless.bestWave(),
+  onRace: (trackId, tier) => { audio.unlock(); startRaceMode(trackId, tier); },
   onContinue: (slot) => {
     document.getElementById('ui-root')?.classList.remove('cine-on');
     audio.unlock();
@@ -1380,11 +1410,13 @@ canvas.addEventListener('click', () => {
     if (out) player.position.copy(out);
     player.viewmodel.visible = true;
   },
-  startRaceDebug: (id: string) => {
+  startRaceDebug: (id: string, trackId = 'redline', practice = false) => {
     const d = RACE_DIFFICULTIES.find((x) => x.id === id) ?? RACE_DIFFICULTIES[0];
-    race.start(d);
+    race.start(d, trackById(trackId), practice);
   },
   raceCheckpoints: CHECKPOINTS,
+  raceTracks: TRACKS,
+  startRaceModeDebug: (trackId: string, tier: string) => startRaceMode(trackId, tier),
   killPlayerDebug: () => handleBleedOut(),
   enterPitDebug: () => enterPit(),
   leavePitDebug: () => leavePit(),

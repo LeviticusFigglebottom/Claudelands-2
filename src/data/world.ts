@@ -999,6 +999,83 @@ export const VELDT_CAVES: WorldDef = {
   ],
 };
 
+// ===========================================================================
+// PLANET 2, GP CIRCUIT — THE CANOPY RUN. A pure racing map: one big jungle
+// loop with a lagoon beach straight, a plateau shortcut with a launch ramp,
+// a south gap jump, and a paddock. Reached from the main menu's RACE mode.
+export const VELDT_GP: WorldDef = {
+  id: 'veldt_gp',
+  name: 'THE CANOPY RUN',
+  tagline: 'three laps. the jungle keeps time.',
+  size: 380,
+  skyTop: 0x2a90d0, skyHorizon: 0xc8ecd8,
+  sun: { color: 0xfff4d4, intensity: 1.5, dirX: 0.4, dirY: 0.82, dirZ: -0.28 },
+  ambient: { sky: 0xaddce8, ground: 0x4a7a4a, intensity: 0.85 },
+  fog: { color: 0xa8d8c8, near: 90, far: 380 },
+  biome: {
+    ground: { base: '#7aa848', light: '#a8cc6a', dark: '#48702e', crack: 'rgba(40,70,30,0.35)' },
+    rock: '#6a8a58',
+    scrub: 0xff6aa0,
+    ambientParticle: 'dust',
+    trees: 'palm',
+    aurora: false,
+    weeds: false,
+  },
+  terrain: {
+    duneAmp: 1.6,
+    roughAmp: 0.7,
+    roads: [
+      { x0: -140, z0: -30, x1: -140, z1: 50 },     // start/finish straight
+      { x0: -140, z0: 50, x1: -100, z1: 110 },
+      { x0: -100, z0: 110, x1: -20, z1: 140 },
+      { x0: -20, z0: 140, x1: 60, z1: 130 },       // lagoon beach straight
+      { x0: 60, z0: 130, x1: 120, z1: 90 },
+      { x0: 120, z0: 90, x1: 150, z1: 30 },        // fork 1 OUTER — shore sweep
+      { x0: 150, z0: 30, x1: 130, z1: -40 },
+      { x0: 120, z0: 90, x1: 98, z1: 44 },         // fork 1 INNER — plateau cut + ramp
+      { x0: 98, z0: 44, x1: 130, z1: -40 },
+      { x0: 130, z0: -40, x1: 80, z1: -120 },
+      { x0: 80, z0: -120, x1: 0, z1: -150 },       // fork 2 OUTER — south rim
+      { x0: 0, z0: -150, x1: -90, z1: -120 },
+      { x0: 80, z0: -120, x1: 10, z1: -113 },      // fork 2 INNER — gap jump
+      { x0: 10, z0: -113, x1: -90, z1: -120 },
+      { x0: -90, z0: -120, x1: -140, z1: -60 },
+      { x0: -140, z0: -60, x1: -140, z1: -30 },
+    ],
+    lake: { x: 170, z: 170, r: 85, level: 0.25 },  // the lagoon the beach skirts
+    bumps: [
+      // launch ramps ON the line
+      { x: 98, z: 44, r: 13, h: 5 },               // plateau cut ramp
+      { x: 10, z: -113, r: 12, h: 5 },             // south gap jump
+      // scenery hills walling the loop
+      { x: 0, z: 0, r: 55, h: 12 },                // central jungle plateau
+      { x: -170, z: 160, r: 26, h: 12 },
+      { x: -175, z: -165, r: 28, h: 14 },
+      { x: 160, z: -165, r: 26, h: 12 },
+      { x: 0, z: 185, r: 24, h: 10 },
+    ],
+  },
+  districts: [
+    {
+      id: 'paddock', name: 'THE PADDOCK', subtitle: 'Grid Girls Sold Separately', dress: 'gulchgate',
+      cx: -140, cz: 6, radius: 30, baseHeight: 0,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 0,
+    },
+    {
+      id: 'drumstand', name: 'THE DRUM STAND', subtitle: 'The Verdant Came for the Noise', dress: 'verdantcamp',
+      cx: 60, cz: 55, radius: 20, baseHeight: 1,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 0,
+    },
+  ],
+  pois: [
+    { id: 'buggy_gp', kind: 'buggy', x: -128, z: 12, rot: 0.3 },
+    { id: 'sign_gp1', kind: 'sign', x: -146, z: 24, rot: 0.2, data: 'THE CANOPY RUN — THREE LAPS. THE JUNGLE KEEPS TIME.' },
+    { id: 'sign_gp2', kind: 'sign', x: -132, z: -14, rot: -0.3, data: 'BEACH → PLATEAU CUT → THE GAP. SWIM AT YOUR OWN PACE.' },
+  ],
+  spawn: { x: -132, z: 16 },
+  exits: [],
+};
+
 export const MAPS: Record<string, WorldDef> = {
   claudelands: CLAUDELANDS,
   frosthollow: FROSTHOLLOW,
@@ -1010,6 +1087,7 @@ export const MAPS: Record<string, WorldDef> = {
   veldt_tangle: VELDT_TANGLE,
   veldt_shallows: VELDT_SHALLOWS,
   veldt_caves: VELDT_CAVES,
+  veldt_gp: VELDT_GP,
 };
 
 let active: WorldDef = CLAUDELANDS;

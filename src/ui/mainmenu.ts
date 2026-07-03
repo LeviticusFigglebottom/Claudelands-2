@@ -8,6 +8,8 @@ import { DIFFICULTIES, type DifficultyId } from '../game/settings';
 import { prefs, setPref, resetPrefs, DEFAULT_PREFS, type Prefs } from '../game/prefs';
 import { SAVE_SLOTS, slotSummary, clearSave, exportSlot, importSlot, type SaveSlotId } from '../game/state';
 import { audio } from '../audio/synth';
+import { TRACKS } from '../data/race';
+import { RACE_DIFFICULTIES } from '../data/race';
 
 export type StartMode = 'new' | 'veteran' | 'endless';
 
@@ -16,9 +18,10 @@ export interface MenuCallbacks {
   bestWave: () => number;
   onContinue: (slot: SaveSlotId) => void;
   onStart: (mode: StartMode, classId: string, difficultyId: DifficultyId, slot: SaveSlotId) => void;
+  onRace: (trackId: string, tier: string) => void;
 }
 
-type Screen = 'press' | 'menu' | 'campaign' | 'select' | 'settings';
+type Screen = 'press' | 'menu' | 'campaign' | 'select' | 'settings' | 'race';
 
 export class MainMenu {
   private root = document.getElementById('title-screen')!;
@@ -61,6 +64,7 @@ export class MainMenu {
       case 'campaign': this.renderCampaign(); break;
       case 'select': this.renderSelect(); break;
       case 'settings': this.renderSettings(); break;
+      case 'race': this.renderRace(); break;
     }
   }
 
@@ -95,11 +99,42 @@ export class MainMenu {
       <div class="mm-menu">
         <button class="mm-btn" id="mm-campaign">CAMPAIGN<span class="mm-sub">the claudelands contract — story, side jobs, four worlds</span></button>
         <button class="mm-btn" id="mm-endless">ENDLESS MODE<span class="mm-sub">the crucible — waves without end${best > 0 ? ` · best: wave ${best}` : ''}</span></button>
+        <button class="mm-btn" id="mm-race">RACE<span class="mm-sub">any circuit, three laps — solo practice or a grid duel</span></button>
         <button class="mm-btn" id="mm-settings">SETTINGS<span class="mm-sub">look, feel, and how much the screen shakes</span></button>
       </div>`);
     this.root.querySelector('#mm-campaign')?.addEventListener('click', () => { audio.uiClick(); this.screen = 'campaign'; this.render(); });
     this.root.querySelector('#mm-endless')?.addEventListener('click', () => { audio.uiClick(); this.startMode = 'endless'; this.screen = 'select'; this.render(); });
+    this.root.querySelector('#mm-race')?.addEventListener('click', () => { audio.uiClick(); this.screen = 'race'; this.render(); });
     this.root.querySelector('#mm-settings')?.addEventListener('click', () => { audio.uiClick(); this.screen = 'settings'; this.render(); });
+  }
+
+  // ---------------------------------------------------------- race mode
+  private renderRace(): void {
+    const tiers = [
+      { id: 'practice', name: 'PRACTICE', sub: 'solo — just you, the clock, and the racing line' },
+      ...RACE_DIFFICULTIES.map((d) => ({ id: d.id, name: d.name, sub: d.blurb })),
+    ];
+    const cards = TRACKS.map((t) => `
+      <div class="mm-slot">
+        <div class="mm-slot-head"><b>${t.name}</b><span style="opacity:0.65"> · ${t.laps} laps</span></div>
+        <div class="mm-slot-sub">${t.blurb}</div>
+        <div class="mm-slot-acts">
+          ${tiers.map((tr) => `<button class="mm-slot-btn" data-track="${t.id}" data-tier="${tr.id}" title="${tr.sub}">${tr.name}</button>`).join('')}
+        </div>
+      </div>`).join('');
+    this.chrome(`
+      <div class="mm-menu" style="max-width:640px;">
+        <div class="mm-section">PICK A CIRCUIT — PICK A GRID</div>
+        ${cards}
+      </div>`, 'menu');
+    this.root.querySelectorAll<HTMLButtonElement>('[data-track]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        audio.uiClick();
+        const track = btn.dataset.track!;
+        const tier = btn.dataset.tier!;
+        this.finish(() => this.cb.onRace(track, tier));
+      });
+    });
   }
 
   // ---------------------------------------------------------- save slots

@@ -61,10 +61,10 @@ export function playWireLog(logId: string): boolean {
 }
 
 // ---------------------------------------------------------------- prompts
-export function showInteract(label: string | null): void {
+export function showInteract(label: string | null, key = 'E'): void {
   const el = document.getElementById('interact-prompt')!;
   if (label) {
-    el.innerHTML = `<span class="key">[E]</span> ${label}`;
+    el.innerHTML = `<span class="key">[${key}]</span> ${label}`;
     el.style.display = 'block';
   } else {
     el.style.display = 'none';

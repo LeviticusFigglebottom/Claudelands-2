@@ -1957,8 +1957,9 @@ export class World {
   /** Pit row: Rita's garage, the start/finish arch, bleachers, tire walls. */
   private buildGulchGate(d: DistrictDef): void {
     const rng = mulberry32(4242);
-    // start/finish arch over the west straight
-    const archX = -150, archZ = 8;
+    // start/finish arch over the west straight (relative: any circuit's
+    // paddock district centers on its own start straight)
+    const archX = d.cx, archZ = d.cz + 8;
     const gy = terrainHeight(archX, archZ);
     const poleMat = toonMat({ color: 0xd88428, map: swatch('#c1731f', 70) });
     for (const side of [-1, 1]) {

@@ -96,6 +96,73 @@ export function buildAiLine(fork1Inner: boolean, fork2Inner: boolean): RacePoint
   ];
 }
 
+// ===========================================================================
+// TRACKS — every race is a TrackDef; the race system is track-agnostic.
+export interface TrackDef {
+  id: string;
+  name: string;
+  mapId: string;
+  blurb: string;
+  laps: number;
+  start: { player: RacePoint; rival: RacePoint; yaw: number };
+  checkpoints: { x: number; z: number; r: number }[];
+  buildAiLine: (fork1Inner: boolean, fork2Inner: boolean) => RacePoint[];
+}
+
+// THE CANOPY RUN (Veldt Minor GP circuit): jungle inland loop with a lagoon
+// beach straight, a plateau cut with a launch ramp, and a south gap jump.
+const CANOPY_COMMON_1: RacePoint[] = [
+  { x: -140, z: 50 }, { x: -100, z: 110 }, { x: -60, z: 132 }, { x: -20, z: 140 },
+  { x: 30, z: 136 }, { x: 60, z: 130 }, { x: 96, z: 108 }, { x: 120, z: 90 },
+];
+const CANOPY_F1_OUTER: RacePoint[] = [{ x: 144, z: 52 }, { x: 150, z: 30 }, { x: 142, z: -8 }, { x: 130, z: -40 }];
+const CANOPY_F1_INNER: RacePoint[] = [{ x: 102, z: 60 }, { x: 98, z: 44 }, { x: 112, z: -2 }, { x: 130, z: -40 }];
+const CANOPY_COMMON_2: RacePoint[] = [{ x: 110, z: -84 }, { x: 80, z: -120 }];
+const CANOPY_F2_OUTER: RacePoint[] = [{ x: 36, z: -142 }, { x: 0, z: -150 }, { x: -56, z: -138 }, { x: -90, z: -120 }];
+const CANOPY_F2_INNER: RacePoint[] = [{ x: 44, z: -118 }, { x: 10, z: -113 }, { x: -46, z: -114 }, { x: -90, z: -120 }];
+const CANOPY_COMMON_3: RacePoint[] = [{ x: -122, z: -92 }, { x: -140, z: -60 }, { x: -140, z: 4 }];
+
+export const TRACKS: TrackDef[] = [
+  {
+    id: 'redline',
+    name: 'REDLINE’S RUN',
+    mapId: 'rustgulch',
+    blurb: 'The gulch classic — canyon walls, two cuts, three jumps.',
+    laps: 3,
+    start: RACE_START,
+    checkpoints: CHECKPOINTS,
+    buildAiLine,
+  },
+  {
+    id: 'canopy',
+    name: 'THE CANOPY RUN',
+    mapId: 'veldt_gp',
+    blurb: 'Veldt Minor GP — lagoon beach straight, plateau cut, gap jump.',
+    laps: 3,
+    start: { player: { x: -137, z: 4 }, rival: { x: -143, z: 4 }, yaw: Math.PI },
+    checkpoints: [
+      { x: -100, z: 110, r: 13 },
+      { x: 60, z: 130, r: 13 },
+      { x: 120, z: 90, r: 13 },   // fork 1 opens
+      { x: 130, z: -40, r: 13 },  // fork 1 rejoins
+      { x: 80, z: -120, r: 13 },  // fork 2 opens
+      { x: -90, z: -120, r: 13 }, // fork 2 rejoins
+      { x: -140, z: 4, r: 14 },   // finish
+    ],
+    buildAiLine: (f1, f2) => [
+      ...CANOPY_COMMON_1,
+      ...(f1 ? CANOPY_F1_INNER : CANOPY_F1_OUTER),
+      ...CANOPY_COMMON_2,
+      ...(f2 ? CANOPY_F2_INNER : CANOPY_F2_OUTER),
+      ...CANOPY_COMMON_3,
+    ],
+  },
+];
+
+export function trackById(id: string): TrackDef {
+  return TRACKS.find((t) => t.id === id) ?? TRACKS[0];
+}
+
 export const RITA_GREETINGS = [
   'REDLINE RITA. Fastest courier the wastes ever fired. Retired means I only race people I like now.',
   'Smell that? High-octane and bad decisions. Welcome to my office.',

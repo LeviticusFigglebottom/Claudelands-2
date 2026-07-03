@@ -292,11 +292,18 @@ export class Vehicle {
       this.driftCharge = 0;
     }
     if (this.drifting && (!input.drift || planarSpeed < 6)) {
-      // payout: blue → orange → violet, like the go-kart gods intended
+      // payout: the slide was slow — the RELEASE is the reward. A hard
+      // directional burst along the nose, plus a short turbo to carry it.
       const tier = this.driftTier;
       if (tier > 0) {
-        this.miniTurboT = [0, 0.55, 0.95, 1.45][tier];
-        if (isPlayer) { audio.boostIgnite(); juice.kickFov(3 + tier * 2); }
+        const fwd = this.forward;
+        const burst = [0, 6.5, 10, 14][tier];
+        const fSpeedNow = this.vel.dot(fwd);
+        const target = Math.min(fSpeedNow + burst, S.boostSpeed * 0.96);
+        this.vel.x += fwd.x * (target - fSpeedNow);
+        this.vel.z += fwd.z * (target - fSpeedNow);
+        this.miniTurboT = [0, 0.4, 0.7, 1.05][tier];
+        if (isPlayer) { audio.boostIgnite(); juice.kickFov(4 + tier * 2); }
         fx.burst(this.pos.clone().add(new THREE.Vector3(0, 0.5, 0)),
           [0, 0x54d4ff, 0xff8c2a, 0xc06bff][tier], 14 + tier * 8, 6, 0.12, 0.6, 3);
       }
@@ -317,12 +324,12 @@ export class Vehicle {
       let steerCmd = this.steerSmooth;
       if (this.drifting) {
         const trim = clamp(this.steerSmooth * this.driftDir, -1, 1); // 1 = into the slide
-        // gentler, more gradual arc than before — the slide eases in and the
-        // player shapes it, kart-style, instead of snapping sideways
-        steerCmd = this.driftDir * (0.52 + 0.34 * trim);
+        // a SLOW, controllable slide: soft arc the player shapes with the
+        // stick — the speed comes back as a burst on release
+        steerCmd = this.driftDir * (0.42 + 0.3 * trim);
         this.driftCharge += dt * (0.7 + 0.45 * Math.max(0, trim));
       }
-      const rate = S.turnRate * (this.drifting ? 1.5 : 1) * steerAuth;
+      const rate = S.turnRate * (this.drifting ? 1.25 : 1) * steerAuth;
       const reversing = this.vel.dot(this.forward) < -0.5;
       this.yaw += steerCmd * rate * dt * (reversing ? -1 : 1);
 
@@ -359,11 +366,12 @@ export class Vehicle {
       else if (!this.boosting) this.boostMeter = clamp(this.boostMeter + dt * 0.045, 0, 1);
       const latBefore = Math.abs(lat);
       lat *= Math.exp(-grip * dt);
-      // kart rules: a drift redirects momentum instead of burning it — most
-      // of the scrubbed slip feeds back into the nose, so a held slide stays
-      // fast instead of decaying to a crawl
+      // drifting is deliberately SLOW: some slip feeds back into the nose so
+      // the slide doesn't stall, but a bleed drags it toward ~60% of top
+      // speed — control now, the burst on release pays the speed back
       if (this.drifting && fSpeed > 0) {
-        fSpeed = Math.min(fSpeed + (latBefore - Math.abs(lat)) * 0.8, Math.max(fSpeed, cap * 0.92));
+        fSpeed = Math.min(fSpeed + (latBefore - Math.abs(lat)) * 0.35, Math.max(fSpeed, cap * 0.9));
+        if (fSpeed > S.maxSpeed * 0.5) fSpeed -= (fSpeed - S.maxSpeed * 0.5) * 2.4 * dt;
       }
       // handbrake without speed = a scrub, not a slide
       if (input.drift && planarSpeed <= 6) fSpeed *= Math.exp(-2.2 * dt);
@@ -634,20 +642,17 @@ class VehicleSystem {
   }
 
   private prevSpace = false;
-  private prevDriftKey = false;
 
   input(): VehicleInput {
-    // SPACE is the jump; C is the drift trigger (with its own little hop on
-    // press, Mario Kart style)
+    // SPACE is the jump; holding E slides — no hop on engage, the drift
+    // just leans in
     const space = this.keys.has('Space');
-    const driftKey = this.keys.has('KeyC');
-    const hop = (space && !this.prevSpace) || (driftKey && !this.prevDriftKey);
+    const hop = space && !this.prevSpace;
     this.prevSpace = space;
-    this.prevDriftKey = driftKey;
     return {
       throttle: (this.keys.has('KeyW') ? 1 : 0) + (this.keys.has('KeyS') ? -1 : 0),
       steer: (this.keys.has('KeyA') ? 1 : 0) + (this.keys.has('KeyD') ? -1 : 0),
-      drift: driftKey,
+      drift: this.keys.has('KeyE'),
       hop,
       boost: this.keys.has('ShiftLeft') || this.keys.has('ShiftRight'),
     };
@@ -700,7 +705,7 @@ class VehicleSystem {
         <div style="width:150px; height:9px; border:2px solid rgba(244,234,216,0.6); margin-top:6px; margin-left:auto;">
           <div id="drv-boost" style="height:100%; width:100%; background:#54d4ff;"></div>
         </div>
-        <div style="font-size:10px; opacity:0.75; margin-top:2px;">SPACE jump · hold C to drift, release for turbo · SHIFT burns the tank</div>`;
+        <div style="font-size:10px; opacity:0.75; margin-top:2px;">SPACE jump · hold E to drift, release for the burst · SHIFT burns the tank</div>`;
       document.getElementById('ui-root')?.appendChild(this.hud);
     }
     this.hud.style.display = v ? 'block' : 'none';

@@ -1,5 +1,41 @@
 # ROADMAP
 
+## Pass 18 status — race weekend
+
+**Controls, settled**: SPACE is the jump, full stop. Holding **E**
+drifts — no hop on engage, the slide just leans in (F climbs out now).
+The drift itself is deliberately SLOW and controllable: the slide
+bleeds toward ~60% of top speed while you shape the arc, and the
+RELEASE is the reward — an instant directional burst along the nose
+(+6.5/+10/+14 by tier) plus a short turbo to carry it. Control now,
+speed after.
+
+**RACE on the main menu**: a third mode next to Campaign and Endless.
+Pick a circuit, pick a grid — solo PRACTICE (pure time trial, personal
+bests) or a duel against any AI tier (Rookie/Courier/Redline). Boots
+straight onto the starting grid, never touches campaign saves.
+
+**THE CANOPY RUN** (`veldt_gp`): a brand-new circuit-only map themed
+after Veldt Minor — one big jungle loop with a lagoon beach straight,
+two forked sections (shore sweep vs plateau cut with a launch ramp;
+south rim vs the gap jump), a central jungle plateau walling the
+infield, palms everywhere, a paddock with the full pit-row treatment,
+and a Verdant drum camp watching from the inside of turn three. The
+race system is track-agnostic now (`TrackDef`: checkpoints, start grid,
+AI lines with fork choices, laps) — Redline's Run and the Canopy Run
+are both data.
+
+**Three laps, everywhere**: every race is 3 full laps — lap-aware
+checkpoints for player AND rival, LAP x/3 on the race HUD, gates
+persist across laps, per-track/per-tier records (old gulch bests carry
+over). Rita's briefing was updated; she was never going to let one lap
+count anyway.
+
+Headless suite: `verify19.mjs` — 13 checks, all passing (menu → grid
+boot, E/SPACE/F scheme, slow-slide + burst numbers, three-lap loop
+finishing only after lap 3, AI completing a canopy lap, redline
+regression).
+
 ## Pass 17 status — the sound pass
 
 **Gunshots are layered instruments now**: every shot = transient snap +

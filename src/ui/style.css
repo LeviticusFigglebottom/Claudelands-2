@@ -537,6 +537,9 @@ body { font-family: var(--ui-font); user-select: none; }
 .mm-slot-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .mm-slot-btn { font-size: 15px !important; padding: 8px 12px !important; flex: 1; min-width: 120px; }
 .mm-slot-btn .mm-sub { font-size: 10px !important; }
+.mm-slot-sub { font-size: 12px; color: #b8ac90; margin-bottom: 8px; }
+.mm-slot-acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.mm-section { font-family: var(--title-font); font-size: 13px; letter-spacing: 0.22em; color: #d8b028; margin: 4px 0 10px; }
 .mm-back:hover { color: var(--paper); }
 
 /* character select detail */
