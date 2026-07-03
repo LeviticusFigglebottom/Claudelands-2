@@ -25,7 +25,7 @@ export interface DistrictDef {
 
 export interface WorldPoi {
   id: string;
-  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'gate' | 'sign' | 'ship' | 'wreck' | 'racer' | 'buggy' | 'pit';
+  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'gate' | 'sign' | 'ship' | 'wreck' | 'racer' | 'buggy' | 'pit' | 'cargo';
   x: number; z: number; rot?: number;
   data?: string;
 }
@@ -884,11 +884,16 @@ export const VELDT_SHALLOWS: WorldDef = {
     { id: 'chest_sh1', kind: 'chest', x: -58, z: 92, rot: 0.6 },
     { id: 'sign_sh1', kind: 'sign', x: -68, z: 64, rot: 0.2, data: '← BRINE PANS · HULLGRAVE ↓ · ANCHORAGE → · SEA: EVERYWHERE' },
     { id: 'log_sh1', kind: 'wirelog', x: -72, z: 70, data: 'log_shallows1' },
-    { id: 'chest_sh2', kind: 'chest', x: 14, z: -48, rot: -1.2 },
-    { id: 'log_sh2', kind: 'wirelog', x: 0, z: -30, data: 'log_shallows2' },
+    { id: 'chest_sh2', kind: 'chest', x: 7, z: -42, rot: -1.2 },
+    { id: 'log_sh2', kind: 'wirelog', x: -13, z: -22, data: 'log_shallows2' },
     { id: 'sign_sh2', kind: 'sign', x: -8, z: -18, rot: 0.4, data: 'PELICAN SALVAGE: CREW ONLY. CREW STATUS: COMPLICATED.' },
     { id: 'chest_sh3', kind: 'chest', x: -68, z: -70, rot: 1.8 },
     { id: 'sign_sh3', kind: 'sign', x: 40, z: 40, rot: -0.6, data: 'THE ANCHORAGE — SALUTE OR SWIM' },
+    { id: 'cargo1', kind: 'cargo', x: 2, z: -18, rot: 0.4 },
+    { id: 'cargo2', kind: 'cargo', x: 36, z: -24, rot: -0.8 },
+    { id: 'cargo3', kind: 'cargo', x: -14, z: -50, rot: 1.6 },
+    { id: 'cargo4', kind: 'cargo', x: 34, z: -54, rot: 2.3 },
+    { id: 'cargo5', kind: 'cargo', x: -50, z: -78, rot: -1.2 },
   ],
   spawn: { x: -100, z: 96 },
   exits: [

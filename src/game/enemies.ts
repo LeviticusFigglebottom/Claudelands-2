@@ -33,6 +33,10 @@ export interface EnemyHooks {
   hasLOS: (from: THREE.Vector3, to: THREE.Vector3) => boolean;
   /** Candidate hide spots near a point, on the far side of props from a threat. */
   coverSpots: (near: THREE.Vector3, threat: THREE.Vector3, maxDist: number) => THREE.Vector3[];
+  /** True when a spawn point sits inside a collider (buildings, rocks). */
+  spawnBlocked?: (x: number, z: number) => boolean;
+  /** Push a walker out of static colliders — enemies don't phase through props. */
+  resolveCollision?: (pos: THREE.Vector3, radius: number) => void;
 }
 
 let hooks: EnemyHooks;
@@ -70,7 +74,7 @@ export class Enemy implements Damageable {
   private flinchT = 0;
   private lastTotalHp = 0;
   private patrolTarget = new THREE.Vector3();
-  private patrolWait = 0;
+  protected patrolWait = 0;
   private flashMats: THREE.MeshToonMaterial[] = [];
   private beepT = 0; // fusebug
 
@@ -329,7 +333,7 @@ export class Enemy implements Damageable {
     if (!this.aggro && this.leashCooldown <= 0 && distToPlayer < this.def.aggroRange * (this.badass ? 1.2 : 1)) {
       this.aggro = true;
       this.leashing = false;
-      if (chance(Math.random as never, 0.6)) hooks.bark(this.displayName, pick(Math.random as never, this.def.barks));
+      if (chance(Math.random as never, 0.3)) hooks.bark(this.displayName, pick(Math.random as never, this.def.barks));
     }
 
     // leash: nobody chases you to the ends of the earth. Past the home
@@ -343,8 +347,7 @@ export class Enemy implements Damageable {
         this.flesh = this.maxFlesh; this.shield = this.maxShield; this.armor = this.maxArmor;
         this.patrolTarget.set(this.homeDistrict.cx, 0, this.homeDistrict.cz);
         this.patrolWait = 0;
-        this.tactic = 'advance'; this.coverPos = null;
-        if (chance(Math.random as never, 0.4)) hooks.bark(this.displayName, 'eh. not worth the walk.');
+        this.tactic = 'advance'; this.coverPos = null; // disengage silently
       }
     }
 
@@ -381,8 +384,8 @@ export class Enemy implements Damageable {
     // ambient barks
     this.barkTimer -= dt;
     if (this.barkTimer <= 0 && distToPlayer < 26 && this.aggro) {
-      this.barkTimer = 8 + Math.random() * 14;
-      if (chance(Math.random as never, 0.55)) hooks.bark(this.displayName, pick(Math.random as never, this.def.barks));
+      this.barkTimer = 15 + Math.random() * 18;
+      if (chance(Math.random as never, 0.3)) hooks.bark(this.displayName, pick(Math.random as never, this.def.barks));
     }
 
     const bubble = this.group.getObjectByName('shield_bubble') as THREE.Mesh | undefined;
@@ -422,6 +425,7 @@ export class Enemy implements Damageable {
     if (terrainHeight(nx, nz) - hBefore > dist * 1.1) return;
     this.position.x = nx;
     this.position.z = nz;
+    hooks.resolveCollision?.(this.position, 0.6);
   }
 
   protected settleToGround(moving = false): void {
@@ -518,7 +522,7 @@ export class Enemy implements Damageable {
         this.coverPos = spot.clone();
         this.tactic = 'toCover';
         this.peekCycles = 0;
-        if (chance(Math.random as never, 0.4)) hooks.bark(this.displayName, pick(Math.random as never, ['COVER! COVER!', 'nope nope nope', 'regrouping!!']));
+        if (chance(Math.random as never, 0.18)) hooks.bark(this.displayName, pick(Math.random as never, ['COVER! COVER!', 'nope nope nope', 'regrouping!!']));
       }
     }
 
@@ -654,7 +658,7 @@ export class Enemy implements Damageable {
     });
     fx.burst(muzzle, 0xffd23c, 6, 2.5, 0.08, 0.3, 3);
     audio.fuseBeep(1.2);
-    if (chance(Math.random as never, 0.5)) hooks.bark(this.displayName, pick(Math.random as never, ['CATCH!', 'present for ya!', 'knock knock!']));
+    if (chance(Math.random as never, 0.22)) hooks.bark(this.displayName, pick(Math.random as never, ['CATCH!', 'present for ya!', 'knock knock!']));
   }
 
   private detonate(): void {
@@ -803,11 +807,13 @@ export class EnemySpawner {
       const entry = weightedPick(Math.random as never, d.spawnTable.map((s) => ({ item: s, w: s.weight })));
       const def = ENEMIES[entry.enemyId];
       if (!def) continue;
-      for (let tries = 0; tries < 8; tries++) {
+      for (let tries = 0; tries < 12; tries++) {
         const a = Math.random() * Math.PI * 2;
         const r = d.radius * (0.3 + Math.random() * 0.55);
         const pos = new THREE.Vector3(d.cx + Math.cos(a) * r, 0, d.cz + Math.sin(a) * r);
         if (pos.distanceTo(playerPos) < 18) continue;
+        // never materialize inside a building/rock — nobody spawns in walls
+        if (enemyHooks().spawnBlocked?.(pos.x, pos.z)) continue;
         this.spawnOne(def, pos, finalWave && i === 0 && d.maxAlive >= 6 ? true : undefined, d.levelOffset);
         break;
       }

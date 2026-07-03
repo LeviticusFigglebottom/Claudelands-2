@@ -93,6 +93,9 @@ export interface QuestDef {
   elite?: { enemyId: string; count: number; x: number; z: number; mapId: string; levelOffset: number };
   /** Side quests: a quest-only legendary granted on completion. */
   rewardUnique?: string;
+  /** Fetch quests: collecting fills the bag, but the quest only completes
+   *  standing in front of the giver — a real return trip, no holocall. */
+  returnToGiver?: boolean;
 }
 
 export const QUESTS: QuestDef[] = [
@@ -404,14 +407,15 @@ export const QUESTS: QuestDef[] = [
     name: 'The Wet Manifest',
     giver: 'peg',
     briefing: [
-      'Now the real work. Dr. Calla\u2019s resupply \u2014 five sealed expedition crates, stamped HELIX-9, soaked through but watertight. The crew treats them like holy cargo. Carries them in PROCESSION.',
-      'I want them back on dry sand. All five. They\u2019re strapped to the biggest, wettest backs out there.',
-      'Pry them loose however you like. I\u2019ll be here, building a fifth chair out of a fourth boat.',
+      'Now the real work. Dr. Calla\u2019s resupply \u2014 five sealed expedition crates, stamped HELIX-9, soaked through but watertight. The tide scattered them from the Hullgrave to the Pans when the stern went under.',
+      'The crew stacks them in little shrines wherever they wash up. Beacons still blinking. They won\u2019t carry them far \u2014 but they WILL object to you taking them.',
+      'Find all five and HAUL them back to me at Driftwood Rest. No shortcuts, no radio hand-offs \u2014 I sign for cargo in PERSON.',
     ],
-    acceptLine: 'Five crates! Follow the processions \u2014 and lift with your LEGS, they\u2019re full of science!',
-    objective: { kind: 'collect', label: 'Expedition crates recovered', count: 5, faction: 'brine', markerX: 6, markerZ: -36, mapId: 'veldt_shallows' },
+    acceptLine: 'Five crates, back to THIS desk! Follow the beacons \u2014 and lift with your LEGS, they\u2019re full of science!',
+    objective: { kind: 'collect', label: 'Expedition crates hauled back to Peg', count: 5, markerX: 6, markerZ: -36, mapId: 'veldt_shallows' },
+    returnToGiver: true,
     rewardCash: 7000, rewardXp: 9000, rewardItem: 'epic',
-    completeLine: 'Five crates, dry-ish, accounted for. Juno\u2019s instruments survived. Peg\u2019s opinion of Helix packaging has, grudgingly, improved.',
+    completeLine: 'Five crates, dry-ish, signed for. Juno\u2019s instruments survived. Peg\u2019s opinion of Helix packaging has, grudgingly, improved.',
   },
   {
     id: 'q23_admiral',

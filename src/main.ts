@@ -155,6 +155,7 @@ setEnemyHooks({
     return world.raycastStatics(ray) === null;
   },
   coverSpots: (near, threat, maxDist) => world.coverSpots(near, threat, maxDist),
+  spawnBlocked: (x, z) => world.collideSphere(new THREE.Vector3(x, world.groundHeight(x, z) + 0.5, z), 0.7) !== null,
   onKilled: (enemy: Enemy, overkill: number) => {
     enemySpawner.gibBurst(enemy);
     const tier = enemy.badass ? Math.max(2, enemy.def.dropTier) : enemy.def.dropTier;
@@ -252,6 +253,7 @@ function switchMap(mapId: string, toX?: number, toZ?: number): void {
   player.viewmodel.visible = true;
   enemySpawner.refreshDistricts();
   questSystem.onMapChanged();
+  pruneCollectedCargo();
   player.world.arenaHalf = WORLD.size / 2;
   const x = toX ?? WORLD.spawn.x, z = toZ ?? WORLD.spawn.z;
   player.position.set(x, world.groundHeight(x, z), z);
@@ -262,6 +264,22 @@ function switchMap(mapId: string, toX?: number, toZ?: number): void {
   fx.burst(player.position.clone().add(new THREE.Vector3(0, 1, 0)), 0x54d4ff, 40, 6, 0.14, 1, 4);
   playCine('map_' + WORLD.id, () => biomeCine(player.position.clone(), WORLD.name.toUpperCase(), WORLD.tagline));
   autosave();
+}
+
+/** A revisit rebuilds every crate; re-haul the ones the ledger says are gone. */
+function pruneCollectedCargo(): void {
+  for (const q of questSystem.quests) {
+    if (!q.def.returnToGiver || q.def.objective.kind !== 'collect') continue;
+    if ((q.def.objective.mapId ?? 'claudelands') !== activeMap().id) continue;
+    const taken = q.status === 'complete' ? q.def.objective.count : q.status === 'active' ? q.progress : 0;
+    if (taken <= 0) continue;
+    const ids = WORLD.pois.filter((p) => p.kind === 'cargo').map((p) => p.id).sort();
+    for (let i = 0; i < Math.min(taken, ids.length); i++) {
+      world.consumeCargo(ids[i]);
+      const it = world.interactables.find((x) => x.kind === 'cargo' && x.data === ids[i]);
+      if (it) world.removeInteractable(it);
+    }
+  }
 }
 
 // ---------------------------------------------------------------- UI
@@ -945,6 +963,22 @@ function interact(): void {
         }
         return;
       }
+      case 'cargo': {
+        const q = questSystem.active;
+        const wantsIt = q && q.def.objective.kind === 'collect' && q.def.returnToGiver
+          && (q.def.objective.mapId ?? 'claudelands') === activeMap().id
+          && q.progress < q.def.objective.count;
+        if (wantsIt) {
+          world.consumeCargo(it.data ?? '');
+          world.removeInteractable(it);
+          audio.reloadClack(1);
+          fx.burst(it.pos.clone().add(new THREE.Vector3(0, 1, 0)), 0xffd23c, 14, 4, 0.1, 0.5, 5);
+          questSystem.recordCollect();
+        } else {
+          bark('HELIX-9 CRATE', 'Sealed expedition cargo. It’s spoken for — Peg at Driftwood Rest holds the manifest.');
+        }
+        return;
+      }
       case 'racer': {
         const info = NPC_INTROS.rita;
         if (playCine('npc_rita', () => charCine(player.position, it.pos, info.name, info.sub), () => setPanel('race'))) return;
@@ -1396,6 +1430,7 @@ canvas.addEventListener('click', () => {
   setPanelDebug: setPanel,
   openDialogueDebug: (giver: QuestGiver) => { dialogueGiver = giver; setPanel('dialogue'); },
   get mapId() { return activeMap().id; },
+  maps: MAPS,
   vehicles, race, respawnCine,
   get pitActive() { return pitActive; },
   enterBuggyDebug: () => {

@@ -148,15 +148,19 @@ class QuestSystem {
    *  quest is still active — leaving mid-quest wipes enemies, so this re-arms
    *  the arena on every entry instead of spawning exactly once. */
   ensureBosses(): void {
-    const mapId = activeMap().id;
+    const map = activeMap();
     for (const q of this.quests) {
       if (q.status !== 'active') continue;
       const obj = q.def.objective;
       if (obj.kind !== 'boss' || !obj.bossId) continue;
-      if ((obj.mapId ?? 'claudelands') !== mapId) continue;
+      if ((obj.mapId ?? 'claudelands') !== map.id) continue;
       const cur = enemySpawner.boss;
       if (cur && cur.alive && cur.def.id === obj.bossId) continue;
-      spawnBoss(obj.bossId as BossId, new THREE.Vector3(obj.markerX ?? 0, 0, obj.markerZ ?? 0));
+      // spawn dead-center in the arena: the marker points AT the district,
+      // but slopes/mounds around it made side-of-the-hill thrones
+      const mx = obj.markerX ?? 0, mz = obj.markerZ ?? 0;
+      const arena = map.districts.find((d) => Math.hypot(mx - d.cx, mz - d.cz) < d.radius);
+      spawnBoss(obj.bossId as BossId, new THREE.Vector3(arena?.cx ?? mx, 0, arena?.cz ?? mz));
     }
   }
 
@@ -211,12 +215,28 @@ class QuestSystem {
     }
   }
 
+  /** Standing close enough to hand the giver something. */
+  private nearGiver(giver: QuestGiver): boolean {
+    if (!this.hooks) return false;
+    const g = GIVERS[giver];
+    if (activeMap().id !== g.mapId) return false;
+    const p = this.hooks.playerPos();
+    return Math.hypot(p.x - g.x, p.z - g.z) < 9;
+  }
+
   recordCollect(): void {
     const q = this.active;
     if (!q || q.def.objective.kind !== 'collect') return;
     q.progress++;
     audio.pickup();
     this.hooks?.toast(`${q.def.objective.label}: <b>${q.progress}/${q.def.objective.count}</b>`, '#54d4ff');
+    // fetch quests: the LAST pickup doesn't finish the job — the walk back does
+    if (q.def.returnToGiver && q.progress >= q.def.objective.count && !this.nearGiver(q.def.giver)) {
+      const g = GIVERS[q.def.giver];
+      this.hooks?.banner('CARGO SECURED');
+      this.hooks?.toast(`All of it. Now haul it back to <b>${g.name}</b> ${g.where} — she signs in person.`, '#ffd23c');
+      return;
+    }
     this.checkComplete(q);
   }
 
@@ -242,6 +262,11 @@ class QuestSystem {
         q.progress = obj.count;
         this.checkComplete(q);
       }
+      return;
+    }
+    // fetch quests: everything's collected, the job finishes at the giver's feet
+    if (obj.kind === 'collect' && q.def.returnToGiver && q.progress >= obj.count && this.nearGiver(q.def.giver)) {
+      this.checkComplete(q);
     }
   }
 
@@ -268,6 +293,20 @@ class QuestSystem {
 
     const idx = this.quests.indexOf(q);
     const next = idx + 1 < this.quests.length ? this.quests[idx + 1] : null;
+
+    // fetch quests turn in FACE TO FACE — the giver is standing right there,
+    // so no ECHO call, no auto-chain: the next job waits until it's asked for
+    if (q.def.returnToGiver) {
+      const g = GIVERS[q.def.giver];
+      voice.speak(q.def.completeLine, voiceOf(q.def.giver));
+      this.hooks?.toast(`<b>${g.name}</b>: ${q.def.completeLine}`, '#ffd23c');
+      if (next && next.status === 'locked') {
+        next.status = 'available';
+        this.hooks?.toast(`New work waiting: <b>${g.name}</b> has more for you.`, '#ffd23c');
+      } else if (this.allDone) this.hooks?.onVictory();
+      return;
+    }
+
     if (next && next.status === 'locked') {
       next.status = 'available';
       // holocall auto-chaining is for "you're already out here" sequences:
@@ -299,6 +338,11 @@ class QuestSystem {
   /** Marker for the compass/HUD: only meaningful on its own map. */
   markerPos(): { x: number; z: number; mapId: string; label: string } | null {
     const q = this.active;
+    // fetch quests flip the compass around once the cargo's in hand
+    if (q && q.def.returnToGiver && q.progress >= q.def.objective.count) {
+      const g = GIVERS[q.def.giver];
+      return { x: g.x, z: g.z, mapId: g.mapId, label: `Return to ${g.name}` };
+    }
     // the notoriety gate points at the side job, not the mayor
     if (q && q.def.objective.markerX !== undefined && q.def.objective.kind !== 'notoriety') {
       return {

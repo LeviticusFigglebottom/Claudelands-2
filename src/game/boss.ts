@@ -21,7 +21,10 @@ abstract class Boss extends Enemy {
 
   constructor(def: EnemyDef, level: number, pos: THREE.Vector3) {
     super(def, level, pos, false);
-    this.aggro = true;
+    // NOT aggro on spawn: a boss holds court in its arena until the player
+    // walks in (aggroRange). Chargers/burrowers were migrating rooms away
+    // from their thrones to meet the player halfway.
+    this.aggro = false;
   }
 
   protected hpFraction(): number {
@@ -29,8 +32,11 @@ abstract class Boss extends Enemy {
   }
 
   override update(dt: number): void {
+    // a boss holds its throne: no patrol wander until the player walks in
+    if (this.alive && !this.aggro) this.patrolWait = 1;
     super.update(dt);
     if (!this.alive) return;
+    if (!this.aggro) return; // holding court: no phases, no specials, no barks
     const frac = this.hpFraction();
     if (this.phase === 0 && frac < 0.66) { this.phase = 1; this.onPhase(1); }
     if (this.phase === 1 && frac < 0.33) { this.phase = 2; this.onPhase(2); }

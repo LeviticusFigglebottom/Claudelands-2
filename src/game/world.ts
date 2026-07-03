@@ -25,7 +25,7 @@ interface AABB {
 }
 
 export interface Interactable {
-  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'ship' | 'wreck' | 'racer' | 'pit';
+  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'ship' | 'wreck' | 'racer' | 'pit' | 'cargo';
   pos: THREE.Vector3;
   label: string;
   data?: string;
@@ -1495,6 +1495,7 @@ export class World {
         case 'racer': this.buildRacerNpc(poi); break;
         case 'buggy': this.buildBuggyPad(poi); break;
         case 'pit': this.buildPitDoor(poi); break;
+        case 'cargo': this.buildCargo(poi); break;
       }
     }
     this.buildZoneExits();
@@ -1887,6 +1888,56 @@ export class World {
     this.staticTargets.push(g);
     this.addCollider(poi.x, poi.z, 3.6, 2.8);
     this.interactables.push({ kind: 'wreck', pos: new THREE.Vector3(poi.x, y, poi.z), label: 'SALVAGE THE WRECK', data: poi.id, range: 6.2 });
+  }
+
+  /** HELIX-9 expedition crates: Peg's fetch cargo, scattered where the
+   *  supply drop broke up. Strapped crate + beacon; hauled (removed) on pickup. */
+  private cargoCrates = new Map<string, { group: THREE.Group; box: AABB }>();
+  private buildCargo(poi: WorldPoi): void {
+    const y = terrainHeight(poi.x, poi.z);
+    const g = new THREE.Group();
+    const crateMat = toonMat({ color: 0x9a7a4e, map: corrugatedTexture('#7c5f3c') });
+    const strapMat = toonMat({ color: 0x2c343c, map: swatch('#262e36', 60) });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.1, 1.1), crateMat);
+    body.position.y = 0.55;
+    g.add(body);
+    for (const off of [-0.45, 0.45]) {
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.16, 1.16), strapMat);
+      strap.position.set(off, 0.55, 0);
+      g.add(strap);
+    }
+    // stencil plate on the lid
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.04, 0.6), toonMat({ color: 0xd8c56a, map: swatch('#c9b45a', 60) }));
+    plate.position.y = 1.12;
+    g.add(plate);
+    // drop-beacon stub with a blinking gold light
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.9, 6), strapMat);
+    mast.position.set(0.55, 1.55, -0.35);
+    g.add(mast);
+    const blink = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 8), glowMat(0xffd23c, 1));
+    blink.position.set(0.55, 2.0, -0.35);
+    blink.name = 'blinker';
+    g.add(blink);
+    g.position.set(poi.x, y, poi.z);
+    g.rotation.y = poi.rot ?? 0;
+    g.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
+    this.group.add(g);
+    this.staticTargets.push(g);
+    this.addCollider(poi.x, poi.z, 0.85, 0.7, 1.4);
+    this.cargoCrates.set(poi.id, { group: g, box: this.colliders[this.colliders.length - 1] });
+    this.interactables.push({ kind: 'cargo', pos: new THREE.Vector3(poi.x, y, poi.z), label: 'RECOVER EXPEDITION CRATE (HELIX-9)', data: poi.id, range: 3.8 });
+  }
+
+  /** Haul a crate away: mesh, collider, and target all leave the world. */
+  consumeCargo(id: string): void {
+    const c = this.cargoCrates.get(id);
+    if (!c) return;
+    this.group.remove(c.group);
+    const ti = this.staticTargets.indexOf(c.group);
+    if (ti >= 0) this.staticTargets.splice(ti, 1);
+    const ci = this.colliders.indexOf(c.box);
+    if (ci >= 0) this.colliders.splice(ci, 1);
+    this.cargoCrates.delete(id);
   }
 
   /** The Crucible's street entrance (Brasshaven) / exit tunnel (pit side):
@@ -3488,8 +3539,9 @@ export class World {
         g.add(postL, postR, lintel, board, lampL, lampR);
       }
 
-      // face the map centre so the entry reads on approach
-      g.rotation.y = Math.atan2(ex.x, ex.z) + Math.PI / 2 + (Math.abs(ex.x) > Math.abs(ex.z) ? 0 : Math.PI / 2);
+      // the portal plane's local +z faces the map centre, so walking toward
+      // the exit means walking THROUGH the gate — not past its side profile
+      g.rotation.y = Math.atan2(-ex.x, -ex.z);
       g.position.set(ex.x, y, ex.z);
       g.traverse((o) => (o.castShadow = true));
       this.group.add(g);

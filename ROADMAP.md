@@ -1,5 +1,48 @@
 # ROADMAP
 
+## Pass 19 status — thrones, cargo, and things in their places
+
+**Bosses hold court**: bosses now spawn dead-center in their arena
+district (the marker point is snapped to the district centre at spawn),
+and they spawn NON-aggro — no phases, no specials, no patrol wander —
+until the player actually walks into aggro range. This kills both
+reported bugs at the root: "spawned on the side of the mountain"
+(marker sat off-centre on a slope) and "the cave boss spawned 2 rooms
+early" (burrower/charger bosses were aggro from birth and migrated
+toward the distant player).
+
+**Quieter enemies**: ambient bark timers stretched (15–33s, lower
+chance), aggro barks down to 30%, and the "disengagement" line when the
+player leaves the leash radius is gone — they just heal and walk home.
+
+**The Wet Manifest is a real fetch quest** (`q22`): five HELIX-9
+expedition crates are physical props scattered across the Hullgrave and
+Brine Pans — strapped crates with blinking drop beacons, colliders, and
+an interact prompt. Picking up the fifth far from Peg fires CARGO
+SECURED and flips the compass to "Return to Quartermistress Peg"; the
+quest only completes standing at her desk, in person — no holocall
+turn-in, and the next job waits as AVAILABLE instead of auto-chaining.
+Hauled crates stay gone across map revisits.
+
+**Gates face their direction**: zone-exit gates (arch/cave/thicket/
+beach styles) now rotate so the portal plane faces the map centre —
+walking toward the exit means walking THROUGH the gate, not past its
+side profile next to the mountains.
+
+**Collision/clipping audit**: enemy spawns reject collider-blocked
+positions (12-try re-roll), and all ground enemy movement now resolves
+against static colliders — no more walking through rocks and buildings.
+Two buried POIs found and moved (a chest and a wire spool inside the
+Pelican's hull colliders). Automated audits now sweep every map: every
+interactable reachable on foot, no NPC clipped into a building box, no
+live enemy inside a collider.
+
+Headless suite: `verify20.mjs` — 27 checks, all passing (source-level
+bark/leash/gate checks, boss data + spawn-centre + hold-court + wake-up
+for three bosses, the full cargo fetch loop end-to-end incl. refusal
+and revisit persistence, spawn clearance across three maps, and the
+93-interactable reachability sweep).
+
 ## Pass 18 status — race weekend
 
 **Controls, settled**: SPACE is the jump, full stop. Holding **E**
