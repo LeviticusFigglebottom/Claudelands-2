@@ -6,7 +6,7 @@
 // Usage:  XI_KEY=... node tools/bake-vo.mjs path/to/volines.json
 // The key comes ONLY from the environment — never hardcode it here.
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { execFile } from 'child_process';
@@ -125,9 +125,20 @@ async function worker() {
 
 await Promise.all(Array.from({ length: 4 }, worker));
 
+// version stamp: changes whenever any clip's bytes change, so the runtime
+// can cache-bust clip URLs after a rebake (same filenames, new takes)
+let vh = 0x811c9dc5;
+for (const v of Object.keys(manifest).sort()) {
+  for (const [h, d] of Object.entries(manifest[v]).sort()) {
+    const s = `${v}/${h}:${d}:${statSync(join(OUT, v, `${h}.mp3`)).size}`;
+    for (let i = 0; i < s.length; i++) { vh ^= s.charCodeAt(i); vh = Math.imul(vh, 0x01000193) >>> 0; }
+  }
+}
+manifest._v = vh.toString(16);
 writeFileSync(join(OUT, 'manifest.json'), JSON.stringify(manifest));
+console.log(`version stamp: ${manifest._v}`);
 console.log(`\nbaked ${done}/${entries.length} lines (${fresh} newly generated, ${failed} failed)`);
 if (failures.length) { console.log('FAILURES:'); failures.slice(0, 10).forEach((f) => console.log(' ', f)); }
-const totalClips = Object.values(manifest).reduce((n, v) => n + Object.keys(v).length, 0);
-console.log(`manifest: ${totalClips} clips across ${Object.keys(manifest).length} voices`);
+const totalClips = Object.entries(manifest).reduce((n, [k, v]) => k === '_v' ? n : n + Object.keys(v).length, 0);
+console.log(`manifest: ${totalClips} clips across ${Object.keys(manifest).length - 1} voices`);
 process.exit(failures.length ? 1 : 0);
