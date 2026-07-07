@@ -180,7 +180,10 @@ export class World {
     this.sun.shadow.camera.left = -60; this.sun.shadow.camera.right = 60;
     this.sun.shadow.camera.top = 60; this.sun.shadow.camera.bottom = -60;
     this.sun.shadow.camera.far = 320;
-    this.sun.shadow.bias = -0.002;
+    this.sun.shadow.bias = -0.0005;
+    // low-poly terrain at grazing sun angles is acne bait — offset along the
+    // surface normal instead of piling on depth bias
+    this.sun.shadow.normalBias = 0.6;
     scene.add(this.sun, this.sun.target);
     this.hemi = new THREE.HemisphereLight(WORLD.ambient.sky, WORLD.ambient.ground, WORLD.ambient.intensity);
     scene.add(this.hemi);
@@ -206,10 +209,16 @@ export class World {
     }
   }
 
-  /** Big world: the shadow frustum follows the player. */
+  /** Big world: the shadow frustum follows the player — SNAPPED to shadow
+   *  texels. A frustum that crawls sub-texel every frame makes shadow edges
+   *  shimmer and throws transient dark patches across the ground while
+   *  running; quantizing the follow kills the crawl. */
   followSun(playerPos: THREE.Vector3): void {
-    this.sun.position.copy(playerPos).add(this.sunOffset);
-    this.sun.target.position.copy(playerPos);
+    const texel = 120 / 2048; // ortho span / shadow map size
+    const sx = Math.round(playerPos.x / texel) * texel;
+    const sz = Math.round(playerPos.z / texel) * texel;
+    this.sun.position.set(sx, playerPos.y, sz).add(this.sunOffset);
+    this.sun.target.position.set(sx, playerPos.y, sz);
     this.skyAnchor.position.set(playerPos.x, 0, playerPos.z);
   }
 

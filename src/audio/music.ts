@@ -46,6 +46,23 @@ export async function loadMusicManifest(): Promise<void> {
 
 interface LoopVoice { src: AudioBufferSourceNode; gain: GainNode; id: string }
 
+// ---- combat pools are per PLANET: each world fights to its own set.
+// Claude Prime keeps the original four; the outer rocks get their own.
+const PLANET_OF: Record<string, string> = {
+  claudelands: 'claudeprime', frosthollow: 'claudeprime', cinderthroat: 'claudeprime',
+  brasshaven: 'claudeprime', crucible: 'claudeprime', rustgulch: 'claudeprime',
+  veldt: 'veldtminor', veldt_tangle: 'veldtminor', veldt_shallows: 'veldtminor',
+  veldt_caves: 'veldtminor', veldt_gp: 'veldtminor',
+  vitra: 'vitranull', vitra_mile: 'vitranull', vitra_gp: 'vitranull',
+  voltholm: 'voltholm', volt_gp: 'voltholm', volt_still: 'voltholm',
+};
+const PLANET_COMBAT: Record<string, string[]> = {
+  claudeprime: ['combat_riff', 'combat_junk', 'combat_chase', 'combat_punk'],
+  veldtminor: ['combat_drums', 'combat_bloom'],
+  vitranull: ['combat_glass', 'combat_nullwave'],
+  voltholm: ['combat_storm', 'combat_livewire'],
+};
+
 class MusicEngine {
   private step = 0;
   private bar = 0;
@@ -177,9 +194,12 @@ class MusicEngine {
       });
     }
 
-    // ---- combat overlay: one random pool track per encounter, looped
+    // ---- combat overlay: one random track per encounter from THIS
+    // planet's pool, looped (fall back to everything if none are baked)
     if (inCombat && !this.combat) {
-      const pool = Object.keys(manifest!.combat);
+      const planet = PLANET_OF[mapId] ?? 'claudeprime';
+      const wanted = (PLANET_COMBAT[planet] ?? []).filter((id) => manifest!.combat[id] !== undefined);
+      const pool = wanted.length ? wanted : Object.keys(manifest!.combat);
       if (pool.length) {
         const pick = pool.length > 1
           ? pool.filter((id) => id !== this.lastCombatId)[Math.floor(Math.random() * (pool.length - 1))]

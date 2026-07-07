@@ -13,7 +13,7 @@ import { makerById, type ManufacturerDef } from '../data/manufacturers';
 import { rarityById } from '../data/rarity';
 import { ELEMENTS } from '../data/elements';
 import { toonMat, glowMat } from '../render/toon';
-import { swatch } from '../render/textures';
+import { gunTexture } from '../render/textures';
 import { mulberry32 } from '../util/rng';
 
 interface Palette {
@@ -28,11 +28,14 @@ function paletteFor(maker: ManufacturerDef): Palette {
   let p = paletteCache.get(maker.id);
   if (!p) {
     const hex = (n: number) => '#' + n.toString(16).padStart(6, '0');
+    // the maker's visual language is baked INTO the albedo — rivet plate,
+    // brushed alloy, welded salvage, etched brass, wood grain, toy plastic
+    const style = maker.silhouette as 'brick' | 'sleek' | 'cobbled' | 'coiled' | 'classic' | 'toy';
     p = {
-      primary: toonMat({ color: 0xffffff, map: swatch(hex(maker.palette.primary), 90) }),
-      secondary: toonMat({ color: 0xffffff, map: swatch(hex(maker.palette.secondary), 70) }),
+      primary: toonMat({ color: 0xffffff, map: gunTexture(hex(maker.palette.primary), style) }),
+      secondary: toonMat({ color: 0xffffff, map: gunTexture(hex(maker.palette.secondary), style === 'classic' ? 'classic' : style) }),
       accent: toonMat({ color: maker.palette.accent }),
-      dark: toonMat({ color: 0x2a2626 }),
+      dark: toonMat({ color: 0x2a2626, map: gunTexture('#2a2626', 'sleek') }),
     };
     paletteCache.set(maker.id, p);
   }

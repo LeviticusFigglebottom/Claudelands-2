@@ -47,6 +47,13 @@ const COMBAT = {
   combat_junk: 'Junkyard percussion war-stomp: clanging scrap-metal drums, anvil hits, growling detuned bass synth, chain-gang rhythm, mean and mechanical.',
   combat_chase: 'High-speed electro-rock pursuit: urgent synth arpeggios, breakneck drum groove, wiry guitar tremolo, sirens-in-the-dust energy, wild and propulsive.',
   combat_punk: 'Frantic surf-punk shootout: raw fuzzed guitar power chords, galloping snare, honking baritone sax jabs, reckless cartoon-violence glee.',
+  // per-planet pools: each world fights to its own sound
+  combat_drums: 'Jungle war-drum firefight: thunderous polyrhythmic hand drums and log percussion, urgent bamboo flute shrieks, driving tribal chant stabs, humid breakneck energy.',
+  combat_bloom: 'Overgrown horror groove: lurching heavy riff tangled in dissonant plucked strings, insect-swarm shaker frenzy, low chanted drone, a garden fighting back at full sprint.',
+  combat_glass: 'Crystalline combat pulse: icy arpeggiated synths shattering over a hard four-on-the-floor, glassy bell stabs, deep sub drops, cold and gleaming and fast.',
+  combat_nullwave: 'Dark-side synthwave chase: brooding analog bass sequence, neon lead wails, gated drums pounding through reverb, moonlit glass-desert pursuit at speed.',
+  combat_storm: 'Thunderstorm battle rock: heavy palm-muted riffing in lockstep with rolling thunder toms, lightning-crack snare accents, howling slide guitar, drenched and furious.',
+  combat_livewire: 'Electro-industrial skirmish: sparking synth static bursts over a grinding bass motor, metallic clang percussion, voltage-whine leads, a firefight inside a generator.',
 };
 
 const TRACKS = [

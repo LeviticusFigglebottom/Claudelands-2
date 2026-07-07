@@ -141,6 +141,99 @@ export function swatch(base: string, speckle = 60): THREE.CanvasTexture {
 // Water: pool surface (sparkle flecks) and falling-water streaks. The fall
 // texture is designed to scroll vertically.
 
+/** Gun-metal albedo per manufacturer visual language. Style keys match the
+ *  maker silhouettes so a VULKRAM reads riveted plate and a BRISKCO reads
+ *  injection-molded toy, before you even see the shape. */
+export function gunTexture(base: string, style: 'brick' | 'sleek' | 'cobbled' | 'coiled' | 'classic' | 'toy'): THREE.CanvasTexture {
+  const [c, ctx] = canvas(128, 128);
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, 128, 128);
+  switch (style) {
+    case 'brick': { // riveted plate: panel seams + rivet heads + scuffs
+      ctx.strokeStyle = 'rgba(10,8,12,0.5)';
+      ctx.lineWidth = 2;
+      for (const y of [32, 64, 96]) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(128, y); ctx.stroke(); }
+      for (const x of [42, 86]) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 128); ctx.stroke(); }
+      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      for (let i = 0; i < 24; i++) { ctx.beginPath(); ctx.arc(6 + (i % 6) * 22, 10 + Math.floor(i / 6) * 32, 2.2, 0, Math.PI * 2); ctx.fill(); }
+      grunge(ctx, 128, 128, 'rgba(20,16,12,0.5)', 10, 3, 9, 0.3);
+      break;
+    }
+    case 'sleek': { // brushed lines + a soft sheen band
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+      ctx.lineWidth = 1;
+      for (let y = 3; y < 128; y += 5) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(128, y); ctx.stroke(); }
+      const grad = ctx.createLinearGradient(0, 0, 0, 128);
+      grad.addColorStop(0.35, 'rgba(255,255,255,0)');
+      grad.addColorStop(0.5, 'rgba(255,255,255,0.18)');
+      grad.addColorStop(0.65, 'rgba(255,255,255,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 128, 128);
+      break;
+    }
+    case 'cobbled': { // mismatched salvage: patch rects, weld seams, rust
+      for (let i = 0; i < 7; i++) {
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = i % 2 ? 'rgba(90,70,50,1)' : 'rgba(60,66,74,1)';
+        ctx.fillRect(Math.random() * 100, Math.random() * 100, 20 + Math.random() * 40, 16 + Math.random() * 30);
+      }
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = 'rgba(16,12,10,0.7)';
+      ctx.lineWidth = 2.5;
+      for (let i = 0; i < 5; i++) {
+        ctx.beginPath();
+        let x = Math.random() * 128, y = Math.random() * 128;
+        ctx.moveTo(x, y);
+        for (let k = 0; k < 4; k++) { x += (Math.random() - 0.5) * 40; y += (Math.random() - 0.5) * 40; ctx.lineTo(x, y); }
+        ctx.stroke();
+      }
+      grunge(ctx, 128, 128, 'rgba(138,74,38,0.8)', 12, 3, 10, 0.35);
+      inkSpeckle(ctx, 128, 128, 40, 0.4);
+      break;
+    }
+    case 'coiled': { // arcane brass: etched rings + glyph ticks
+      ctx.strokeStyle = 'rgba(255,235,190,0.28)';
+      ctx.lineWidth = 1.4;
+      for (let i = 0; i < 6; i++) {
+        ctx.beginPath();
+        ctx.arc(Math.random() * 128, Math.random() * 128, 8 + Math.random() * 20, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      for (let i = 0; i < 26; i++) {
+        const x = Math.random() * 128, y = Math.random() * 128;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + (Math.random() - 0.5) * 8, y + (Math.random() - 0.5) * 8); ctx.stroke();
+      }
+      grunge(ctx, 128, 128, 'rgba(20,10,30,0.6)', 8, 4, 12, 0.25);
+      break;
+    }
+    case 'classic': { // long wavy wood grain
+      ctx.strokeStyle = 'rgba(30,18,8,0.4)';
+      for (let y = 2; y < 128; y += 7) {
+        ctx.lineWidth = 1 + Math.random() * 1.6;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        for (let x = 0; x <= 128; x += 16) ctx.lineTo(x, y + Math.sin(x * 0.08 + y) * 2.5);
+        ctx.stroke();
+      }
+      grunge(ctx, 128, 128, 'rgba(255,220,160,0.5)', 6, 4, 14, 0.2);
+      break;
+    }
+    case 'toy': { // clean plastic: diagonal stripe + sticker dots + seam
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.beginPath();
+      ctx.moveTo(0, 90); ctx.lineTo(128, 30); ctx.lineTo(128, 52); ctx.lineTo(0, 112); ctx.fill();
+      ctx.strokeStyle = 'rgba(10,8,12,0.35)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(0, 64); ctx.lineTo(128, 64); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(Math.random() * 128, Math.random() * 128, 3, 0, Math.PI * 2); ctx.fill(); }
+      break;
+    }
+  }
+  inkSpeckle(ctx, 128, 128, 16, 0.3);
+  return tex(c);
+}
+
 export function waterTexture(base = '#2f86b8', light = '#bfe8ff'): THREE.CanvasTexture {
   const [c, ctx] = canvas(128, 128);
   ctx.fillStyle = base;

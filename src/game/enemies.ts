@@ -312,6 +312,7 @@ export class Enemy implements Damageable {
             this.group.add(plate); this.bodyParts.push(plate);
           }
         }
+        this.dressFaction(scale);
         if (this.def.shield > 0) {
           const bubble = new THREE.Mesh(new THREE.SphereGeometry(1.1 * scale, 10, 10),
             new THREE.MeshBasicMaterial({ color: 0x54d4ff, transparent: true, opacity: 0.14, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -323,6 +324,224 @@ export class Enemy implements Damageable {
       }
     }
     this.group.traverse((o) => { o.castShadow = true; });
+  }
+
+  /** Faction character layer: eyes, headgear, kit — the silhouette says
+   *  WHAT it is, this says WHO. Cheap primitives only; materials made via
+   *  this.mat so decorations flash on hit like the rest of the body. */
+  protected dressFaction(scale: number): void {
+    const f = this.def.faction;
+    const dark = this.mat(0x2a2622);
+    const mutt = this.def.id === 'scrapmutt' || this.def.id === 'frostmutt';
+    const EYE: Record<string, number> = {
+      rustborn: 0xffd23c, helix: 0xff3030, frostborn: 0x9ad8e8, kindled: 0xff6a1a,
+      verdant: 0x9adc4a, brine: 0x7dffd4, hollow: 0x54d4ff, vitrified: 0x7af0ff, galebound: 0xc8d24a,
+    };
+    const eyeColor = EYE[f] ?? 0xffd23c;
+
+    if (mutt) {
+      // ears + wagging tail + glow eyes on the snout
+      for (const sd of [-1, 1]) {
+        const ear = new THREE.Mesh(new THREE.ConeGeometry(0.07 * scale, 0.2 * scale, 5), dark);
+        ear.position.set(sd * 0.12 * scale, 0.82 * scale, -0.58 * scale);
+        ear.rotation.x = -0.3;
+        this.group.add(ear);
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035 * scale, 6, 6), glowMat(eyeColor, 1));
+        eye.position.set(sd * 0.09 * scale, 0.68 * scale, -0.82 * scale);
+        eye.layers.set(1);
+        this.group.add(eye);
+      }
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.06 * scale, 0.06 * scale, 0.4 * scale), dark);
+      tail.position.set(0, 0.6 * scale, 0.62 * scale);
+      tail.rotation.x = -0.5;
+      this.group.add(tail);
+      this.addLimb(tail, 2.2);
+      return;
+    }
+    if (f === 'helix') {
+      // a red tracking visor + hazard chevrons on the chest plate
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.3 * scale, 0.05 * scale, 0.04 * scale), glowMat(eyeColor, 0.95));
+      visor.position.set(0, 1.52 * scale, -0.16 * scale);
+      visor.layers.set(1);
+      const chev = new THREE.Mesh(new THREE.BoxGeometry(0.4 * scale, 0.05 * scale, 0.02 * scale), this.mat(0xd8a020));
+      chev.position.set(0, 0.72 * scale, -0.23 * scale);
+      chev.rotation.z = 0.3;
+      this.group.add(visor, chev);
+      this.bodyParts.push(chev);
+      return;
+    }
+
+    // ---- everyone humanoid gets a face: two glow-dot eyes under the brow
+    const dim = this.def.id === 'sleepwalker'; // asleep: eyes shut
+    for (const sd of [-1, 1]) {
+      const eye = new THREE.Mesh(
+        dim ? new THREE.BoxGeometry(0.07 * scale, 0.015 * scale, 0.02 * scale) : new THREE.SphereGeometry(0.035 * scale, 6, 6),
+        dim ? dark : glowMat(eyeColor, 0.95));
+      eye.position.set(sd * 0.08 * scale, 1.64 * scale, -0.16 * scale);
+      if (!dim) eye.layers.set(1);
+      this.group.add(eye);
+    }
+
+    switch (f) {
+      case 'rustborn': {
+        // mohawk fin + tool belt + shoulder spikes: trash couture
+        const hawk = new THREE.Mesh(new THREE.BoxGeometry(0.05 * scale, 0.16 * scale, 0.3 * scale), this.mat(0xc85a2a));
+        hawk.position.y = 1.85 * scale;
+        const belt = new THREE.Mesh(new THREE.BoxGeometry(0.64 * scale, 0.09 * scale, 0.38 * scale), dark);
+        belt.position.y = 0.72 * scale;
+        this.group.add(hawk, belt);
+        this.bodyParts.push(belt);
+        for (const sd of [-1, 1]) {
+          const spike = new THREE.Mesh(new THREE.ConeGeometry(0.045 * scale, 0.14 * scale, 4), dark);
+          spike.position.set(sd * 0.42 * scale, 1.56 * scale, 0.08 * scale);
+          this.group.add(spike);
+        }
+        if (this.def.behavior === 'brute') {
+          const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.07 * scale, 0.09 * scale, 0.5 * scale, 6), dark);
+          stack.position.set(-0.3 * scale, 1.7 * scale, 0.2 * scale);
+          stack.rotation.z = 0.2;
+          this.group.add(stack);
+          this.bodyParts.push(stack);
+        }
+        break;
+      }
+      case 'frostborn': {
+        // fur ruff + icicle fringe + a snow-dusted cap
+        const ruff = new THREE.Mesh(new THREE.TorusGeometry(0.24 * scale, 0.09 * scale, 6, 12), this.mat(0xd8d0c0, '#c8c0b0'));
+        ruff.position.y = 1.42 * scale;
+        ruff.rotation.x = Math.PI / 2;
+        const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.17 * scale, 0.19 * scale, 0.14 * scale, 8), this.mat(0x5a7a9a));
+        cap.position.y = 1.84 * scale;
+        const snow = new THREE.Mesh(new THREE.CylinderGeometry(0.18 * scale, 0.18 * scale, 0.03 * scale, 8), this.mat(0xf0f6fa));
+        snow.position.y = 1.92 * scale;
+        this.group.add(ruff, cap, snow);
+        this.bodyParts.push(ruff, cap);
+        for (let i = 0; i < 3; i++) {
+          const ice = new THREE.Mesh(new THREE.ConeGeometry(0.025 * scale, 0.12 * scale, 4), this.mat(0xbfe8ff));
+          ice.position.set((i - 1) * 0.08 * scale, 1.44 * scale, -0.17 * scale);
+          ice.rotation.x = Math.PI;
+          this.group.add(ice);
+        }
+        break;
+      }
+      case 'kindled': {
+        // kiln-grate chest slits burning through + soot hood + shoulder stack
+        for (let i = 0; i < 3; i++) {
+          const slit = new THREE.Mesh(new THREE.BoxGeometry(0.28 * scale, 0.035 * scale, 0.02 * scale), glowMat(0xff6a1a, 0.95));
+          slit.position.set(0, (0.95 + i * 0.12) * scale, -0.19 * scale);
+          slit.layers.set(1);
+          this.group.add(slit);
+        }
+        const hood = new THREE.Mesh(new THREE.ConeGeometry(0.24 * scale, 0.34 * scale, 7), this.mat(0x2c2420));
+        hood.position.y = 1.86 * scale;
+        const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * scale, 0.07 * scale, 0.4 * scale, 6), dark);
+        stack.position.set(0.34 * scale, 1.66 * scale, 0.14 * scale);
+        stack.rotation.z = -0.25;
+        this.group.add(hood, stack);
+        this.bodyParts.push(hood, stack);
+        break;
+      }
+      case 'verdant': {
+        // carved mask over the face + leaf skirt + a feather crest
+        const mask = new THREE.Mesh(new THREE.BoxGeometry(0.36 * scale, 0.4 * scale, 0.08 * scale), this.mat(0x8a6a3a, '#7a5c30'));
+        mask.position.set(0, 1.62 * scale, -0.19 * scale);
+        this.group.add(mask);
+        this.bodyParts.push(mask);
+        const skirt = new THREE.Mesh(new THREE.ConeGeometry(0.42 * scale, 0.4 * scale, 8, 1, true), this.mat(0x3a7a3a, '#2e6a30'));
+        skirt.position.y = 0.62 * scale;
+        this.group.add(skirt);
+        for (let i = 0; i < 3; i++) {
+          const feather = new THREE.Mesh(new THREE.BoxGeometry(0.03 * scale, 0.28 * scale, 0.02 * scale), this.mat(i === 1 ? 0xd8b028 : 0x9adc4a));
+          feather.position.set((i - 1) * 0.07 * scale, 1.95 * scale, 0.05 * scale);
+          feather.rotation.x = -0.2 - i * 0.08;
+          this.group.add(feather);
+        }
+        break;
+      }
+      case 'brine': {
+        // barnacled shoulder + hanging kelp + a rusted gaff hook
+        for (let i = 0; i < 3; i++) {
+          const b = new THREE.Mesh(new THREE.SphereGeometry((0.05 + i * 0.015) * scale, 6, 6), this.mat(0xc8c0a8, '#b8b098'));
+          b.position.set(0.38 * scale + (i - 1) * 0.07 * scale, 1.5 * scale, (i - 1) * 0.06 * scale);
+          this.group.add(b);
+        }
+        for (const sd of [-1, 0.4, 1]) {
+          const kelp = new THREE.Mesh(new THREE.BoxGeometry(0.05 * scale, 0.4 * scale, 0.02 * scale), this.mat(0x3a6a4a));
+          kelp.position.set(sd * 0.24 * scale, 0.5 * scale, -0.18 * scale);
+          kelp.rotation.x = 0.1;
+          this.group.add(kelp);
+        }
+        const hook = new THREE.Mesh(new THREE.TorusGeometry(0.08 * scale, 0.02 * scale, 5, 8, Math.PI * 1.3), dark);
+        hook.position.set(-0.4 * scale, 0.86 * scale, -0.1 * scale);
+        this.group.add(hook);
+        break;
+      }
+      case 'hollow': {
+        // crystal outgrowth on the back + a miner's lamp that still works
+        for (let i = 0; i < 3; i++) {
+          const crystal = new THREE.Mesh(new THREE.OctahedronGeometry((0.08 + i * 0.03) * scale, 0), this.mat(0x54a8c8, '#4a98b8'));
+          crystal.position.set((i - 1) * 0.14 * scale, (1.2 + (i % 2) * 0.16) * scale, 0.24 * scale);
+          crystal.rotation.set(i, i * 0.7, 0);
+          this.group.add(crystal);
+          this.bodyParts.push(crystal);
+        }
+        const lamp = new THREE.Mesh(new THREE.CircleGeometry(0.05 * scale, 8), glowMat(0xffe8b0, 0.95));
+        lamp.position.set(0, 1.76 * scale, -0.16 * scale);
+        lamp.layers.set(1);
+        this.group.add(lamp);
+        break;
+      }
+      case 'vitrified': {
+        // glass shard spines + the cinder core glowing through the chest
+        for (let i = 0; i < 4; i++) {
+          const shard = new THREE.Mesh(new THREE.ConeGeometry(0.05 * scale, (0.2 + (i % 2) * 0.12) * scale, 4),
+            new THREE.MeshToonMaterial({ color: 0x6a5adf, transparent: true, opacity: 0.7 }));
+          shard.position.set((i - 1.5) * 0.14 * scale, (1.3 + (i % 2) * 0.14) * scale, 0.22 * scale);
+          shard.rotation.x = 0.5;
+          this.group.add(shard);
+        }
+        const core = new THREE.Mesh(new THREE.SphereGeometry(0.07 * scale, 6, 6), glowMat(0xff8c3c, 0.9));
+        core.position.set(0, 1.05 * scale, -0.15 * scale);
+        core.layers.set(1);
+        this.group.add(core);
+        break;
+      }
+      case 'galebound': {
+        // harvest harness + hip jar + a little back turbine, still turning
+        const strap = new THREE.Mesh(new THREE.BoxGeometry(0.08 * scale, 0.8 * scale, 0.02 * scale), dark);
+        strap.position.set(0.12 * scale, 1.05 * scale, -0.19 * scale);
+        strap.rotation.z = 0.5;
+        this.group.add(strap);
+        const jar = new THREE.Mesh(new THREE.CylinderGeometry(0.08 * scale, 0.1 * scale, 0.22 * scale, 6),
+          glowMat(this.def.id === 'sleepwalker' ? 0x4a5450 : 0xc8d24a, 0.8));
+        jar.position.set(-0.32 * scale, 0.74 * scale, -0.1 * scale);
+        this.group.add(jar);
+        const hub = new THREE.Mesh(new THREE.TorusGeometry(0.12 * scale, 0.025 * scale, 5, 10), dark);
+        hub.position.set(0, 1.25 * scale, 0.26 * scale);
+        this.group.add(hub);
+        const rotor = new THREE.Mesh(new THREE.BoxGeometry(0.32 * scale, 0.02 * scale, 0.04 * scale), dark);
+        rotor.position.set(0, 1.25 * scale, 0.27 * scale);
+        rotor.name = 'rotor';
+        this.group.add(rotor);
+        break;
+      }
+    }
+
+    // ---- behavior kit, any faction
+    if (this.def.behavior === 'gunner') {
+      const bando = new THREE.Mesh(new THREE.BoxGeometry(0.09 * scale, 0.85 * scale, 0.03 * scale), this.mat(0x6a4a2e));
+      bando.position.set(-0.1 * scale, 1.05 * scale, -0.185 * scale);
+      bando.rotation.z = -0.55;
+      this.group.add(bando);
+    }
+    if (this.def.behavior === 'lobber') {
+      for (const sd of [-1, 1]) {
+        const shell = new THREE.Mesh(new THREE.SphereGeometry(0.11 * scale, 6, 6), this.mat(0x7a8a3a));
+        shell.position.set(sd * 0.16 * scale, 1.3 * scale, 0.26 * scale);
+        this.group.add(shell);
+        this.bodyParts.push(shell);
+      }
+    }
   }
 
   get displayName(): string {
