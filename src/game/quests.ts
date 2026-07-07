@@ -266,6 +266,11 @@ class QuestSystem {
     return enemy.def.faction === q.def.objective.faction && q.progress < q.def.objective.count;
   }
 
+  /** What the active collect quest's dropped item calls itself. */
+  collectItemName(): string {
+    return this.active?.def.objective.itemName ?? 'Helix Drive Core';
+  }
+
   update(): void {
     const q = this.active;
     if (!q || !this.hooks) return;

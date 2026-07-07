@@ -17,6 +17,7 @@ import { projectiles } from './game/projectiles';
 import { enemySpawner, setEnemyHooks, coopEnemyScale, type Enemy } from './game/enemies';
 import { ENEMIES } from './data/enemies';
 import { spawnBoss, type BossId } from './game/boss';
+import { storm } from './game/storm';
 import { actionSkill } from './game/actionskill';
 import { setNumberSpawner, setTargetProvider, setPlayerDamageRouter, tickCombatClock, applyDamage, type Damageable } from './game/combat';
 import { questSystem, type QuestStatus } from './game/quests';
@@ -163,6 +164,10 @@ player.extraRayTargets = () => {
   return rt ? [rt] : [];
 };
 
+storm.damagePlayer = (amount, element, from) => player.damage(amount, element, from);
+storm.groundHeight = (x, z) => world.groundHeight(x, z);
+storm.playerLevel = () => state.level;
+
 setEnemyHooks({
   playerPos: () => player.position,
   damagePlayer: (amount, element, from) => player.damage(amount * coopEnemyScale().dmg, element, from),
@@ -179,12 +184,13 @@ setEnemyHooks({
   },
   coverSpots: (near, threat, maxDist) => world.coverSpots(near, threat, maxDist),
   spawnBlocked: (x, z) => world.collideSphere(new THREE.Vector3(x, world.groundHeight(x, z) + 0.5, z), 0.7) !== null,
+  shovePlayer: (dx, dz, power) => player.shove(dx, dz, power),
   onKilled: (enemy: Enemy, overkill: number) => {
     enemySpawner.gibBurst(enemy);
     const tier = enemy.badass ? Math.max(2, enemy.def.dropTier) : enemy.def.dropTier;
     loot.dropForTier(tier, enemy.level, enemy.position.clone());
     if (questSystem.wantsCollectDrop(enemy)) {
-      loot.spawnQuestItem(enemy.position.clone().add(new THREE.Vector3(0.5, 0.3, 0.5)), 'Helix Drive Core');
+      loot.spawnQuestItem(enemy.position.clone().add(new THREE.Vector3(0.5, 0.3, 0.5)), questSystem.collectItemName());
     }
     const xp = enemy.def.xp * Math.pow(1.13, enemy.level - 1) * (enemy.badass ? 3 : 1) * difficulty().xpMult;
     state.addXp(xp);
@@ -286,6 +292,7 @@ function switchMap(mapId: string, toX?: number, toZ?: number): void {
   player.position.set(x, world.groundHeight(x, z), z);
   player.respawnPoint.copy(player.position);
   faceArrival();
+  storm.reset();
   world.followSun(player.position);
   mapFadeT = 1; // fade-in from the reconstruction flash
   fx.burst(player.position.clone().add(new THREE.Vector3(0, 1, 0)), 0x54d4ff, 40, 6, 0.14, 1, 4);
@@ -658,15 +665,21 @@ const SHIP_PADS: Record<string, { x: number; z: number; to: string; planet: stri
   brasshaven: { x: -26, z: 40, to: 'veldt', planet: 'claudeprime' },
   veldt: { x: -16, z: 94, to: 'brasshaven', planet: 'veldtminor' },
   vitra: { x: -18, z: 100, to: 'brasshaven', planet: 'vitranull' },
+  voltholm: { x: -18, z: 98, to: 'brasshaven', planet: 'voltholm' },
 };
 
-/** The Paperweight flies a LOOP once the third rock answers: brasshaven →
- *  veldt → vitra → brasshaven. Before the finale, veldt hops straight home. */
+/** The Paperweight flies a LOOP that grows with the story: brasshaven →
+ *  veldt → vitra → voltholm → brasshaven. Each new rock joins the route
+ *  when its chapter opens; before that, the hop skips straight home. */
 function shipDestFrom(mapId: string): string {
   const pad = SHIP_PADS[mapId];
   if (mapId === 'veldt') {
     const q26 = questSystem.quests.find((q) => q.def.id === 'q26_motherlode');
     return q26?.status === 'complete' ? 'vitra' : 'brasshaven';
+  }
+  if (mapId === 'vitra') {
+    const q32 = questSystem.quests.find((q) => q.def.id === 'q32_secondlamp');
+    return q32?.status === 'complete' ? 'voltholm' : 'brasshaven';
   }
   return pad.to;
 }
@@ -1191,6 +1204,7 @@ function stepSim(dt: number): void {
     player.update(dt);
   }
   race.update(dt);
+  storm.update(dt, player.position, player.paused || cinema.active);
   actionSkill.update(dt);
   enemySpawner.update(dt);
   projectiles.update(dt);
@@ -1514,9 +1528,10 @@ function startRaceMode(trackId: string, tier: string): void {
   }
   const diff = RACE_DIFFICULTIES.find((d) => d.id === tier) ?? RACE_DIFFICULTIES[0];
   race.start(diff, track, tier === 'practice');
+  const distance = track.linear ? 'point to point' : `${track.laps} laps`;
   feedText(tier === 'practice'
-    ? `<b>${track.name}</b> — ${track.laps} laps against the clock. F climbs out when you're done.`
-    : `<b>${track.name}</b> — ${track.laps} laps vs ${diff.name}. Good luck.`, '#ffd23c');
+    ? `<b>${track.name}</b> — ${distance} against the clock. F climbs out when you're done.`
+    : `<b>${track.name}</b> — ${distance} vs ${diff.name}. Good luck.`, '#ffd23c');
   canvas.requestPointerLock();
 }
 
@@ -1597,6 +1612,10 @@ canvas.addEventListener('click', () => {
   voStats,
   prefsDebug: { prefs, setPref },
   switchMapDebug: switchMap,
+  storm,
+  get pauseStateDebug() {
+    return { paused: player.paused, cinematicT, cinemaActive: cinema.active, openPanel, shipActive: shipTravel.active };
+  },
   skipIntro: () => { if (cinematicT >= 0) intro.end(); },
   cinema, seenCines, shipTravel,
   startShipTravelDebug: startShipTravel,

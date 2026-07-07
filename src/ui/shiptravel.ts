@@ -30,6 +30,8 @@ export const PLANET_LOOKS: Record<string, PlanetLook> = {
   veldtminor: { body: 0x4a9a58, shellA: { color: 0x54d4ff, opacity: 0.16 }, shellB: { color: 0x9adc4a, opacity: 0.08 } },
   // Vitra Null: a moon-dark marble veined in aurora light
   vitranull: { body: 0x241a4e, shellA: { color: 0x7af0ff, opacity: 0.18 }, shellB: { color: 0xc06bff, opacity: 0.1 } },
+  // Voltholm: slate-green under a permanent thunderhead, flickering
+  voltholm: { body: 0x4a5248, shellA: { color: 0xc8d24a, opacity: 0.16 }, shellB: { color: 0x8a9ab8, opacity: 0.1 } },
 };
 
 export interface ShipTravelHooks {

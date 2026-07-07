@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { Enemy, enemySpawner, enemyHooks } from './enemies';
-import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, BOSS_BLOOM, BOSS_ANCHORHEAD, BOSS_MOTHERLODE, BOSS_UNKEEPER, type EnemyDef } from '../data/enemies';
+import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, BOSS_BLOOM, BOSS_ANCHORHEAD, BOSS_MOTHERLODE, BOSS_UNKEEPER, BOSS_ABBOT, BOSS_GALEPRIME, type EnemyDef } from '../data/enemies';
 import { toonMat, glowMat } from '../render/toon';
 import { fx } from './particles';
 import { audio } from '../audio/synth';
@@ -843,7 +843,242 @@ export class Unkeeper extends Boss {
 }
 
 // ---------------------------------------------------------------------------
-export type BossId = 'gutterball' | 'warden_prime' | 'old_man_avalanche' | 'saint_furnace' | 'bloom_mother' | 'admiral_anchorhead' | 'mother_lode' | 'unkeeper';
+// THE STATIC ABBOT — Voltholm's grounded monk. Runs the Capacitorium like a
+// monastery where the storm takes confession. His halo is a charged capacitor
+// ring — the crit zone — and every special is a sermon: chain-lightning
+// litanies, a grounding nova, and called-down judgment bolts that preview
+// the SKYFALL storm mechanic in miniature.
+export class StaticAbbot extends Boss {
+  private halo: THREE.Mesh;
+  private judgePts: THREE.Vector3[] = [];
+  private judgeT = 0;
+
+  constructor(level: number, pos: THREE.Vector3) {
+    super(BOSS_ABBOT, level, pos);
+    const scale = this.def.scale;
+    const cloth = toonMat({ color: 0x3a3e2a });
+    const brass = toonMat({ color: 0x9a8a3c });
+    // the cassock: a bell of storm-waxed cloth
+    const cassock = new THREE.Mesh(new THREE.CylinderGeometry(0.5 * scale, 0.95 * scale, 1.4 * scale, 8), cloth);
+    cassock.position.y = 0.8 * scale;
+    this.group.add(cassock);
+    this.bodyParts.push(cassock);
+    // a copper stole, because the storm likes a conductor
+    const stole = new THREE.Mesh(new THREE.BoxGeometry(0.2 * scale, 1.2 * scale, 0.08 * scale), brass);
+    stole.position.set(0.2 * scale, 1.15 * scale, 0.3 * scale);
+    this.group.add(stole);
+    this.bodyParts.push(stole);
+    // the halo: a capacitor ring floating over the cowl — CRIT
+    this.halo = new THREE.Mesh(new THREE.TorusGeometry(0.42 * scale, 0.08 * scale, 8, 18), glowMat(0xc8d24a, 0.85));
+    this.halo.position.y = 2.35 * scale;
+    this.halo.rotation.x = Math.PI / 2;
+    this.group.add(this.halo);
+    this.bodyParts.push(this.halo);
+    this.critZone = this.halo;
+    audio.bossRoar(false);
+  }
+
+  protected onPhase(phase: number): void {
+    if (phase === 1) {
+      enemyHooks().bark(this.displayName, 'BROTHERS. THE COLLECTION PLATE.');
+      for (const s of [new THREE.Vector3(5, 0, 4), new THREE.Vector3(-5, 0, 4), new THREE.Vector3(0, 0, -6)]) {
+        enemySpawner.spawnOne(ENEMIES.conductor, this.position.clone().add(s), false, 12);
+      }
+    } else {
+      enemyHooks().bark(this.displayName, 'VESPERS ARE OVER. NOW WE SING LOUD.');
+      audio.bossRoar(false);
+      this.def = { ...this.def, speed: this.def.speed * 1.4, attackRate: this.def.attackRate * 1.4 };
+      (this.halo.material as THREE.MeshBasicMaterial).color.setHex(0xffffa0);
+    }
+  }
+
+  protected specialCooldown(): number { return this.phase >= 2 ? 4.4 : 6.8; }
+
+  protected special(): void {
+    const playerPos = enemyHooks().playerPos();
+    const roll = Math.random();
+    if (roll < 0.38) {
+      // LITANY: a fan of chained volt bolts, wide then converging
+      enemyHooks().bark(this.displayName, 'RESPONSORIAL. REPEAT AFTER ME.');
+      const muzzle = this.position.clone().add(new THREE.Vector3(0, 2.2 * this.def.scale, 0));
+      const base = playerPos.clone().sub(muzzle).setY(0).normalize();
+      for (let i = -2; i <= 2; i++) {
+        const dir = base.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), i * 0.16);
+        dir.y = 0.06;
+        projectiles.spawn({
+          pos: muzzle.clone(), vel: dir.normalize().multiplyScalar(30),
+          damage: 7.5 * levelScale(this.level), element: 'volt',
+          splash: 1.6, gravity: 0, fuse: -1, source: 'enemy',
+        });
+      }
+      audio.elemental('volt');
+    } else if (roll < 0.72) {
+      // JUDGMENT: he marks spots under and around you — bolts land a beat later
+      enemyHooks().bark(this.displayName, 'THE SKY WILL NOW TAKE QUESTIONS.');
+      this.judgePts = [];
+      for (let i = 0; i < 3; i++) {
+        const p = playerPos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 7, 0, (Math.random() - 0.5) * 7));
+        p.y = enemyHooks().groundHeight(p.x, p.z);
+        this.judgePts.push(p);
+        fx.burst(p.clone().add(new THREE.Vector3(0, 0.4, 0)), 0xc8d24a, 14, 2, 0.1, 0.9, 1);
+      }
+      this.judgeT = 1.0;
+    } else {
+      // GROUNDING: the floor becomes the sermon
+      fx.explosion(this.position.clone(), 6, 0xc8d24a);
+      audio.explosion(true);
+      audio.elemental('volt');
+      splashDamage(this.position.clone(), 8, 9 * levelScale(this.level), 'volt', { source: 'enemy', elemChance: 0.8 });
+    }
+  }
+
+  override update(dt: number): void {
+    super.update(dt);
+    if (!this.alive) return;
+    // judgment bolts: telegraphed columns that punish standing still
+    if (this.judgeT > 0) {
+      this.judgeT -= dt;
+      for (const p of this.judgePts) {
+        if (Math.random() < 6 * dt) fx.burst(p.clone().add(new THREE.Vector3(0, 0.3, 0)), 0xf8ffc0, 3, 1.5, 0.08, 0.6, 1);
+      }
+      if (this.judgeT <= 0) {
+        for (const p of this.judgePts) {
+          fx.skyBolt(p);
+          splashDamage(p.clone(), 3.4, 12 * levelScale(this.level), 'volt', { source: 'enemy', elemChance: 0.9 });
+        }
+        audio.explosion(true);
+        this.judgePts = [];
+      }
+    }
+    // the halo spins; faster when he's angrier
+    this.halo.rotation.z += dt * (this.phase >= 2 ? 3.2 : 1.2);
+    if (this.phase >= 2 && Math.random() < 7 * dt) fx.statusFlames(this.position, 'volt');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GALE PRIME, THE UNANCHORED — the Eyewall's tenant. A storm-harvest foreman
+// who cut every mooring but one: the last shackle on its chest is the crit
+// zone. Fights with the weather itself — shearing wind charges, an updraft
+// nova that throws you off your aim, crosswind summons, and bottled fronts.
+export class GalePrime extends Boss {
+  private shackle: THREE.Mesh;
+  private vanes: THREE.Group;
+  private shearing = 0;
+  private shearDir = new THREE.Vector3();
+
+  constructor(level: number, pos: THREE.Vector3) {
+    super(BOSS_GALEPRIME, level, pos);
+    const scale = this.def.scale;
+    const slate = toonMat({ color: 0x5a6a78 });
+    const iron = toonMat({ color: 0x32383e });
+    // a torso wrapped in wind-torn harness plates
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.62 * scale, 0.5 * scale, 1.2 * scale, 8), slate);
+    barrel.position.y = 1.25 * scale;
+    this.group.add(barrel);
+    this.bodyParts.push(barrel);
+    // turbine vanes orbit the shoulders — the storm it wears like a coat
+    this.vanes = new THREE.Group();
+    for (let i = 0; i < 4; i++) {
+      const vane = new THREE.Mesh(new THREE.BoxGeometry(1.1 * scale, 0.08 * scale, 0.26 * scale), iron);
+      const a = (i / 4) * Math.PI * 2;
+      vane.position.set(Math.cos(a) * 0.95 * scale, 0, Math.sin(a) * 0.95 * scale);
+      vane.rotation.y = -a;
+      this.vanes.add(vane);
+      this.bodyParts.push(vane);
+    }
+    this.vanes.position.y = 1.9 * scale;
+    this.group.add(this.vanes);
+    // THE LAST MOORING: one glowing shackle still bolted to the chest — CRIT
+    this.shackle = new THREE.Mesh(new THREE.TorusGeometry(0.26 * scale, 0.09 * scale, 8, 14), glowMat(0x9adcff, 0.9));
+    this.shackle.position.set(0, 1.3 * scale, 0.55 * scale);
+    this.group.add(this.shackle);
+    this.bodyParts.push(this.shackle);
+    this.critZone = this.shackle;
+    audio.bossRoar(true);
+  }
+
+  protected onPhase(phase: number): void {
+    if (phase === 1) {
+      enemyHooks().bark(this.displayName, 'CROSSWIND. MEET THE CREW I KEPT.');
+      for (const s of [new THREE.Vector3(6, 0, 3), new THREE.Vector3(-6, 0, 3), new THREE.Vector3(0, 0, -7)]) {
+        enemySpawner.spawnOne(Math.random() < 0.5 ? ENEMIES.zephyrite : ENEMIES.stormcrow, this.position.clone().add(s), false, 13);
+      }
+    } else {
+      enemyHooks().bark(this.displayName, 'LAST MOORING. CUT IT IF YOU CAN.');
+      audio.bossRoar(true);
+      this.def = { ...this.def, speed: this.def.speed * 1.5, attackRate: this.def.attackRate * 1.35 };
+      (this.shackle.material as THREE.MeshBasicMaterial).color.setHex(0xffb44a);
+    }
+  }
+
+  protected specialCooldown(): number { return this.phase >= 2 ? 4.0 : 6.4; }
+
+  protected special(): void {
+    const playerPos = enemyHooks().playerPos();
+    const roll = Math.random();
+    if (roll < 0.35 && playerPos.distanceTo(this.position) > 7) {
+      // SHEAR: it stops walking and starts weathering — a wind-wrapped charge
+      this.shearing = 1.15;
+      this.shearDir.copy(playerPos).sub(this.position).setY(0).normalize();
+      fx.burst(this.position.clone().add(new THREE.Vector3(0, 1.8, 0)), 0x9adcff, 24, 4, 0.14, 0.6, 2);
+      enemyHooks().bark(this.displayName, 'WIND ADVISORY.');
+    } else if (roll < 0.66) {
+      // UPDRAFT: a burst nova that damages AND throws the player off their feet
+      enemyHooks().bark(this.displayName, 'OUT. THE SKY INSISTS.');
+      fx.explosion(this.position.clone(), 6, 0x9adcff);
+      audio.explosion(true);
+      splashDamage(this.position.clone(), 9, 7.5 * levelScale(this.level), 'blast', { source: 'enemy' });
+      const away = playerPos.clone().sub(this.position).setY(0);
+      if (away.lengthSq() < 12 * 12 && enemyHooks().shovePlayer) {
+        enemyHooks().shovePlayer!(away.x, away.z, 26);
+      }
+    } else {
+      // BOTTLED FRONT: lobbed weather, brackets the player like mortar fire
+      enemyHooks().bark(this.displayName, 'FORECAST SAYS: INCOMING.');
+      for (let i = 0; i < 4; i++) {
+        const target = playerPos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 9, 0, (Math.random() - 0.5) * 9));
+        const muzzle = this.position.clone().add(new THREE.Vector3(0, 2.4 * this.def.scale, 0));
+        const aim = target.clone().sub(muzzle);
+        const dist = aim.length();
+        aim.normalize().multiplyScalar(17);
+        aim.y += dist * 0.5;
+        projectiles.spawn({
+          pos: muzzle, vel: aim, damage: 10 * levelScale(this.level), element: 'blast',
+          splash: 3.4, gravity: 14, fuse: -1, source: 'enemy',
+        });
+      }
+      audio.explosion(false);
+    }
+  }
+
+  override update(dt: number): void {
+    super.update(dt);
+    if (!this.alive) return;
+    if (this.shearing > 0) {
+      this.shearing -= dt;
+      this.position.addScaledVector(this.shearDir, 16 * dt);
+      this.settleToGround(true);
+      this.wobble += dt * 16;
+      fx.burst(this.position.clone().add(new THREE.Vector3(0, 0.6, 0)), 0x9adcff, 3, 3, 0.1, 0.5, 4);
+      const playerPos = enemyHooks().playerPos();
+      if (playerPos.distanceTo(this.position) < 3.0) {
+        enemyHooks().damagePlayer(14 * levelScale(this.level), 'kinetic', this.position);
+        // the wind carries you with it, briefly
+        enemyHooks().shovePlayer?.(this.shearDir.x, this.shearDir.z, 18);
+        this.shearing = 0;
+      }
+    }
+    // vanes spin with fury; phase 2 sheds constant wind streaks
+    this.vanes.rotation.y += dt * (this.phase >= 2 ? 6 : 2.4);
+    if (this.phase >= 2 && Math.random() < 8 * dt) {
+      fx.burst(this.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, 1.5 + Math.random(), (Math.random() - 0.5) * 3)), 0xaad8c8, 2, 3, 0.08, 0.5, 3);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+export type BossId = 'gutterball' | 'warden_prime' | 'old_man_avalanche' | 'saint_furnace' | 'bloom_mother' | 'admiral_anchorhead' | 'mother_lode' | 'unkeeper' | 'static_abbot' | 'gale_prime';
 
 export function spawnBoss(id: BossId, pos: THREE.Vector3, levelOverride?: number): Enemy {
   const level = levelOverride ?? state.level + 2;
@@ -854,12 +1089,14 @@ export function spawnBoss(id: BossId, pos: THREE.Vector3, levelOverride?: number
     : id === 'admiral_anchorhead' ? new AdmiralAnchorhead(level, pos)
     : id === 'mother_lode' ? new MotherLode(level, pos)
     : id === 'unkeeper' ? new Unkeeper(level, pos)
+    : id === 'static_abbot' ? new StaticAbbot(level, pos)
+    : id === 'gale_prime' ? new GalePrime(level, pos)
     : new SaintFurnace(level, pos);
   enemySpawner.registerBoss(boss);
   const flash: Record<string, number> = {
     gutterball: 0xff8438, warden_prime: 0x54d4ff, old_man_avalanche: 0x9ad8e8,
     bloom_mother: 0x9adc4a, admiral_anchorhead: 0x7dffd4, mother_lode: 0x54d4ff,
-    unkeeper: 0x9a6aff,
+    unkeeper: 0x9a6aff, static_abbot: 0xc8d24a, gale_prime: 0x9adcff,
   };
   fx.explosion(pos.clone().add(new THREE.Vector3(0, 1, 0)), 4, flash[id] ?? 0xff7a1a);
   return boss;

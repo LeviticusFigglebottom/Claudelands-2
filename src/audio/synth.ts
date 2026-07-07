@@ -222,6 +222,23 @@ export class AudioSystem {
     this.noise(this.now(), 0.25, 0.3, 'bandpass', 600, 1, 1800);
   }
 
+  /** SKYFALL warning: a two-tone storm siren, Voltholm civic infrastructure. */
+  siren(): void {
+    if (!this.ctx) return;
+    const t = this.now();
+    this.tone(t, 0.5, 0.3, 'sawtooth', 520, 760, 0.06);
+    this.tone(t + 0.55, 0.5, 0.3, 'sawtooth', 760, 520, 0.06);
+  }
+
+  /** A lightning strike: the crack, then the roll. */
+  thunder(near = true): void {
+    if (!this.ctx) return;
+    const t = this.now();
+    if (near) this.noise(t, 0.06, 0.7, 'highpass', 4000, 1);
+    this.noise(t + 0.02, near ? 0.9 : 0.6, near ? 0.9 : 0.4, 'lowpass', near ? 500 : 260, 1, 50);
+    this.tone(t + 0.02, 0.5, 0.4, 'sine', 70, 28);
+  }
+
   explosion(big = false): void {
     if (!this.ctx) return;
     const t = this.now();

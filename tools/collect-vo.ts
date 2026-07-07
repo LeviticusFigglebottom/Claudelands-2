@@ -34,6 +34,7 @@ const VOICE_TAG: Record<string, string> = {
   tovah: 'deep, growling, menacing',
   faro: 'calm, weathered, quietly amused lighthouse keeper',
   wick: 'jittery, over-bright, brittle cheer, talks slightly too fast, two hundred years alone',
+  coil: 'brisk, clipped, storm-proof forewoman, dry gallows warmth underneath',
   thug: '', // per-line direction only — see THUG_TAGS (the deadpan lines need the contrast)
   wirelog: 'weary, haunted, distant',
 };

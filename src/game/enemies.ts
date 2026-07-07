@@ -37,6 +37,8 @@ export interface EnemyHooks {
   spawnBlocked?: (x: number, z: number) => boolean;
   /** Push a walker out of static colliders — enemies don't phase through props. */
   resolveCollision?: (pos: THREE.Vector3, radius: number) => void;
+  /** Wind kick on the player (Gale Prime's gusts): horizontal, decays. */
+  shovePlayer?: (dirX: number, dirZ: number, power: number) => void;
 }
 
 let hooks: EnemyHooks;

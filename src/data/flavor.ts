@@ -265,6 +265,26 @@ export const WIRE_LOGS: WireLog[] = [
       'Keep yours burning if it flatters you. Mine is finally QUIET. You’ll see it my way in a century or two.',
     ],
   },
+  {
+    id: 'log_volt1',
+    speaker: 'VOLTHOLM HARVEST AUTHORITY — SITE-WIDE MEMO, LAST ISSUE',
+    lines: [
+      'Memo to all crews: the new neural rigging is APPROVED. Hands-free harvest, direct storm interface, zero jar spillage. Sign the waiver, wire in, clock out rich.',
+      'Update: crews report the storm is “warm” and “knows their names.” Filed under morale: excellent. Output up 900%.',
+      'Update: crews have stopped submitting timesheets. Crews have stopped LANDING. Site manager says the weather “has it handled.”',
+      'Final memo, unsigned: if you can read this, you are not wired in. Do not sign the waiver. The storm keeps what it pays for.',
+    ],
+  },
+  {
+    id: 'log_volt2',
+    speaker: 'CONDUCTOR ROW — TITHE LEDGER, KEPT IN A DRY HAND',
+    lines: [
+      'Entry: the flats gave four jars today. We returned one to the sky, as is proper. The sky returned it at nine hundred miles an hour, as is TRADITION.',
+      'Entry: Brother Aldan preached the noon SKYFALL from inside it. Unharmed. The rods bowed. Attendance is mandatory now, per the weather.',
+      'Entry: the Forewoman came again asking after her crews by name. We gave her the names back. The rest is filed under the storm.',
+      'Entry, final: the tithe is not paid TO the storm. It is paid THROUGH it. Upward. To whom, the ledger does not say. The ledger is afraid to ask.',
+    ],
+  },
 ];
 
 export const ZAZA_GREETINGS = [

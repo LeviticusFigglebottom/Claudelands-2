@@ -25,7 +25,7 @@ import { playerVoice } from './playervoice';
 import { difficulty } from './settings';
 import { prefs } from './prefs';
 import type { StaticHit, ExplosiveBarrel } from './world';
-import { WORLD } from '../data/world';
+import { WORLD, galeAt } from '../data/world';
 
 const EYE_HEIGHT = 1.65;
 const PLAYER_RADIUS = 0.45;
@@ -62,6 +62,8 @@ export class Player implements Damageable {
   yaw = 0; // spawn at the north road looking south into Gutterlight
   pitch = 0;
   private velY = 0;
+  /** External horizontal wind (gale channels, boss gusts). Decays in still air. */
+  private pushVel = new THREE.Vector3();
   private grounded = true;
   private wasGrounded = true;
   private keys = new Set<string>();
@@ -262,6 +264,13 @@ export class Player implements Damageable {
     bus.emit('secondwind', {});
   }
 
+  /** External wind kick (Gale Prime, updraft bursts): horizontal, decays. */
+  shove(dirX: number, dirZ: number, power: number): void {
+    const len = Math.hypot(dirX, dirZ) || 1;
+    this.pushVel.x += (dirX / len) * power;
+    this.pushVel.z += (dirZ / len) * power;
+  }
+
   respawn(): void {
     this.downed = false;
     this.flesh = this.maxFlesh;
@@ -302,6 +311,24 @@ export class Player implements Damageable {
       }
     }
     this.position.add(move);
+
+    // gale channels: on Voltholm the wind has opinions about your route.
+    // Inside a channel pushVel homes toward the gale vector; in still air
+    // it bleeds off fast. Boss gusts also inject through shove().
+    const gale = this.paused ? null : galeAt(this.position.x, this.position.z);
+    if (gale) {
+      const k = Math.min(1, 2.4 * dt);
+      this.pushVel.x += (gale.x - this.pushVel.x) * k;
+      this.pushVel.z += (gale.z - this.pushVel.z) * k;
+    } else {
+      const f = Math.exp(-4.5 * dt);
+      this.pushVel.x *= f;
+      this.pushVel.z *= f;
+    }
+    if (this.pushVel.lengthSq() > 0.02 && !this.paused) {
+      this.position.x += this.pushVel.x * dt;
+      this.position.z += this.pushVel.z * dt;
+    }
 
     // gravity & jump
     const ground = this.world.groundHeight(this.position.x, this.position.z);

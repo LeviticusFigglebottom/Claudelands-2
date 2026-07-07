@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { toonMat, glowMat } from '../render/toon';
 import { swatch } from '../render/textures';
-import { terrainHeight, terrainNormal, WORLD } from '../data/world';
+import { terrainHeight, terrainNormal, WORLD, galeAt } from '../data/world';
 import { fx } from './particles';
 import { audio } from '../audio/synth';
 import { juice } from './juice';
@@ -17,7 +17,10 @@ import { enemySpawner } from './enemies';
 import { applyDamage } from './combat';
 import { clamp, damp, lerp } from '../util/maff';
 
+// Base gravity; maps can run lighter (Vitra) — the buggy scales with them
+// but keeps a floor so it never turns into a boat.
 const GRAV = 26;
+const grav = () => GRAV * ((WORLD.gravity ?? 24) / 24);
 
 export interface VehicleInput {
   throttle: number;   // -1..1
@@ -358,7 +361,7 @@ export class Vehicle {
       if (Math.abs(input.throttle) < 0.05 && this.miniTurboT <= 0) fSpeed -= fSpeed * S.drag * dt;
       const n = terrainNormal(this.pos.x, this.pos.z);
       const slope = fwd.x * n.x + fwd.z * n.z; // >0 when the nose points downhill
-      fSpeed += slope * GRAV * 0.55 * dt;
+      fSpeed += slope * grav() * 0.55 * dt;
 
       // ---- grip: lateral slip bleeds off fast (or lingers, mid-drift)
       const grip = this.drifting ? S.driftGrip : S.grip;
@@ -415,7 +418,14 @@ export class Vehicle {
     }
 
     // ---- integrate + ground (floatier while rising: big-air jumps hang)
-    this.vel.y -= GRAV * (this.vel.y > 0 && !this.grounded ? 0.72 : 1) * dt;
+    this.vel.y -= grav() * (this.vel.y > 0 && !this.grounded ? 0.72 : 1) * dt;
+    // gale channels shove the chassis too — a tailwind is free speed, a
+    // crosswind is a problem you steer against
+    const gale = galeAt(this.pos.x, this.pos.z);
+    if (gale) {
+      this.vel.x += gale.x * 0.55 * dt;
+      this.vel.z += gale.z * 0.55 * dt;
+    }
     this.prevPos.copy(this.pos);
     this.pos.addScaledVector(this.vel, dt);
     const g = terrainHeight(this.pos.x, this.pos.z);

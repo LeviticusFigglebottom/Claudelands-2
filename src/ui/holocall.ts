@@ -25,6 +25,7 @@ export const CALL_LOOKS: Record<string, HolocallLook> = {
   peg: { name: 'QUARTERMISTRESS PEG', accent: '#7dffd4', hat: 'bun' },
   faro: { name: 'KEEPER FARO', accent: '#ffd88a', hat: 'cap' },
   wick: { name: 'WICK', accent: '#9a6aff', hat: 'goggles' },
+  coil: { name: 'FOREWOMAN COIL', accent: '#c8d24a', hat: 'cap' },
 };
 
 interface Call {

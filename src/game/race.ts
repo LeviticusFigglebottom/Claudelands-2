@@ -135,7 +135,9 @@ class RaceSystem {
       this.hooks.toast(startLine, '#ffd23c');
       voice.speak(startLine, VOICES.rita);
     } else {
-      this.hooks.toast(`${track.laps} laps against the clock. The jungle judges silently.`, '#54d4ff');
+      this.hooks.toast(track.linear
+        ? 'Point to point against the clock. No second lap. No excuses.'
+        : `${track.laps} laps against the clock. The jungle judges silently.`, '#54d4ff');
     }
   }
 
@@ -329,7 +331,7 @@ class RaceSystem {
     if (this.practice) {
       this.hooks.banner('RUN COMPLETE');
       audio.questComplete();
-      this.hooks.toast(`${this.track.name} — ${this.track.laps} laps in <b>${formatRaceTime(this.raceMs)}</b>${isBest ? ' · <b style="color:#ffd23c">PERSONAL BEST</b>' : ''}`, '#54d4ff');
+      this.hooks.toast(`${this.track.name} — ${this.track.linear ? 'the run' : `${this.track.laps} laps`} in <b>${formatRaceTime(this.raceMs)}</b>${isBest ? ' · <b style="color:#ffd23c">PERSONAL BEST</b>' : ''}`, '#54d4ff');
     } else if (!this.aiFinished) {
       this.hooks.banner('FIRST PLACE!');
       audio.victory();
@@ -389,9 +391,10 @@ class RaceSystem {
         const place = this.playerPlace;
         return `<div style="font-size:24px; font-weight:800; color:${place === 1 ? '#3ddc4e' : '#ff8c5a'}">${place === 1 ? '1st' : '2nd'} <span style="opacity:0.6; font-size:15px;">of 2</span></div>`;
       })();
+    const lapLabel = this.track.linear ? '' : `LAP ${Math.min(this.playerLap + 1, this.track.laps)}/${this.track.laps} · `;
     this.hud.innerHTML = `
       ${placeLine}
-      <div style="font-size:14px; margin-top:2px;">LAP ${Math.min(this.playerLap + 1, this.track.laps)}/${this.track.laps} · GATE ${Math.min(this.playerCp + 1, cps.length)}/${cps.length} · ${formatRaceTime(this.raceMs)}</div>`;
+      <div style="font-size:14px; margin-top:2px;">${lapLabel}GATE ${Math.min(this.playerCp + 1, cps.length)}/${cps.length} · ${formatRaceTime(this.raceMs)}</div>`;
   }
 }
 

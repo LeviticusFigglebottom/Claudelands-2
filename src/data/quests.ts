@@ -3,7 +3,7 @@
 // progression. All dialogue is original and lives here for the writers.
 
 export type ObjectiveKind = 'goto' | 'kill_faction' | 'collect' | 'boss' | 'kill_elites' | 'notoriety';
-export type QuestGiver = 'quibb' | 'zaza' | 'mayor' | 'brann' | 'mirelle' | 'okto' | 'juno' | 'peg' | 'faro' | 'wick';
+export type QuestGiver = 'quibb' | 'zaza' | 'mayor' | 'brann' | 'mirelle' | 'okto' | 'juno' | 'peg' | 'faro' | 'wick' | 'coil';
 
 /** Everyone who hands out work: display name, where they stand, greetings. */
 export const GIVERS: Record<QuestGiver, { name: string; where: string; mapId: string; x: number; z: number; greetings: string[] }> = {
@@ -77,6 +77,13 @@ export const GIVERS: Record<QuestGiver, { name: string; where: string; mapId: st
       'Back again! The dark talked about you all night. Rude things. You must be doing WONDERFULLY.',
     ],
   },
+  coil: {
+    name: 'Forewoman Coil', where: 'at the Jarworks on Voltholm', mapId: 'voltholm', x: -4, z: 80,
+    greetings: [
+      'Coil. Forewoman, Jarworks. I bottle the weather and the weather resents it. We manage.',
+      'Contractor. Good timing — the sky just invoiced us again and I am NOT paying.',
+    ],
+  },
 };
 
 export interface QuestDef {
@@ -91,10 +98,12 @@ export interface QuestDef {
     label: string;
     count: number;
     districtId?: string;
-    faction?: 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'brine' | 'hollow' | 'vitrified';
+    faction?: 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'brine' | 'hollow' | 'vitrified' | 'galebound';
     bossId?: string;
     markerX?: number; markerZ?: number;
     mapId?: string;                // which map the marker/boss lives on (default claudelands)
+    /** Collect quests: what the dropped quest item calls itself. */
+    itemName?: string;
   };
   rewardCash: number;
   rewardXp: number;
@@ -578,6 +587,79 @@ export const QUESTS: QuestDef[] = [
     objective: { kind: 'boss', label: 'The Unkeeper’s shift ended', count: 1, bossId: 'unkeeper', markerX: 0, markerZ: -114, mapId: 'vitra_mile' },
     rewardCash: 16000, rewardXp: 18000, rewardItem: 'legendary',
     completeLine: 'The Unkeeper is out. The mile went silent — then, one by one, the Snuffed Rows flickered ON, two hundred years of stored dark paying its bill. Wick is already up a ladder. Faro logged one line in the ledger: “Shift covered. Sleep well, Morrow.”',
+  },
+  // ---- PLANET 4: VOLTHOLM (the storm that answers)
+  {
+    id: 'q33_stormcall',
+    name: 'The Sky That Answers',
+    giver: 'faro',
+    briefing: [
+      'One more page, contractor, and it isn’t mine. The night my beam went out to the system, something answered from the FOURTH rock. Not a lighthouse. A work signal — a repeating crew-call, the kind you send when the shift is drowning and nobody’s coming.',
+      'Voltholm. Storm-harvest world. The charts say the colony sold bottled lightning to half the sector, then went quiet twenty years back. The signal says somebody is still bottling.',
+      'The Paperweight knows the way. Fly into the weather and find whoever is still clocking in under that sky. And contractor — the readings show the storm there runs on a SCHEDULE. Learn it fast.',
+    ],
+    acceptLine: 'The fourth rock, contractor! Follow the crew-call down — and if the sky starts SINGING, find something tall and metal that isn’t YOU!',
+    objective: { kind: 'goto', label: 'Make landfall at the Jarworks', count: 1, markerX: 0, markerZ: 88, mapId: 'voltholm' },
+    rewardCash: 10000, rewardXp: 13000,
+    completeLine: 'Down through the thunderhead in one piece. The Jarworks is lit, racked, and RUNNING — and the woman on the landing pad has been expecting somebody for twenty years. Not you specifically. Anybody.',
+    unlocksStation: 'Jarworks Landing',
+  },
+  {
+    id: 'q34_windwork',
+    name: 'Overtime in the Wind',
+    giver: 'coil',
+    briefing: [
+      'So the crew-call finally caught a live one. Coil. Forewoman of the Jarworks, last supervisor standing on this entire rock, and I will skip to the part you can shoot.',
+      'My harvest crews wired themselves into the weather to work the storms hands-free. Clever, right up until the storm started doing the MANAGING. Now they’re the Galebound — my own people, out on the flats, harvesting nothing, forever, and violently opposed to backpay.',
+      'The Gale Flats crews are the worst of it. Thin them out — ten of them — so my last live linemen can walk their own routes again. Watch the wind channels: the gale shoves EVERYTHING, and it does not check whose side you’re on.',
+    ],
+    acceptLine: 'Ten Galebound off my flats! Lean INTO the crosswind and shoot DOWNWIND, it’s basic site safety!',
+    objective: { kind: 'kill_faction', label: 'Galebound crews thinned', count: 10, faction: 'galebound', markerX: -75, markerZ: -5, mapId: 'voltholm' },
+    rewardCash: 11000, rewardXp: 14000, rewardItem: 'epic',
+    completeLine: 'Ten of the wind’s employees terminated, and the flats went quiet enough to hear the rods hum. Coil crossed ten names off a twenty-year-old crew roster. She didn’t say anything for a while. Then: “Back to work.”',
+  },
+  {
+    id: 'q35_bottling',
+    name: 'Bottling Day',
+    giver: 'coil',
+    briefing: [
+      'Here’s the economics of Voltholm: the jars keep the town lit, the town keeps the rods fed, the rods keep the SKYFALL off our heads. No jars, no town. And my shelves are down to the decorative ones.',
+      'The Galebound still carry their old harvest jars — full ones, riding their rigs like hearts. The Conductors on the Row have the freshest stock; they call it TITHE now, because everything out there found religion except the weather.',
+      'Crack four of them open and bring the jars back HERE, to the racks. Intact, please. A dropped storm jar doesn’t break, it FILES A COMPLAINT, at speed, in every direction.',
+    ],
+    acceptLine: 'Four full jars, back to my racks! Carry them like they’re angry — because they ARE!',
+    objective: { kind: 'collect', label: 'Storm jars racked at the Jarworks', count: 4, faction: 'galebound', markerX: 70, markerZ: -15, mapId: 'voltholm', itemName: 'Storm Jar' },
+    returnToGiver: true,
+    rewardCash: 12000, rewardXp: 15000, rewardItem: 'epic',
+    completeLine: 'Four jars racked and humming, and the Jarworks lights stopped flickering for the first time in a season. Coil tapped each jar once, like saying a name. “Bottling day,” she said. “Best day on the calendar. Used to be a hundred of us on it.”',
+  },
+  {
+    id: 'q36_abbot',
+    name: 'The Collection Plate',
+    giver: 'coil',
+    briefing: [
+      'Now the part I’ve been dreading out loud. My old shift supervisor — Brother Aldan, ran the capacitor banks, kindest man on the payroll — wired himself DEEPEST when the storm took the crews. The banks called him. He answered. Twenty years on, they call him THE STATIC ABBOT, and the Capacitorium is his chapel.',
+      'He’s not harvesting the storm anymore. He’s TAKING CONFESSION from it. Every jar my crews lose, every bolt the rods eat, the tithe rolls south to his banks — and lately his sermons have been walking my linemen off their routes, straight into the wind.',
+      'Go south to the Capacitorium and close the account. Aim for the halo — the capacitor ring over his head. It was his hard hat, once. It’s the only part of him the storm hasn’t bought.',
+    ],
+    acceptLine: 'The Capacitorium, due south! When the sky marks the ground — MOVE, that’s not decoration, that’s his OPENING PRAYER!',
+    objective: { kind: 'boss', label: 'The Static Abbot unplugged', count: 1, bossId: 'static_abbot', markerX: -15, markerZ: -100, mapId: 'voltholm' },
+    rewardCash: 15000, rewardXp: 17000, rewardItem: 'legendary',
+    completeLine: 'The halo cracked, the banks sighed twenty years of stored charge into the dirt, and the Static Abbot sat down like a man at the end of a very long shift. Coil filed it as a retirement. The storm, for one whole night, forgot to collect.',
+  },
+  {
+    id: 'q37_eyewall',
+    name: 'The Last Mooring',
+    giver: 'coil',
+    briefing: [
+      'The storm’s got one hand left, and it’s the one that took the crews in the first place. GALE PRIME. Site manager, first shift, the one who signed the wiring order twenty years ago. The weather liked the chain of command so much it PROMOTED itself into him.',
+      'He cut every mooring that held him to the ground — every one but the last shackle, bolted to his chest, and my name is on the requisition slip for it. He keeps it. I’ve stopped asking myself why.',
+      'He holds the Eyewall, east past the crater rim, where the storm keeps its heart. End the shift, contractor. All of it. Shoot the shackle — if any part of the man I hired is still in there, that’s where he’s holding on.',
+    ],
+    acceptLine: 'The Eyewall, east! When he breathes IN, hold on to the planet — and when he breathes OUT, SHOOT!',
+    objective: { kind: 'boss', label: 'Gale Prime brought to ground', count: 1, bossId: 'gale_prime', markerX: 100, markerZ: -85, mapId: 'voltholm' },
+    rewardCash: 20000, rewardXp: 22000, rewardItem: 'legendary',
+    completeLine: 'The last mooring snapped and the wind fell out of him like a crew going home. The Eyewall opened — actual sky, actual sun, the first anyone on Voltholm has seen in twenty years. Coil stood in it, checked the weather out of habit, and laughed. “Clear,” she said. “Well. Now what do I DO all day?”',
   },
 ];
 

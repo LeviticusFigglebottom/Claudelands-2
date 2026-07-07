@@ -7,7 +7,7 @@
 import type { ElementId } from '../game/types';
 
 export type EnemyBehavior = 'rusher' | 'gunner' | 'lobber' | 'brute' | 'flyer' | 'suicide';
-export type Faction = 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'brine' | 'hollow' | 'vitrified';
+export type Faction = 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'brine' | 'hollow' | 'vitrified' | 'galebound';
 
 export interface EnemyDef {
   id: string;
@@ -564,6 +564,82 @@ ENEMIES.cullet_hulk = {
   scale: 1.6, tint: 0x4a3e7a, dropTier: 1, xp: 40,
   barks: ['*a rockslide made of windows*', 'THE MILE TAKES ITS TOLL!', '*every broken thing, standing up at once*'],
   weight: 8,
+};
+
+// ---- VOLTHOLM: THE GALEBOUND. Storm-harvest crews who wired themselves
+// into the weather. Zephyrites are wind with a grudge, Conductors are
+// grounded monks with ungrounded opinions, Stormcrows ride the gusts,
+// Thunderheads lob bottled weather, Ballast Golems are the anchor that
+// walks.
+ENEMIES.zephyrite = {
+  id: 'zephyrite', name: 'Zephyrite', badassName: 'Big Damn Gust',
+  faction: 'galebound', behavior: 'rusher',
+  flesh: 0.85, shield: 0.15, armor: 0,
+  hpMult: 0.9, damageMult: 1.05, speed: 8.8, attackRange: 2.0, attackRate: 1.25, aggroRange: 30,
+  scale: 0.85, tint: 0xaad8c8, dropTier: 0, xp: 18,
+  barks: ['*a draft with intent*', 'The wind called DIBS!', '*whistling, weaponized*'],
+  weight: 26,
+};
+ENEMIES.conductor = {
+  id: 'conductor', name: 'Conductor', badassName: 'Arch-Conductor',
+  faction: 'galebound', behavior: 'gunner', grenades: true,
+  flesh: 0.3, shield: 0.7, armor: 0,
+  hpMult: 1.15, damageMult: 1.1, speed: 3.6, attackRange: 17, attackRate: 0.9, aggroRange: 30,
+  scale: 1.05, tint: 0xc8d24a, dropTier: 1, xp: 24,
+  barks: ['The storm TITHES!', 'You are OUTSTANDING. As in: go stand OUTSIDE.', 'Voltage is a virtue!', 'The sky remembers its debtors!'],
+  projectile: { speed: 32, element: 'volt' },
+  weight: 22,
+};
+ENEMIES.stormcrow = {
+  id: 'stormcrow', name: 'Stormcrow', badassName: 'Big Damn Thundercrow',
+  faction: 'galebound', behavior: 'flyer',
+  flesh: 0.7, shield: 0.3, armor: 0,
+  hpMult: 0.85, damageMult: 1.0, speed: 8.2, attackRange: 14, attackRate: 0.9, aggroRange: 32,
+  scale: 0.85, tint: 0x3a4458, dropTier: 0, xp: 18,
+  barks: ['*a caw with static in it*', '*feathers, charged*', '*the sound of weather choosing you*'],
+  projectile: { speed: 30, element: 'volt' },
+  weight: 16,
+};
+ENEMIES.thunderhead = {
+  id: 'thunderhead', name: 'Thunderhead', badassName: 'Big Damn Front',
+  faction: 'galebound', behavior: 'lobber',
+  flesh: 0.6, shield: 0.4, armor: 0,
+  hpMult: 1.2, damageMult: 1.3, speed: 3.0, attackRange: 21, attackRate: 0.55, aggroRange: 30,
+  scale: 1.05, tint: 0x6a7a9a, dropTier: 1, xp: 26,
+  barks: ['FORECAST: YOU.', 'Special delivery from UPSTAIRS!', 'Bottled fresh this morning!'],
+  projectile: { speed: 17, element: 'blast', arc: true },
+  weight: 12,
+};
+ENEMIES.ballast_golem = {
+  id: 'ballast_golem', name: 'Ballast Golem', badassName: 'Big Damn Anchor',
+  faction: 'galebound', behavior: 'brute',
+  flesh: 0.25, shield: 0, armor: 0.75,
+  hpMult: 3.2, damageMult: 1.7, speed: 2.7, attackRange: 2.6, attackRate: 0.55, aggroRange: 24,
+  scale: 1.6, tint: 0x4a5560, dropTier: 1, xp: 42,
+  barks: ['*the opposite of wind*', 'I HOLD THE LINE DOWN!', '*gravity, but personal*'],
+  weight: 8,
+};
+
+export const BOSS_ABBOT: EnemyDef = {
+  id: 'static_abbot', name: 'THE STATIC ABBOT', badassName: 'THE STATIC ABBOT',
+  faction: 'galebound', behavior: 'brute',
+  flesh: 0.25, shield: 0.45, armor: 0.3,
+  hpMult: 40, damageMult: 2.4, speed: 3.0, attackRange: 3.4, attackRate: 0.75, aggroRange: 68,
+  scale: 2.8, tint: 0xc8d24a, dropTier: 3, xp: 1800,
+  barks: ['KNEEL. THE FLOOR IS GROUNDED.', 'the storm and I take CONFESSION.', 'YOUR STATIC IS SHOWING.', 'tithe. TITHE. T I T H E.'],
+  projectile: { speed: 26, element: 'volt', arc: true },
+  weight: 0,
+};
+
+export const BOSS_GALEPRIME: EnemyDef = {
+  id: 'gale_prime', name: 'GALE PRIME, THE UNANCHORED', badassName: 'GALE PRIME, THE UNANCHORED',
+  faction: 'galebound', behavior: 'brute',
+  flesh: 0.5, shield: 0.25, armor: 0.25,
+  hpMult: 46, damageMult: 2.5, speed: 3.6, attackRange: 3.6, attackRate: 0.8, aggroRange: 72,
+  scale: 3.1, tint: 0x8aa8b8, dropTier: 3, xp: 2200,
+  barks: ['I SLIPPED THE LAST MOORING YEARS AGO.', 'the flats BREATHE ME.', 'YOU WEIGH NOTHING TO WEATHER.', 'come CLOSER. everything does, eventually.'],
+  projectile: { speed: 18, element: 'blast', arc: true },
+  weight: 0,
 };
 
 export const BOSS_UNKEEPER: EnemyDef = {

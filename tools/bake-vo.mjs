@@ -47,6 +47,7 @@ const CAST = {
   faro:      { id: 'onwK4e9ZLuTAKqWW03F9', name: 'Daniel',  stability: 0.5 }, // two centuries of lamp duty
   thug:      { id: 'SOYHLrjzK2X1ezoPC6cr', name: 'Harry',   stability: 0.0 }, // the sauce itself
   wick:      { id: 'XB0fDUnXU5powFXDhCwa', name: 'Charlotte', stability: 0.0 }, // lamplighter, two centuries in
+  coil:      { id: 'pFZP5JQG7iQjIQuC4Bku', name: 'Lily',    stability: 0.5 }, // storm-proof forewoman
   wirelog:   { id: 'CwhRBWXzGAHq8TQ4Fs17', name: 'Roger',   stability: 0.5 }, // the wire remembers the dead
 };
 

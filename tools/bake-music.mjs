@@ -36,6 +36,9 @@ const EXPLORE = {
   veldt_gp: 'Jungle raceway paddock: upbeat tropical surf-rock, bright ukulele chops over driving-but-easy drums, carefree checkered-flag energy at idle throttle.',
   vitra: 'Nocturnal glass-planet score: crystalline bell tones ringing in vast dark space, slow aurora synth pads, deep sub-bass hum, delicate icy plucks like starlight on glass, serene and alien and weightless.',
   vitra_mile: 'Haunted lamplit-road score: a slow lonely music-box melody drifting through hollow glass drones, sparse deep bell tolls far away, cold whispering wind harmonics, one warm fragile celesta motif recurring like a lit window in the dark, hushed and mournful and watchful.',
+  vitra_gp: 'Low-gravity glass raceway idle: weightless synthwave cruise, gleaming arpeggios drifting like slow meteor trails, soft four-on-the-floor pulse, chrome-cold pads, serene speed waiting to happen.',
+  voltholm: 'Storm-harvest frontier score: rolling thunder-drum groove far below, crackling electric guitar harmonics like arcing wires, wind-whipped slide guitar, brooding organ swells between lightning strikes, industrious and electric and defiant.',
+  volt_gp: 'Storm raceway paddock: charged-up stadium rock idle, chugging palm-muted riff under crackling synth static bursts, thunder-roll tom fills, revving anticipation with a weather warning in it.',
 };
 
 const COMBAT = {

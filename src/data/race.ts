@@ -104,6 +104,8 @@ export interface TrackDef {
   mapId: string;
   blurb: string;
   laps: number;
+  /** Point-to-point: one pass, the last gate IS the finish, no return leg. */
+  linear?: boolean;
   start: { player: RacePoint; rival: RacePoint; yaw: number };
   checkpoints: { x: number; z: number; r: number }[];
   buildAiLine: (fork1Inner: boolean, fork2Inner: boolean) => RacePoint[];
@@ -121,6 +123,27 @@ const CANOPY_COMMON_2: RacePoint[] = [{ x: 110, z: -84 }, { x: 80, z: -120 }];
 const CANOPY_F2_OUTER: RacePoint[] = [{ x: 36, z: -142 }, { x: 0, z: -150 }, { x: -56, z: -138 }, { x: -90, z: -120 }];
 const CANOPY_F2_INNER: RacePoint[] = [{ x: 44, z: -118 }, { x: 10, z: -113 }, { x: -46, z: -114 }, { x: -90, z: -120 }];
 const CANOPY_COMMON_3: RacePoint[] = [{ x: -122, z: -92 }, { x: -140, z: -60 }, { x: -140, z: 4 }];
+
+// THE SHATTERLINE (Vitra Null GP): a truly LINEAR downhill sprint — one
+// corridor of black glass under 11 m/s² of gravity, three launch ramps with
+// hang time you could nap through. No laps. No second chances.
+const SHATTERLINE_LINE: RacePoint[] = [
+  { x: -110, z: 112 }, { x: -90, z: 96 }, { x: -60, z: 102 }, { x: -30, z: 110 },
+  { x: 4, z: 92 }, { x: 30, z: 70 }, { x: 18, z: 40 }, { x: 0, z: 10 },
+  { x: -34, z: -6 }, { x: -60, z: -20 }, { x: -48, z: -52 }, { x: -30, z: -80 },
+  { x: 6, z: -70 }, { x: 40, z: -60 }, { x: 66, z: -86 }, { x: 90, z: -110 },
+  { x: 112, z: -126 }, { x: 130, z: -140 },
+];
+
+// THE JAR RUN (Voltholm GP): linear storm gauntlet — a gale tailwind
+// straight, the rod forest under live SKYFALL, a crater hop to the Eyewall
+// rim. The wind drives with you; the sky files complaints.
+const JARRUN_LINE: RacePoint[] = [
+  { x: -120, z: 6 }, { x: -95, z: 30 }, { x: -62, z: 40 }, { x: -30, z: 45 },
+  { x: 6, z: 46 }, { x: 40, z: 45 }, { x: 64, z: 30 }, { x: 80, z: 10 },
+  { x: 74, z: -18 }, { x: 60, z: -45 }, { x: 84, z: -66 }, { x: 110, z: -85 },
+  { x: 130, z: -102 }, { x: 150, z: -120 },
+];
 
 export const TRACKS: TrackDef[] = [
   {
@@ -156,6 +179,46 @@ export const TRACKS: TrackDef[] = [
       ...(f2 ? CANOPY_F2_INNER : CANOPY_F2_OUTER),
       ...CANOPY_COMMON_3,
     ],
+  },
+  {
+    id: 'shatterline',
+    name: 'THE SHATTERLINE',
+    mapId: 'vitra_gp',
+    blurb: 'Vitra Null GP — downhill on glass, low gravity, three big airs. One way.',
+    laps: 1,
+    linear: true,
+    start: { player: { x: -127, z: 127 }, rival: { x: -133, z: 133 }, yaw: Math.atan2(-(-90 - -130), -(96 - 130)) },
+    checkpoints: [
+      { x: -90, z: 96, r: 13 },
+      { x: -30, z: 110, r: 13 },
+      { x: 30, z: 70, r: 13 },    // ridge launch — commit before the lip
+      { x: 0, z: 10, r: 13 },     // the chime bend
+      { x: -60, z: -20, r: 13 },
+      { x: -30, z: -80, r: 13 },  // the long float
+      { x: 40, z: -60, r: 13 },
+      { x: 90, z: -110, r: 12 },  // finish approach hop
+      { x: 130, z: -140, r: 14 }, // the line, among the monoliths
+    ],
+    buildAiLine: () => SHATTERLINE_LINE,
+  },
+  {
+    id: 'jarrun',
+    name: 'THE JAR RUN',
+    mapId: 'volt_gp',
+    blurb: 'Voltholm GP — gale tailwind straight, rod forest under SKYFALL, crater hop.',
+    laps: 1,
+    linear: true,
+    start: { player: { x: -138, z: -23 }, rival: { x: -143, z: -17 }, yaw: Math.atan2(-(-95 - -140), -(30 - -20)) },
+    checkpoints: [
+      { x: -95, z: 30, r: 13 },
+      { x: -30, z: 45, r: 13 },   // mid-tailwind
+      { x: 40, z: 45, r: 13 },    // the wind lets go here
+      { x: 80, z: 10, r: 13 },    // rod forest crest
+      { x: 60, z: -45, r: 13 },
+      { x: 110, z: -85, r: 12 },  // crater hop
+      { x: 150, z: -120, r: 14 }, // finish inside the weather
+    ],
+    buildAiLine: () => JARRUN_LINE,
   },
 ];
 

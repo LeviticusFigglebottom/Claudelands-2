@@ -33,6 +33,8 @@ export const BOSS_EPITHETS: Record<string, string> = {
   admiral_anchorhead: 'promoted by the sea itself',
   mother_lode: 'sixty years of tribute, crowned',
   unkeeper: 'keeper morrow. two hundred years off the clock.',
+  static_abbot: 'takes the storm’s confession. keeps the change.',
+  gale_prime: 'cut every mooring but one. guess where to shoot.',
 };
 
 export const NPC_INTROS: Record<string, { name: string; sub: string }> = {
@@ -47,6 +49,7 @@ export const NPC_INTROS: Record<string, { name: string; sub: string }> = {
   peg: { name: 'QUARTERMISTRESS PEG', sub: 'the pelican’s last dry crew member. the paperwork survived too.' },
   faro: { name: 'KEEPER FARO', sub: 'two hundred years on lamp duty. the dark blinked first.' },
   wick: { name: 'WICK', sub: 'apprentice lamplighter, two centuries into one night shift. the arm chimes.' },
+  coil: { name: 'FOREWOMAN COIL', sub: 'runs the jarworks. the lightning owes her money.' },
 };
 
 /** Slow orbit around a boss, ending face-to-face. */

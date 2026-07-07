@@ -7,7 +7,7 @@
 
 import { clamp01, lerp } from '../util/maff';
 
-export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle' | 'gulchgate' | 'shipbreak' | 'castaway' | 'hullgrave' | 'brinepans' | 'anchorage' | 'cavemouth' | 'gloomgrove' | 'cryptworks' | 'lodecourt' | 'lastlight' | 'chimefield' | 'shardsea' | 'nullbasin' | 'gloamgate' | 'snuffrows' | 'wickbothy' | 'echoorgan' | 'lampfall';
+export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle' | 'gulchgate' | 'shipbreak' | 'castaway' | 'hullgrave' | 'brinepans' | 'anchorage' | 'cavemouth' | 'gloomgrove' | 'cryptworks' | 'lodecourt' | 'lastlight' | 'chimefield' | 'shardsea' | 'nullbasin' | 'gloamgate' | 'snuffrows' | 'wickbothy' | 'echoorgan' | 'lampfall' | 'jarworks' | 'galeflats' | 'conductorrow' | 'capacitorium' | 'eyewall';
 
 export interface DistrictDef {
   id: string;
@@ -16,7 +16,7 @@ export interface DistrictDef {
   dress: DistrictDress;
   cx: number; cz: number; radius: number;
   baseHeight: number;
-  faction: 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'brine' | 'hollow' | 'vitrified' | 'none';
+  faction: 'rustborn' | 'helix' | 'frostborn' | 'kindled' | 'verdant' | 'brine' | 'hollow' | 'vitrified' | 'galebound' | 'none';
   spawnTable: { enemyId: string; weight: number }[];
   maxAlive: number;
   respawnDelay: number;
@@ -25,7 +25,7 @@ export interface DistrictDef {
 
 export interface WorldPoi {
   id: string;
-  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'gate' | 'sign' | 'ship' | 'wreck' | 'racer' | 'buggy' | 'pit' | 'cargo' | 'vent';
+  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'gate' | 'sign' | 'ship' | 'wreck' | 'racer' | 'buggy' | 'pit' | 'cargo' | 'vent' | 'rod';
   x: number; z: number; rot?: number;
   data?: string;
 }
@@ -34,7 +34,7 @@ export interface BiomeDef {
   ground: { base: string; light: string; dark: string; crack: string };
   rock: string;
   scrub: number;               // scrub tuft color
-  ambientParticle: 'dust' | 'snow' | 'ash' | 'spore';
+  ambientParticle: 'dust' | 'snow' | 'ash' | 'spore' | 'rain';
   trees: 'cactus' | 'pine' | 'burnt' | 'palm' | 'mushroom' | 'shard';
   aurora: boolean;
   weeds: boolean;              // tumbleweeds roam
@@ -47,6 +47,13 @@ export interface WorldDef {
   size: number;
   /** m/s² pulling the player down — Vitra Null runs light (default 24). */
   gravity?: number;
+  /** VOLTHOLM: gale channels — segments of hard directional wind that shove
+   *  anyone (and any buggy) standing in them along the segment. */
+  gales?: { x0: number; z0: number; x1: number; z1: number; width: number; power: number }[];
+  /** VOLTHOLM: the SKYFALL cycle — every `period`s a lightning storm rolls
+   *  through: `warn`s of sirens, then `strikes`s of bolts. Conductor rods
+   *  (poi kind 'rod') eat any bolt that lands near them. */
+  storm?: { period: number; warn: number; strikes: number };
   skyTop: number; skyHorizon: number;
   sun: { color: number; intensity: number; dirX: number; dirY: number; dirZ: number };
   ambient: { sky: number; ground: number; intensity: number };
@@ -1303,6 +1310,300 @@ export const VITRA_MILE: WorldDef = {
   ],
 };
 
+// ===========================================================================
+// PLANET 4 — VOLTHOLM. A storm-harvest world under a permanent thunderhead:
+// slate flats strung with conductor rods, fields of lightning jars, and the
+// Galebound — crews who wired themselves into the weather and stopped
+// clocking out. Gimmicks: SKYFALL (a rolling lightning storm on a timer —
+// shelter near a rod or eat voltage) and GALE CHANNELS (rivers of wind that
+// shove you, your bullets' owners, and your buggy).
+const VOLTHOLM: WorldDef = {
+  id: 'voltholm',
+  name: 'VOLTHOLM',
+  tagline: 'the sky owes this place money. it pays in bolts.',
+  size: 260,
+  skyTop: 0x1a2438,
+  skyHorizon: 0x8a9a68,
+  sun: { color: 0xd8e2c0, intensity: 1.6, dirX: 0.35, dirY: 0.75, dirZ: -0.4 },
+  ambient: { sky: 0x8a9ab8, ground: 0x4a5248, intensity: 1.15 },
+  fog: { color: 0x6a7868, near: 70, far: 300 },
+  biome: {
+    ground: { base: '#5a6858', light: '#7d8a72', dark: '#38423a', crack: 'rgba(210,230,120,0.35)' },
+    rock: '#55605c',
+    scrub: 0x7a9a4a,
+    ambientParticle: 'rain',
+    trees: 'burnt',
+    aurora: false,
+    weeds: true,
+  },
+  gales: [
+    { x0: -18, z0: 62, x1: -66, z1: 14, width: 8, power: 11 },
+    { x0: 26, z0: 30, x1: 62, z1: -2, width: 8, power: 11 },
+    { x0: -40, z0: -46, x1: 20, z1: -72, width: 9, power: 13 },
+  ],
+  storm: { period: 42, warn: 4, strikes: 7 },
+  terrain: {
+    duneAmp: 1.15,
+    roughAmp: 1.0,
+    roads: [
+      { x0: 0, z0: 95, x1: 0, z1: -64 },
+      { x0: 0, z0: 24, x1: -72, z1: -4 },
+      { x0: 0, z0: 2, x1: 68, z1: -14 },
+      { x0: 30, z0: -40, x1: 96, z1: -80 },
+    ],
+  },
+  districts: [
+    {
+      id: 'jarworks', name: 'THE JARWORKS', subtitle: 'Bottled Lightning. Shake Well. Actually, Don’t.', dress: 'jarworks',
+      cx: 0, cz: 88, radius: 32, baseHeight: 0.4,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 13,
+    },
+    {
+      id: 'galeflats', name: 'THE GALE FLATS', subtitle: 'The Wind Has Right of Way.', dress: 'galeflats',
+      cx: -75, cz: -5, radius: 44, baseHeight: 0.6,
+      faction: 'galebound',
+      spawnTable: [
+        { enemyId: 'zephyrite', weight: 26 },
+        { enemyId: 'stormcrow', weight: 16 },
+        { enemyId: 'thunderhead', weight: 12 },
+        { enemyId: 'ballast_golem', weight: 7 },
+      ],
+      maxAlive: 8, respawnDelay: 16, levelOffset: 14,
+    },
+    {
+      id: 'conductorrow', name: 'CONDUCTOR ROW', subtitle: 'The Monks Are Grounded. Spiritually. ONLY Spiritually.', dress: 'conductorrow',
+      cx: 70, cz: -15, radius: 44, baseHeight: 0.8,
+      faction: 'galebound',
+      spawnTable: [
+        { enemyId: 'conductor', weight: 24 },
+        { enemyId: 'zephyrite', weight: 16 },
+        { enemyId: 'stormcrow', weight: 12 },
+        { enemyId: 'thunderhead', weight: 10 },
+        { enemyId: 'ballast_golem', weight: 6 },
+      ],
+      maxAlive: 8, respawnDelay: 17, levelOffset: 15,
+    },
+    {
+      id: 'capacitorium', name: 'THE CAPACITORIUM', subtitle: 'The Abbot Is Charging. Do Not Disturb. DO Ground Yourself.', dress: 'capacitorium',
+      cx: -15, cz: -100, radius: 30, baseHeight: 1.0,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 16,
+    },
+    {
+      id: 'eyewall', name: 'THE EYEWALL', subtitle: 'Where the Storm Keeps Its Heart.', dress: 'eyewall',
+      cx: 100, cz: -85, radius: 32, baseHeight: -0.4,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 17,
+    },
+  ],
+  pois: [
+    { id: 'ft_volt', kind: 'fast_travel', x: 8, z: 94, data: 'Jarworks Landing' },
+    { id: 'ship_volt', kind: 'ship', x: -18, z: 98 },
+    { id: 'npc_coil', kind: 'npc', x: -4, z: 80, rot: 2.7, data: 'coil' },
+    { id: 'vg_vo', kind: 'vendor_gun', x: 12, z: 80, rot: -1.4 },
+    { id: 'vm_vo', kind: 'vendor_med', x: -16, z: 86, rot: 1.2 },
+    { id: 'sign_vo1', kind: 'sign', x: 0, z: 68, rot: 0.1, data: 'THE JARWORKS — SKYFALL DRILL: SEE ROD, HUG ROD.' },
+    { id: 'sign_vo2', kind: 'sign', x: -52, z: 10, rot: 0.5, data: '← GALE FLATS · CONDUCTOR ROW → · WIND: YES' },
+    { id: 'chest_vo1', kind: 'chest', x: -86, z: -18, rot: 0.8 },
+    { id: 'chest_vo2', kind: 'chest', x: 82, z: -28, rot: -1.1 },
+    { id: 'chest_vo3', kind: 'chest', x: 108, z: -94, rot: 2.1 },
+    { id: 'log_vo1', kind: 'wirelog', x: -64, z: 6, data: 'log_volt1' },
+    { id: 'log_vo2', kind: 'wirelog', x: 58, z: -6, data: 'log_volt2' },
+    { id: 'vent_vo1', kind: 'vent', x: -34, z: 36 },
+    { id: 'vent_vo2', kind: 'vent', x: 40, z: 18 },
+    { id: 'vent_vo3', kind: 'vent', x: 6, z: -44 },
+    // conductor rods: SKYFALL shelter, marked on foot by their glow
+    { id: 'rod_t1', kind: 'rod', x: -13, z: 88 },
+    { id: 'rod_t2', kind: 'rod', x: 14, z: 88 },
+    { id: 'rod_1', kind: 'rod', x: 0, z: 52 },
+    { id: 'rod_2', kind: 'rod', x: -44, z: 16 },
+    { id: 'rod_3', kind: 'rod', x: -78, z: -8 },
+    { id: 'rod_4', kind: 'rod', x: 32, z: -6 },
+    { id: 'rod_5', kind: 'rod', x: 72, z: -18 },
+    { id: 'rod_6', kind: 'rod', x: 22, z: -58 },
+    { id: 'rod_7', kind: 'rod', x: -16, z: -96 },
+    { id: 'rod_8', kind: 'rod', x: 98, z: -82 },
+  ],
+  spawn: { x: 0, z: 104 },
+  exits: [],
+};
+
+// ===========================================================================
+// PLANET 3 GP — THE SHATTERLINE. A truly LINEAR downhill sprint across the
+// glass under low gravity: one corridor, no laps, launch ramps with hang
+// time measured in postcards, shimmer vents lighting the line.
+const SHATTER_PATH = [
+  { x: -130, z: 130 },
+  { x: -90, z: 96 },
+  { x: -30, z: 110 },
+  { x: 30, z: 70 },
+  { x: 0, z: 10 },
+  { x: -60, z: -20 },
+  { x: -30, z: -80 },
+  { x: 40, z: -60 },
+  { x: 90, z: -110 },
+  { x: 130, z: -140 },
+];
+
+const VITRA_GP: WorldDef = {
+  id: 'vitra_gp',
+  name: 'THE SHATTERLINE',
+  tagline: 'one mile of glass. no second lap.',
+  size: 340,
+  gravity: 11,
+  skyTop: 0x060312,
+  skyHorizon: 0x241a4e,
+  sun: { color: 0xb0a0ff, intensity: 1.5, dirX: -0.3, dirY: 0.8, dirZ: 0.35 },
+  ambient: { sky: 0x5a48a8, ground: 0x241c40, intensity: 1.5 },
+  fog: { color: 0x0d0a24, near: 90, far: 380 },
+  biome: {
+    ground: { base: '#181228', light: '#2c2148', dark: '#0b0716', crack: 'rgba(122,240,255,0.55)' },
+    rock: '#2e2652',
+    scrub: 0x6a5adf,
+    ambientParticle: 'spore',
+    trees: 'shard',
+    aurora: true,
+    weeds: false,
+  },
+  terrain: {
+    duneAmp: 1.2,
+    roughAmp: 0.8,
+    roads: [],
+    corridor: {
+      pts: SHATTER_PATH,
+      width: 16,
+      arenas: [
+        { x: -130, z: 130, r: 26 },
+        { x: 0, z: 10, r: 22 },
+        { x: 130, z: -140, r: 28 },
+      ],
+      wallHeight: 18,
+    },
+    bumps: [
+      { x: 30, z: 70, r: 12, h: 5 },     // ridge launch
+      { x: -30, z: -80, r: 12, h: 5.5 }, // the long float
+      { x: 90, z: -110, r: 11, h: 4.5 }, // finish approach hop
+    ],
+  },
+  districts: [
+    {
+      id: 'shatterpaddock', name: 'THE SHATTERLINE', subtitle: 'Grid on the Glass', dress: 'gulchgate',
+      cx: -130, cz: 130, radius: 26, baseHeight: 0,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 0,
+    },
+    {
+      id: 'chimebend', name: 'THE CHIME BEND', subtitle: 'The Glass Sings Your Split Times', dress: 'chimefield',
+      cx: 0, cz: 10, radius: 24, baseHeight: 0.4,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 0,
+    },
+    {
+      id: 'shatterfinish', name: 'THE LONG SHARD', subtitle: 'Finish Line. Mind the Monoliths.', dress: 'shardsea',
+      cx: 130, cz: -140, radius: 28, baseHeight: 0.6,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 0,
+    },
+  ],
+  pois: [
+    { id: 'buggy_sh', kind: 'buggy', x: -122, z: 122, rot: -0.9 },
+    { id: 'sign_sh1', kind: 'sign', x: -136, z: 118, rot: 0.4, data: 'THE SHATTERLINE — DOWNHILL, ONE WAY, LOW GRAVITY. BRAKES OPTIONAL.' },
+    { id: 'sign_sh2', kind: 'sign', x: -124, z: 138, rot: -0.5, data: 'HANG TIME RECORD: 4.6s. THE GLASS REMEMBERS.' },
+    { id: 'vent_sh1', kind: 'vent', x: 30, z: 62 },
+    { id: 'vent_sh2', kind: 'vent', x: -36, z: -72 },
+    { id: 'vent_sh3', kind: 'vent', x: 96, z: -104 },
+  ],
+  spawn: { x: -124, z: 124 },
+  exits: [],
+};
+
+// ===========================================================================
+// PLANET 4 GP — THE JAR RUN. Voltholm's linear storm gauntlet: a tailwind
+// gale straight, an S through the rod forest while SKYFALL hammers the
+// track, and a crater hop into the Eyewall rim. One direction. One try.
+const JARRUN_PATH = [
+  { x: -140, z: -20 },
+  { x: -95, z: 30 },
+  { x: -30, z: 45 },
+  { x: 40, z: 45 },
+  { x: 80, z: 10 },
+  { x: 60, z: -45 },
+  { x: 110, z: -85 },
+  { x: 150, z: -120 },
+];
+
+const VOLT_GP: WorldDef = {
+  id: 'volt_gp',
+  name: 'THE JAR RUN',
+  tagline: 'ride the wind. dodge the invoice.',
+  size: 340,
+  skyTop: 0x1a2438,
+  skyHorizon: 0x8a9a68,
+  sun: { color: 0xd8e2c0, intensity: 1.55, dirX: 0.35, dirY: 0.75, dirZ: -0.4 },
+  ambient: { sky: 0x8a9ab8, ground: 0x4a5248, intensity: 1.15 },
+  fog: { color: 0x6a7868, near: 90, far: 380 },
+  biome: {
+    ground: { base: '#5a6858', light: '#7d8a72', dark: '#38423a', crack: 'rgba(210,230,120,0.35)' },
+    rock: '#55605c',
+    scrub: 0x7a9a4a,
+    ambientParticle: 'rain',
+    trees: 'burnt',
+    aurora: false,
+    weeds: true,
+  },
+  gales: [
+    { x0: -95, z0: 30, x1: 40, z1: 45, width: 10, power: 15 },  // the tailwind straight
+    { x0: 60, z0: -45, x1: 110, z1: -85, width: 9, power: 12 }, // the second push
+  ],
+  storm: { period: 26, warn: 3, strikes: 6 },
+  terrain: {
+    duneAmp: 1.0,
+    roughAmp: 0.8,
+    roads: [],
+    corridor: {
+      pts: JARRUN_PATH,
+      width: 16,
+      arenas: [
+        { x: -140, z: -20, r: 26 },
+        { x: 80, z: 10, r: 24 },
+        { x: 150, z: -120, r: 28 },
+      ],
+      wallHeight: 16,
+    },
+    bumps: [
+      { x: 80, z: 10, r: 12, h: 4.5 },    // rod-forest crest
+      { x: 110, z: -85, r: 12, h: 5 },    // crater hop
+    ],
+  },
+  districts: [
+    {
+      id: 'jarpaddock', name: 'THE JAR RUN', subtitle: 'Grid Under a Bad Sky', dress: 'gulchgate',
+      cx: -140, cz: -20, radius: 26, baseHeight: 0,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 0,
+    },
+    {
+      id: 'rodforest', name: 'THE ROD FOREST', subtitle: 'Every Tree Is a Lightning Rod. On Purpose.', dress: 'conductorrow',
+      cx: 80, cz: 10, radius: 26, baseHeight: 0.4,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 0,
+    },
+    {
+      id: 'eyerim', name: 'THE EYEWALL RIM', subtitle: 'Finish Inside the Weather', dress: 'eyewall',
+      cx: 150, cz: -120, radius: 28, baseHeight: -0.2,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 0,
+    },
+  ],
+  pois: [
+    { id: 'buggy_jr', kind: 'buggy', x: -132, z: -28, rot: 0.6 },
+    { id: 'sign_jr1', kind: 'sign', x: -146, z: -32, rot: 0.3, data: 'THE JAR RUN — ONE WAY. THE WIND DRIVES WITH YOU. THE SKY DOES NOT.' },
+    { id: 'sign_jr2', kind: 'sign', x: -134, z: -8, rot: -0.4, data: 'SKYFALL SCHEDULE: OFTEN. HUG THE RODS.' },
+    { id: 'rod_jr1', kind: 'rod', x: -95, z: 36 },
+    { id: 'rod_jr2', kind: 'rod', x: -28, z: 52 },
+    { id: 'rod_jr3', kind: 'rod', x: 46, z: 51 },
+    { id: 'rod_jr4', kind: 'rod', x: 86, z: 16 },
+    { id: 'rod_jr5', kind: 'rod', x: 64, z: -52 },
+    { id: 'rod_jr6', kind: 'rod', x: 116, z: -90 },
+    { id: 'vent_jr1', kind: 'vent', x: 74, z: 2 },
+    { id: 'vent_jr2', kind: 'vent', x: 104, z: -78 },
+  ],
+  spawn: { x: -132, z: -24 },
+  exits: [],
+};
+
 export const MAPS: Record<string, WorldDef> = {
   claudelands: CLAUDELANDS,
   frosthollow: FROSTHOLLOW,
@@ -1317,6 +1618,9 @@ export const MAPS: Record<string, WorldDef> = {
   veldt_gp: VELDT_GP,
   vitra: VITRA,
   vitra_mile: VITRA_MILE,
+  voltholm: VOLTHOLM,
+  vitra_gp: VITRA_GP,
+  volt_gp: VOLT_GP,
 };
 
 let active: WorldDef = CLAUDELANDS;
@@ -1346,6 +1650,28 @@ function distToSegment(px: number, pz: number, s: { x0: number; z0: number; x1: 
   const len2 = dx * dx + dz * dz;
   const t = len2 > 0 ? clamp01(((px - s.x0) * dx + (pz - s.z0) * dz) / len2) : 0;
   return Math.hypot(px - (s.x0 + dx * t), pz - (s.z0 + dz * t));
+}
+
+/** Net gale-channel wind at a point on the active map: a unit direction
+ *  along the channel scaled by power, fading toward the channel's edges.
+ *  Null when the point sits in still air (or the map has no gales). */
+export function galeAt(x: number, z: number): { x: number; z: number } | null {
+  const gales = active.gales;
+  if (!gales) return null;
+  let best: { x: number; z: number } | null = null;
+  let bestStrength = 0;
+  for (const g of gales) {
+    const d = distToSegment(x, z, g);
+    if (d >= g.width) continue;
+    const falloff = 1 - (d / g.width) * (d / g.width); // full force mid-channel
+    const len = Math.hypot(g.x1 - g.x0, g.z1 - g.z0) || 1;
+    const s = g.power * falloff;
+    if (s > bestStrength) {
+      bestStrength = s;
+      best = { x: ((g.x1 - g.x0) / len) * s, z: ((g.z1 - g.z0) / len) * s };
+    }
+  }
+  return best;
 }
 
 export function roadFactor(x: number, z: number): number {

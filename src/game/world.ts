@@ -6,7 +6,7 @@
 // terrain ray-march), and interactables. Consumes data/world.ts only.
 
 import * as THREE from 'three';
-import { WORLD, terrainHeight, terrainNormal, meshHeight, roadFactor, districtAt, TERRAIN_SEGS, TERRAIN_SPAN_FACTOR, type WorldPoi, type DistrictDef } from '../data/world';
+import { WORLD, terrainHeight, terrainNormal, meshHeight, roadFactor, districtAt, galeAt, TERRAIN_SEGS, TERRAIN_SPAN_FACTOR, type WorldPoi, type DistrictDef } from '../data/world';
 import { toonMat, glowMat, flatMat } from '../render/toon';
 import { groundTexture, rockTexture, corrugatedTexture, posterTexture, swatch, cloudTexture, waterTexture, fallTexture } from '../render/textures';
 import { buildScrapship } from '../render/scrapship';
@@ -279,7 +279,7 @@ export class World {
       const x = (rng() - 0.5) * WORLD.size * 0.95;
       const z = (rng() - 0.5) * WORLD.size * 0.95;
       const dd = districtAt(x, z);
-      if (dd && (dd.dress === 'hub' || dd.dress === 'frosthub' || dd.dress === 'throatgate' || dd.dress === 'porttown')) continue;
+      if (dd && (dd.dress === 'hub' || dd.dress === 'frosthub' || dd.dress === 'throatgate' || dd.dress === 'porttown' || dd.dress === 'jarworks')) continue;
       if (!this.clearOfAssets(x, z, 2.2)) continue;
       const s = 0.8 + rng() * 2.6;
       const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
@@ -306,7 +306,7 @@ export class World {
       const x = (rng() - 0.5) * WORLD.size * 1.15;
       const z = (rng() - 0.5) * WORLD.size * 1.15;
       const d = districtAt(x, z);
-      if (d && (d.dress === 'hub' || d.dress === 'frosthub' || d.dress === 'throne' || d.dress === 'throatgate' || d.dress === 'porttown' || d.dress === 'castaway' || d.dress === 'cavemouth' || d.dress === 'anchorage')) continue;
+      if (d && (d.dress === 'hub' || d.dress === 'frosthub' || d.dress === 'throne' || d.dress === 'throatgate' || d.dress === 'porttown' || d.dress === 'castaway' || d.dress === 'cavemouth' || d.dress === 'anchorage' || d.dress === 'jarworks')) continue;
       if (!this.clearOfAssets(x, z, 1.2)) continue;
       const sc = 0.6 + rng() * 1.3;
       q.setFromEuler(new THREE.Euler(0.15 * (rng() - 0.5), rng() * Math.PI, 0.15 * (rng() - 0.5)));
@@ -414,6 +414,11 @@ export class World {
         case 'wickbothy': this.buildWickBothy(d); break;
         case 'echoorgan': this.buildEchoOrgan(d); break;
         case 'lampfall': this.buildLampfall(d); break;
+        case 'jarworks': this.buildJarworks(d); break;
+        case 'galeflats': this.buildGaleFlats(d); break;
+        case 'conductorrow': this.buildConductorRow(d); break;
+        case 'capacitorium': this.buildCapacitorium(d); break;
+        case 'eyewall': this.buildEyewall(d); break;
       }
     }
   }
@@ -1513,6 +1518,7 @@ export class World {
         case 'pit': this.buildPitDoor(poi); break;
         case 'cargo': this.buildCargo(poi); break;
         case 'vent': this.buildVent(poi); break;
+        case 'rod': this.buildRod(poi); break;
       }
     }
     this.buildZoneExits();
@@ -1760,6 +1766,7 @@ export class World {
       juno: { coat: 0x3a8a5a, skin: 0xc89878, hat: 0xd8c898, hatKind: 'cap', accent: 0x9adc4a, label: 'TALK TO DR. CALLA' },
       peg: { coat: 0x4a5a66, skin: 0xb89070, hat: 0xd8d0c0, hatKind: 'bun', accent: 0x7dffd4, label: 'TALK TO QUARTERMISTRESS PEG' },
       wick: { coat: 0x3a2f6a, skin: 0xd8b090, hat: 0x2a2244, hatKind: 'hood', accent: 0x9a6aff, label: 'TALK TO WICK' },
+      coil: { coat: 0x4a5248, skin: 0xb08868, hat: 0x8a7a2c, hatKind: 'cap', accent: 0xc8d24a, label: 'TALK TO FOREWOMAN COIL' },
     };
     const look = looks[poi.data ?? ''] ?? looks.brann;
     const y = terrainHeight(poi.x, poi.z);
@@ -2063,7 +2070,13 @@ export class World {
       this.group.add(pole);
       this.addCollider(archX + side * 11, archZ, 0.8, 0.8);
     }
-    const bannerTex = posterTexture({ lines: ['REDLINE’S', 'RUN'], style: 'ad', bg: '#2a2622', fg: '#ffd23c', accent: '#ff5a86' }, 20 / 2.6);
+    // the arch names ITS track — the gulch is Rita's, the GP paddocks brand
+    // themselves after their own map
+    const archLines = WORLD.id === 'rustgulch' ? ['REDLINE’S', 'RUN'] : (() => {
+      const words = WORLD.name.split(' ');
+      return words.length > 1 ? [words.slice(0, -1).join(' '), words[words.length - 1]] : [WORLD.name];
+    })();
+    const bannerTex = posterTexture({ lines: archLines, style: 'ad', bg: '#2a2622', fg: '#ffd23c', accent: '#ff5a86' }, 20 / 2.6);
     for (const flip of [0, Math.PI]) { // readable from both directions
       const banner = new THREE.Mesh(new THREE.PlaneGeometry(20, 2.6), new THREE.MeshBasicMaterial({ map: bannerTex }));
       banner.position.set(archX, gy + 8.6, archZ + (flip === 0 ? 0.05 : -0.05));
@@ -4004,6 +4017,313 @@ export class World {
     }
   }
 
+  // -------------------------------------------------------------- VOLTHOLM
+
+  /** Conductor rod: SKYFALL shelter. A guyed mast with a charged tip and a
+   *  ground ring showing the shelter radius — hug it when the sirens sing. */
+  private buildRod(poi: WorldPoi): void {
+    const y = terrainHeight(poi.x, poi.z);
+    const iron = toonMat({ color: 0x32383e, map: swatch('#2c3238', 60) });
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.4, 12, 6), iron);
+    mast.position.set(poi.x, y + 6, poi.z);
+    this.group.add(mast);
+    this.staticTargets.push(mast);
+    this.addCollider(poi.x, poi.z, 0.5, 0.5, 12);
+    // tripod feet
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 3.2, 5), iron);
+      leg.position.set(poi.x + Math.cos(a) * 1.1, y + 1.4, poi.z + Math.sin(a) * 1.1);
+      leg.rotation.z = Math.cos(a) * 0.5;
+      leg.rotation.x = -Math.sin(a) * 0.5;
+      this.group.add(leg);
+    }
+    // coil rings up the mast + the charged tip
+    const brass = toonMat({ color: 0x9a8a3c });
+    for (const h of [7.5, 9.2, 10.9]) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.07, 6, 12), brass);
+      ring.position.set(poi.x, y + h, poi.z);
+      ring.rotation.x = Math.PI / 2;
+      this.group.add(ring);
+    }
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 8), glowMat(0xc8d24a, 0.95));
+    tip.position.set(poi.x, y + 12.3, poi.z);
+    tip.name = 'blinker';
+    this.group.add(tip);
+    // the shelter ring: a faint circle on the dirt saying "safe-ish here"
+    const ringGeo = new THREE.RingGeometry(9.4, 10, 36);
+    const ringMat = new THREE.MeshBasicMaterial({ color: 0xc8d24a, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false });
+    const shelter = new THREE.Mesh(ringGeo, ringMat);
+    shelter.rotation.x = -Math.PI / 2;
+    shelter.position.set(poi.x, y + 0.15, poi.z);
+    this.group.add(shelter);
+  }
+
+  /** THE JARWORKS — Voltholm's company town: rack after rack of bottled
+   *  lightning, a civic siren horn, and the paperwork to prove it's legal. */
+  private buildJarworks(d: DistrictDef): void {
+    const rng = mulberry32(717001);
+    const iron = toonMat({ color: 0x3a4046, map: swatch('#343a40', 60) });
+    // jar racks: shelving with rows of glowing capacitor jars
+    for (let rIdx = 0; rIdx < 5; rIdx++) {
+      const a = rng() * Math.PI * 2, r = 8 + rng() * (d.radius * 0.6);
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 3)) continue;
+      const y = terrainHeight(x, z);
+      const rack = new THREE.Group();
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.6, 1.0), iron);
+      frame.position.y = 1.3;
+      rack.add(frame);
+      for (let s = 0; s < 2; s++) {
+        for (let j = 0; j < 4; j++) {
+          const jar = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.6, 7), glowMat(rng() < 0.7 ? 0xc8d24a : 0x9adcff, 0.8));
+          jar.position.set(-1.2 + j * 0.8, 0.75 + s * 1.1, 0.56);
+          if (rng() < 0.5) jar.name = 'blinker';
+          rack.add(jar);
+        }
+      }
+      rack.position.set(x, y, z);
+      rack.rotation.y = rng() * Math.PI * 2;
+      this.group.add(rack);
+      this.staticTargets.push(rack);
+      this.addCollider(x, z, 1.9, 1.9, 2.8);
+    }
+    // the SKYFALL civic horn: a pole with two bell speakers
+    const hx = d.cx + 6, hz = d.cz - 10;
+    const hy = terrainHeight(hx, hz);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.2, 6.5, 6), iron);
+    pole.position.set(hx, hy + 3.25, hz);
+    this.group.add(pole);
+    this.addCollider(hx, hz, 0.4, 0.4, 6.5);
+    for (const s of [-1, 1]) {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.1, 8, 1, true), toonMat({ color: 0x8a2e2e }));
+      horn.position.set(hx + s * 0.7, hy + 6.1, hz);
+      horn.rotation.z = s * (Math.PI / 2 + 0.3);
+      this.group.add(horn);
+    }
+    // stacked cable drums + crates for yard clutter
+    for (let i = 0; i < 6; i++) {
+      const a = rng() * Math.PI * 2, r = 6 + rng() * (d.radius * 0.7);
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 1.6)) continue;
+      const y = terrainHeight(x, z);
+      if (rng() < 0.5) {
+        const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.7, 10), toonMat({ color: 0x6a5a3a, map: swatch('#5a4c30', 50) }));
+        drum.position.set(x, y + 0.45, z);
+        drum.rotation.x = Math.PI / 2;
+        drum.rotation.z = rng() * Math.PI;
+        this.group.add(drum);
+        this.staticTargets.push(drum);
+        this.addCollider(x, z, 0.9, 0.9, 1.0);
+      } else {
+        const crate = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.0, 1.2), toonMat({ color: 0x4a5560, map: swatch('#424c56', 60) }));
+        crate.position.set(x, y + 0.5, z);
+        crate.rotation.y = rng() * Math.PI;
+        this.group.add(crate);
+        this.staticTargets.push(crate);
+        this.addCollider(x, z, 0.85, 0.85, 1.1);
+      }
+    }
+  }
+
+  /** THE GALE FLATS — wind-scoured slate. Everything leans the way the
+   *  weather went: slabs, windsocks, and the bones of less careful crews. */
+  private buildGaleFlats(d: DistrictDef): void {
+    const rng = mulberry32(717002);
+    // leaning slabs, all bowed the same direction (the wind's direction)
+    for (let i = 0; i < 12; i++) {
+      const a = rng() * Math.PI * 2, r = 6 + rng() * (d.radius * 0.85);
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 2.4)) continue;
+      const y = terrainHeight(x, z);
+      const h = 1.8 + rng() * 3.4;
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(0.7 + rng() * 1.2, h, 2.0 + rng() * 2.2), toonMat({ color: 0x55605c, map: rockTexture('#4c5854') }));
+      slab.position.set(x, y + h * 0.42, z);
+      slab.rotation.z = -0.28 - rng() * 0.22; // the lean: the wind always wins
+      slab.rotation.y = rng() * 0.6 - 0.3;
+      this.group.add(slab);
+      this.staticTargets.push(slab);
+      this.addCollider(x, z, 1.2, 1.2, h);
+    }
+    // windsock poles: full horizontal — this is not a gentle breeze
+    for (let i = 0; i < 4; i++) {
+      const a = rng() * Math.PI * 2, r = 8 + rng() * (d.radius * 0.7);
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 1.4)) continue;
+      const y = terrainHeight(x, z);
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 4.2, 6), toonMat({ color: 0x3a4046 }));
+      pole.position.set(x, y + 2.1, z);
+      this.group.add(pole);
+      this.addCollider(x, z, 0.3, 0.3, 4.2);
+      const sock = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.6, 7, 1, true), toonMat({ color: 0xc86a2e }));
+      sock.position.set(x, y + 4.0, z);
+      sock.rotation.z = Math.PI / 2 + 0.08; // flying straight out
+      sock.name = 'windsock';
+      this.group.add(sock);
+    }
+    // wrecked harvest kites: frames snapped into the slate
+    for (let i = 0; i < 3; i++) {
+      const a = rng() * Math.PI * 2, r = 10 + rng() * (d.radius * 0.6);
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 2)) continue;
+      const y = terrainHeight(x, z);
+      const frame = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.09, 6, 12, Math.PI * 1.4), toonMat({ color: 0x6a4a2e }));
+      frame.position.set(x, y + 0.8, z);
+      frame.rotation.set(rng() * 1.2, rng() * Math.PI, 0.9);
+      this.group.add(frame);
+      this.staticTargets.push(frame);
+    }
+  }
+
+  /** CONDUCTOR ROW — the monks' avenue: pylon shrines strung with sagging
+   *  cable, votive jars at every base. Grounded, in every sense but one. */
+  private buildConductorRow(d: DistrictDef): void {
+    const rng = mulberry32(717003);
+    const iron = toonMat({ color: 0x32383e, map: swatch('#2c3238', 60) });
+    // shrine pylons: mini-rods with a hooded lamp head, in a rough row
+    const posts: THREE.Vector3[] = [];
+    for (let i = 0; i < 7; i++) {
+      const t = i / 6;
+      const x = d.cx - d.radius * 0.7 + t * d.radius * 1.4 + (rng() - 0.5) * 8;
+      const z = d.cz + Math.sin(t * Math.PI * 2) * d.radius * 0.35 + (rng() - 0.5) * 8;
+      if (!this.clearOfAssets(x, z, 2)) continue;
+      const y = terrainHeight(x, z);
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.3, 5.4, 6), iron);
+      post.position.set(x, y + 2.7, z);
+      this.group.add(post);
+      this.staticTargets.push(post);
+      this.addCollider(x, z, 0.45, 0.45, 5.4);
+      const hood = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.7, 7), iron);
+      hood.position.set(x, y + 5.6, z);
+      this.group.add(hood);
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.24, 7, 7), glowMat(0xc8d24a, 0.9));
+      lamp.position.set(x, y + 5.25, z);
+      if (rng() < 0.4) lamp.name = 'blinker';
+      this.group.add(lamp);
+      posts.push(new THREE.Vector3(x, y + 5.1, z));
+      // votive jars at the base, humming their little prayers
+      for (let j = 0; j < 2 + Math.floor(rng() * 3); j++) {
+        const ja = rng() * Math.PI * 2;
+        const jar = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.44, 6), glowMat(0x9adcff, 0.7));
+        jar.position.set(x + Math.cos(ja) * 0.9, y + 0.22, z + Math.sin(ja) * 0.9);
+        this.group.add(jar);
+      }
+    }
+    // sagging cables between consecutive pylons
+    for (let i = 0; i + 1 < posts.length; i++) {
+      const p1 = posts[i], p2 = posts[i + 1];
+      if (p1.distanceTo(p2) > 40) continue;
+      for (let b = 1; b < 7; b++) {
+        const t = b / 7;
+        const bead = new THREE.Mesh(new THREE.SphereGeometry(0.07, 5, 5), toonMat({ color: 0x22262a }));
+        bead.position.lerpVectors(p1, p2, t);
+        bead.position.y -= Math.sin(t * Math.PI) * 1.2;
+        this.group.add(bead);
+      }
+    }
+  }
+
+  /** THE CAPACITORIUM — the Abbot's chapel: a ring of giant charged stacks
+   *  around a dais. The architecture hums. The congregation is voltage. */
+  private buildCapacitorium(d: DistrictDef): void {
+    const rng = mulberry32(717004);
+    const dark = toonMat({ color: 0x2a3036, map: rockTexture('#242a30') });
+    const brass = toonMat({ color: 0x9a8a3c, map: swatch('#8a7a34', 60) });
+    // the stacks: fat capacitor towers ringing the arena
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 0.15;
+      const x = d.cx + Math.cos(a) * (d.radius - 5.5), z = d.cz + Math.sin(a) * (d.radius - 5.5);
+      const y = terrainHeight(x, z);
+      const h = 6.5 + rng() * 3;
+      const tower = new THREE.Group();
+      for (let s = 0; s < 4; s++) {
+        const seg = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.25, h / 4 - 0.12, 10), s % 2 ? brass : dark);
+        seg.position.y = (s + 0.5) * (h / 4);
+        tower.add(seg);
+      }
+      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), glowMat(0xc8d24a, 0.9));
+      tip.position.y = h + 0.4;
+      if (i % 2 === 0) tip.name = 'blinker';
+      tower.add(tip);
+      tower.position.set(x, y, z);
+      this.group.add(tower);
+      this.staticTargets.push(tower);
+      this.addCollider(x, z, 1.5, 1.5, h);
+    }
+    // the dais: three shallow steps to nowhere in particular
+    const dy = terrainHeight(d.cx, d.cz);
+    for (let s = 0; s < 3; s++) {
+      const step = new THREE.Mesh(new THREE.CylinderGeometry(5.5 - s * 1.4, 5.9 - s * 1.4, 0.5, 12), dark);
+      step.position.set(d.cx, dy + 0.25 + s * 0.5, d.cz);
+      this.group.add(step);
+    }
+    // pews for the faithful: rows of grounded slate benches
+    for (let i = 0; i < 6; i++) {
+      const a = rng() * Math.PI * 2, r = 9 + rng() * (d.radius * 0.5);
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 2)) continue;
+      const y = terrainHeight(x, z);
+      const pew = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.5, 0.7), dark);
+      pew.position.set(x, y + 0.25, z);
+      pew.rotation.y = Math.atan2(d.cx - x, d.cz - z);
+      this.group.add(pew);
+      this.staticTargets.push(pew);
+      this.addCollider(x, z, 1.2, 0.6, 0.8);
+    }
+  }
+
+  /** THE EYEWALL — the storm's heart. A crater rim of storm-bent monoliths
+   *  and the mooring field Gale Prime tore loose from: anchor blocks with
+   *  snapped chain still swinging. */
+  private buildEyewall(d: DistrictDef): void {
+    const rng = mulberry32(717005);
+    const slate = toonMat({ color: 0x4a5560, map: rockTexture('#424c56') });
+    // rim monoliths, storm-bent inward like a closing hand
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 + 0.1;
+      const x = d.cx + Math.cos(a) * (d.radius - 4), z = d.cz + Math.sin(a) * (d.radius - 4);
+      const y = terrainHeight(x, z);
+      const h = 4.5 + rng() * 4;
+      const mono = new THREE.Mesh(new THREE.BoxGeometry(1.2 + rng() * 0.8, h, 1.0 + rng() * 0.6), slate);
+      mono.position.set(x, y + h * 0.42, z);
+      // every one leans toward the centre — the eye pulls
+      mono.lookAt(d.cx, y + h * 2.2, d.cz);
+      this.group.add(mono);
+      this.staticTargets.push(mono);
+      this.addCollider(x, z, 1.2, 1.2, h);
+    }
+    // the mooring field: anchor blocks with snapped chain stubs
+    for (let i = 0; i < 6; i++) {
+      const a = rng() * Math.PI * 2, r = 6 + rng() * (d.radius * 0.55);
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 2)) continue;
+      const y = terrainHeight(x, z);
+      const block = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.1, 1.6), toonMat({ color: 0x32383e, map: swatch('#2c3238', 60) }));
+      block.position.set(x, y + 0.55, z);
+      block.rotation.y = rng() * Math.PI;
+      this.group.add(block);
+      this.staticTargets.push(block);
+      this.addCollider(x, z, 1.0, 1.0, 1.2);
+      // the chain that lost the argument: a few links arcing skyward
+      for (let l = 0; l < 3; l++) {
+        const link = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.06, 5, 8), toonMat({ color: 0x22262a }));
+        link.position.set(x + 0.2 * l, y + 1.3 + l * 0.38, z + 0.1 * l);
+        link.rotation.set(rng() * 1.2, rng() * 1.2, 0);
+        this.group.add(link);
+      }
+    }
+    // dead centre: the mooring Gale Prime kept, a lone ring bolted to a slab
+    const cy = terrainHeight(d.cx, d.cz);
+    const slabC = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 3.0, 0.7, 10), slate);
+    slabC.position.set(d.cx, cy + 0.35, d.cz);
+    this.group.add(slabC);
+    const ringC = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.14, 8, 14), glowMat(0x9adcff, 0.8));
+    ringC.position.set(d.cx, cy + 1.15, d.cz);
+    ringC.rotation.x = 0.4;
+    ringC.name = 'blinker';
+    this.group.add(ringC);
+  }
+
   private buildQuibb(poi: WorldPoi): void {
     const y = terrainHeight(poi.x, poi.z);
     const q = new THREE.Group();
@@ -4434,6 +4754,20 @@ export class World {
         const r = 3 + Math.random() * 18;
         const p = playerPos.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.3 + Math.random() * 2, Math.sin(a) * r));
         fx.emit(p, new THREE.Vector3(0.12, 0.45 + Math.random() * 0.3, 0.08), Math.random() > 0.5 ? 0x2fd8c8 : 0x7a6ae8, 0.055, 6, -0.01);
+      }
+    } else if (WORLD.biome.ambientParticle === 'rain') {
+      // sideways storm rain, fast and thin
+      if (Math.random() < 90 * dt) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * 22;
+        const p = playerPos.clone().add(new THREE.Vector3(Math.cos(a) * r, 7 + Math.random() * 6, Math.sin(a) * r));
+        fx.emit(p, new THREE.Vector3(2.2, -16, 0.8), 0x9ab8c8, 0.045, 0.8, 0);
+      }
+      // gale channels made visible: streaks racing along the wind
+      if (Math.random() < 40 * dt) {
+        const p = playerPos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 44, 0.4 + Math.random() * 2.4, (Math.random() - 0.5) * 44));
+        const gp = galeAt(p.x, p.z);
+        if (gp) fx.emit(p, new THREE.Vector3(gp.x * 1.6, 0.2, gp.z * 1.6), 0xaad8c8, 0.05, 0.7, 0);
       }
     } else if (Math.random() < 6 * dt) {
       const a = Math.random() * Math.PI * 2;

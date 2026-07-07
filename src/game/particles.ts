@@ -159,6 +159,21 @@ export class FxSystem {
     this.burst(to, color, 6, 3, 0.07, 0.3, 2);
   }
 
+  /** SKYFALL: a jagged bolt from the clouds to a ground point, with the
+   *  flash and scorch to sell it. Voltholm's storm + the Abbot's judgment. */
+  skyBolt(ground: THREE.Vector3, color = 0xf8ffc0): void {
+    const sky = ground.clone().add(new THREE.Vector3((Math.random() - 0.5) * 8, 60, (Math.random() - 0.5) * 8));
+    this.lightningArc(sky, ground, color);
+    const mid = ground.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, 30, (Math.random() - 0.5) * 3));
+    this.lightningArc(mid, ground, color);
+    const mat = glowMat(color, 0.85);
+    const flash = new THREE.Mesh(new THREE.SphereGeometry(1.4, 8, 8), mat);
+    flash.position.copy(ground).add(new THREE.Vector3(0, 0.6, 0));
+    this.addTimed(flash, mat, 0.14, 'flash');
+    this.burst(ground, color, 18, 6, 0.12, 0.5, 6);
+    this.burst(ground, 0x3a3230, 8, 3, 0.2, 0.9, 3);
+  }
+
   muzzleFlash(pos: THREE.Vector3, dir: THREE.Vector3, color = 0xffd23c, scale = 1): void {
     const mat = new THREE.SpriteMaterial({ map: starTexture(), color, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, rotation: Math.random() * Math.PI });
     const s = new THREE.Sprite(mat);

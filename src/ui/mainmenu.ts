@@ -257,7 +257,7 @@ export class MainMenu {
     ];
     const cards = TRACKS.map((t) => `
       <div class="mm-slot">
-        <div class="mm-slot-head"><b>${t.name}</b><span style="opacity:0.65"> · ${t.laps} laps</span></div>
+        <div class="mm-slot-head"><b>${t.name}</b><span style="opacity:0.65"> · ${t.linear ? 'point to point' : `${t.laps} laps`}</span></div>
         <div class="mm-slot-sub">${t.blurb}</div>
         <div class="mm-slot-acts">
           ${tiers.map((tr) => `<button class="mm-slot-btn" data-track="${t.id}" data-tier="${tr.id}" title="${tr.sub}">${tr.name}</button>`).join('')}
