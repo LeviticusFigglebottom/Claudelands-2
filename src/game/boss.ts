@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { Enemy, enemySpawner, enemyHooks } from './enemies';
-import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, BOSS_BLOOM, BOSS_ANCHORHEAD, BOSS_MOTHERLODE, BOSS_UNKEEPER, BOSS_ABBOT, BOSS_GALEPRIME, type EnemyDef } from '../data/enemies';
+import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, BOSS_BLOOM, BOSS_ANCHORHEAD, BOSS_MOTHERLODE, BOSS_UNKEEPER, BOSS_ABBOT, BOSS_GALEPRIME, BOSS_HELDBREATH, type EnemyDef } from '../data/enemies';
 import { toonMat, glowMat } from '../render/toon';
 import { fx } from './particles';
 import { audio } from '../audio/synth';
@@ -1078,7 +1078,121 @@ export class GalePrime extends Boss {
 }
 
 // ---------------------------------------------------------------------------
-export type BossId = 'gutterball' | 'warden_prime' | 'old_man_avalanche' | 'saint_furnace' | 'bloom_mother' | 'admiral_anchorhead' | 'mother_lode' | 'unkeeper' | 'static_abbot' | 'gale_prime';
+// THE HELD BREATH — twenty years of Voltholm's missing wind, coiled into one
+// slow shape in the middle of the Becalmed. It INHALES (drags you in),
+// EXHALES (a rime nova that throws you back out), and sings the sleepwalking
+// crews awake. The crit zone is a swallowed harvest kite, still glowing in
+// its chest — the last thing it caught the night it stopped.
+export class HeldBreath extends Boss {
+  private kite: THREE.Mesh;
+  private coils: THREE.Group;
+  private inhaling = 0;
+
+  constructor(level: number, pos: THREE.Vector3) {
+    super(BOSS_HELDBREATH, level, pos);
+    const scale = this.def.scale;
+    const mist = new THREE.MeshToonMaterial({ color: 0x8a9a90, transparent: true, opacity: 0.55 });
+    // a body of layered wind coils, barely holding a shape
+    this.coils = new THREE.Group();
+    for (let i = 0; i < 4; i++) {
+      const coil = new THREE.Mesh(new THREE.TorusGeometry((0.5 + i * 0.22) * scale, 0.1 * scale, 7, 18), mist);
+      coil.position.y = (0.7 + i * 0.45) * scale;
+      coil.rotation.x = Math.PI / 2 + (i % 2 ? 0.2 : -0.2);
+      this.coils.add(coil);
+      this.bodyParts.push(coil);
+    }
+    this.group.add(this.coils);
+    // THE SWALLOWED KITE: a diamond of warm light deep in the funnel — CRIT
+    this.kite = new THREE.Mesh(new THREE.OctahedronGeometry(0.38 * scale, 0), glowMat(0xffd88a, 0.95));
+    this.kite.position.y = 1.5 * scale;
+    this.group.add(this.kite);
+    this.bodyParts.push(this.kite);
+    this.critZone = this.kite;
+    audio.bossRoar(false);
+  }
+
+  protected onPhase(phase: number): void {
+    if (phase === 1) {
+      enemyHooks().bark(this.displayName, '*a lullaby, reversed* — UP, CREWS. COMPANY.');
+      for (const s of [new THREE.Vector3(6, 0, 4), new THREE.Vector3(-6, 0, 4), new THREE.Vector3(0, 0, -7)]) {
+        enemySpawner.spawnOne(ENEMIES.sleepwalker, this.position.clone().add(s), false, 18);
+      }
+    } else {
+      enemyHooks().bark(this.displayName, '*twenty years of held air, losing patience*');
+      audio.bossRoar(false);
+      this.def = { ...this.def, speed: this.def.speed * 1.4, attackRate: this.def.attackRate * 1.35 };
+      (this.kite.material as THREE.MeshBasicMaterial).color.setHex(0xffb44a);
+    }
+  }
+
+  protected specialCooldown(): number { return this.phase >= 2 ? 4.2 : 6.6; }
+
+  protected special(): void {
+    const playerPos = enemyHooks().playerPos();
+    const roll = Math.random();
+    const dist = playerPos.distanceTo(this.position);
+    if (roll < 0.45 && dist > 6) {
+      // INHALE: the room breathes in, and you are part of the room
+      enemyHooks().bark(this.displayName, '*inhale*');
+      this.inhaling = 1.6;
+      fx.burst(this.position.clone().add(new THREE.Vector3(0, 1.8, 0)), 0x9ab8b0, 26, 4, 0.14, 0.8, 1);
+    } else if (roll < 0.75) {
+      // EXHALE: everything it holds, out at once — rime nova + shove
+      enemyHooks().bark(this.displayName, '*EXHALE*');
+      fx.explosion(this.position.clone(), 6.5, 0x9adcd0);
+      audio.explosion(true);
+      audio.elemental('rime');
+      splashDamage(this.position.clone(), 9, 8.5 * levelScale(this.level), 'rime', { source: 'enemy', elemChance: 0.85 });
+      const away = playerPos.clone().sub(this.position).setY(0);
+      if (away.lengthSq() < 13 * 13) enemyHooks().shovePlayer?.(away.x, away.z, 30);
+    } else {
+      // STILL AIR: lobbed pockets of dead calm that burst cold
+      enemyHooks().bark(this.displayName, '*the quiet, thrown*');
+      for (let i = 0; i < 3; i++) {
+        const target = playerPos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 7, 0, (Math.random() - 0.5) * 7));
+        const muzzle = this.position.clone().add(new THREE.Vector3(0, 2.4 * this.def.scale, 0));
+        const aim = target.clone().sub(muzzle);
+        const d = aim.length();
+        aim.normalize().multiplyScalar(15);
+        aim.y += d * 0.55;
+        projectiles.spawn({
+          pos: muzzle, vel: aim, damage: 9.5 * levelScale(this.level), element: 'rime',
+          splash: 3.2, gravity: 13, fuse: -1, source: 'enemy',
+        });
+      }
+      audio.elemental('rime');
+    }
+  }
+
+  override update(dt: number): void {
+    super.update(dt);
+    if (!this.alive) return;
+    if (this.inhaling > 0) {
+      this.inhaling -= dt;
+      const playerPos = enemyHooks().playerPos();
+      const toward = this.position.clone().sub(playerPos).setY(0);
+      const d = toward.length();
+      if (d > 3.2) {
+        toward.normalize();
+        enemyHooks().shovePlayer?.(toward.x, toward.z, 34 * dt);
+        if (Math.random() < 14 * dt) {
+          fx.emit(playerPos.clone().add(new THREE.Vector3(0, 1, 0)), toward.clone().multiplyScalar(9), 0x9ab8b0, 0.05, 0.5, 0);
+        }
+      } else {
+        // caught in the throat of it: a bite of cold
+        enemyHooks().damagePlayer(11 * levelScale(this.level) * dt, 'rime', this.position);
+      }
+    }
+    // the funnel turns, slowly; the kite bobs like something still flying
+    this.coils.rotation.y += dt * (this.phase >= 2 ? 2.2 : 0.8);
+    this.kite.rotation.y += dt * 1.4;
+    this.kite.position.y = (1.5 + Math.sin(this.wobble * 0.6) * 0.12) * this.def.scale;
+    if (this.phase >= 2 && Math.random() < 6 * dt) fx.statusFlames(this.position, 'rime');
+  }
+}
+
+// ---------------------------------------------------------------------------
+export type BossId = 'gutterball' | 'warden_prime' | 'old_man_avalanche' | 'saint_furnace' | 'bloom_mother' | 'admiral_anchorhead' | 'mother_lode' | 'unkeeper' | 'static_abbot' | 'gale_prime' | 'held_breath';
 
 export function spawnBoss(id: BossId, pos: THREE.Vector3, levelOverride?: number): Enemy {
   const level = levelOverride ?? state.level + 2;
@@ -1091,12 +1205,14 @@ export function spawnBoss(id: BossId, pos: THREE.Vector3, levelOverride?: number
     : id === 'unkeeper' ? new Unkeeper(level, pos)
     : id === 'static_abbot' ? new StaticAbbot(level, pos)
     : id === 'gale_prime' ? new GalePrime(level, pos)
+    : id === 'held_breath' ? new HeldBreath(level, pos)
     : new SaintFurnace(level, pos);
   enemySpawner.registerBoss(boss);
   const flash: Record<string, number> = {
     gutterball: 0xff8438, warden_prime: 0x54d4ff, old_man_avalanche: 0x9ad8e8,
     bloom_mother: 0x9adc4a, admiral_anchorhead: 0x7dffd4, mother_lode: 0x54d4ff,
     unkeeper: 0x9a6aff, static_abbot: 0xc8d24a, gale_prime: 0x9adcff,
+    held_breath: 0x9adcd0,
   };
   fx.explosion(pos.clone().add(new THREE.Vector3(0, 1, 0)), 4, flash[id] ?? 0xff7a1a);
   return boss;

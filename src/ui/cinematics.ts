@@ -35,6 +35,7 @@ export const BOSS_EPITHETS: Record<string, string> = {
   unkeeper: 'keeper morrow. two hundred years off the clock.',
   static_abbot: 'takes the storm’s confession. keeps the change.',
   gale_prime: 'cut every mooring but one. guess where to shoot.',
+  held_breath: 'twenty years of missing wind. it kept the receipt.',
 };
 
 export const NPC_INTROS: Record<string, { name: string; sub: string }> = {
@@ -50,6 +51,7 @@ export const NPC_INTROS: Record<string, { name: string; sub: string }> = {
   faro: { name: 'KEEPER FARO', sub: 'two hundred years on lamp duty. the dark blinked first.' },
   wick: { name: 'WICK', sub: 'apprentice lamplighter, two centuries into one night shift. the arm chimes.' },
   coil: { name: 'FOREWOMAN COIL', sub: 'runs the jarworks. the lightning owes her money.' },
+  bet: { name: 'BAROMETER BET', sub: 'forecast officer. twenty years logging a sky that stopped.' },
 };
 
 /** Slow orbit around a boss, ending face-to-face. */

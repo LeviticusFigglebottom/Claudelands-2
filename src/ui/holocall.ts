@@ -26,6 +26,7 @@ export const CALL_LOOKS: Record<string, HolocallLook> = {
   faro: { name: 'KEEPER FARO', accent: '#ffd88a', hat: 'cap' },
   wick: { name: 'WICK', accent: '#9a6aff', hat: 'goggles' },
   coil: { name: 'FOREWOMAN COIL', accent: '#c8d24a', hat: 'cap' },
+  bet: { name: 'BAROMETER BET', accent: '#9adcd0', hat: 'hood' },
 };
 
 interface Call {

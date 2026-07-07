@@ -39,6 +39,7 @@ const EXPLORE = {
   vitra_gp: 'Low-gravity glass raceway idle: weightless synthwave cruise, gleaming arpeggios drifting like slow meteor trails, soft four-on-the-floor pulse, chrome-cold pads, serene speed waiting to happen.',
   voltholm: 'Storm-harvest frontier score: rolling thunder-drum groove far below, crackling electric guitar harmonics like arcing wires, wind-whipped slide guitar, brooding organ swells between lightning strikes, industrious and electric and defiant.',
   volt_gp: 'Storm raceway paddock: charged-up stadium rock idle, chugging palm-muted riff under crackling synth static bursts, thunder-roll tom fills, revving anticipation with a weather warning in it.',
+  volt_still: 'Dead-calm eerie score: near-silence weaponized, a single sustained glass drone, sparse felt-piano notes far apart, held breath pauses where the music simply stops, one distant wind chime that never quite rings, unbearably still and waiting.',
 };
 
 const COMBAT = {

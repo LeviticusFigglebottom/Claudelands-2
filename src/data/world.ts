@@ -7,7 +7,7 @@
 
 import { clamp01, lerp } from '../util/maff';
 
-export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle' | 'gulchgate' | 'shipbreak' | 'castaway' | 'hullgrave' | 'brinepans' | 'anchorage' | 'cavemouth' | 'gloomgrove' | 'cryptworks' | 'lodecourt' | 'lastlight' | 'chimefield' | 'shardsea' | 'nullbasin' | 'gloamgate' | 'snuffrows' | 'wickbothy' | 'echoorgan' | 'lampfall' | 'jarworks' | 'galeflats' | 'conductorrow' | 'capacitorium' | 'eyewall';
+export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle' | 'gulchgate' | 'shipbreak' | 'castaway' | 'hullgrave' | 'brinepans' | 'anchorage' | 'cavemouth' | 'gloomgrove' | 'cryptworks' | 'lodecourt' | 'lastlight' | 'chimefield' | 'shardsea' | 'nullbasin' | 'gloamgate' | 'snuffrows' | 'wickbothy' | 'echoorgan' | 'lampfall' | 'jarworks' | 'galeflats' | 'conductorrow' | 'capacitorium' | 'eyewall' | 'stillgate' | 'hangfields' | 'barrowline' | 'breathhall';
 
 export interface DistrictDef {
   id: string;
@@ -1604,6 +1604,102 @@ const VOLT_GP: WorldDef = {
   exits: [],
 };
 
+// ===========================================================================
+// VOLTHOLM SIDE ZONE — THE BECALMED. The night the crews wired in, one
+// stretch of the flats went silent and STAYED silent: no gales, no SKYFALL,
+// twenty years of dead air. Harvest kites hang overhead where the wind left
+// them, mid-flight, refusing to fall. The Galebound who wander in stop
+// harvesting and start SLEEPWALKING. And at the dead centre, the wind that
+// went missing is all in one place — held, coiled, and breathing very
+// slowly. Gimmick inversion: the zone INHALES — every wind channel points
+// inward, toward the thing at the middle.
+const VOLT_STILL: WorldDef = {
+  id: 'volt_still',
+  name: 'THE BECALMED',
+  tagline: 'the wind isn’t gone. it’s HELD.',
+  size: 240,
+  skyTop: 0x141a26,
+  skyHorizon: 0x6a7460,
+  sun: { color: 0xb8c2a8, intensity: 1.25, dirX: 0.2, dirY: 0.8, dirZ: -0.3 },
+  ambient: { sky: 0x6a7a90, ground: 0x3a423c, intensity: 1.0 },
+  fog: { color: 0x49544c, near: 40, far: 210 },
+  biome: {
+    ground: { base: '#4a5548', light: '#66705e', dark: '#2c342e', crack: 'rgba(170,216,200,0.3)' },
+    rock: '#48524e',
+    scrub: 0x5a7a44,
+    ambientParticle: 'spore', // dust hanging in dead air, lit from nowhere
+    trees: 'burnt',
+    aurora: false,
+    weeds: true,
+  },
+  // THE INHALE: every channel runs INWARD to the Held Breath's hall
+  gales: [
+    { x0: -8, z0: 96, x1: -2, z1: -52, width: 7, power: 8 },
+    { x0: -92, z0: -18, x1: -12, z1: -58, width: 7, power: 8 },
+    { x0: 84, z0: -30, x1: 8, z1: -60, width: 7, power: 8 },
+  ],
+  terrain: {
+    duneAmp: 0.9,
+    roughAmp: 0.9,
+    roads: [
+      { x0: 0, z0: 100, x1: 0, z1: -62 },
+      { x0: -84, z0: -12, x1: 0, z1: -50 },
+      { x0: 78, z0: -24, x1: 0, z1: -52 },
+    ],
+  },
+  districts: [
+    {
+      id: 'stillgate', name: 'THE STILLING GATE', subtitle: 'Last Weather for Twenty Years. Mind the Quiet.', dress: 'stillgate',
+      cx: 0, cz: 92, radius: 24, baseHeight: 0.4,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 17,
+    },
+    {
+      id: 'hangfields', name: 'THE HANG FIELDS', subtitle: 'The Kites Never Landed.', dress: 'hangfields',
+      cx: -66, cz: -4, radius: 40, baseHeight: 0.6,
+      faction: 'galebound',
+      spawnTable: [
+        { enemyId: 'sleepwalker', weight: 26 },
+        { enemyId: 'breathless', weight: 18 },
+        { enemyId: 'zephyrite', weight: 10 },
+        { enemyId: 'ballast_golem', weight: 6 },
+      ],
+      maxAlive: 8, respawnDelay: 16, levelOffset: 18,
+    },
+    {
+      id: 'barrowline', name: 'THE BARROW LINE', subtitle: 'Where the Crews Lie Down. Standing Up.', dress: 'barrowline',
+      cx: 64, cz: -16, radius: 38, baseHeight: 0.8,
+      faction: 'galebound',
+      spawnTable: [
+        { enemyId: 'sleepwalker', weight: 24 },
+        { enemyId: 'breathless', weight: 18 },
+        { enemyId: 'thunderhead', weight: 8 },
+        { enemyId: 'ballast_golem', weight: 8 },
+      ],
+      maxAlive: 8, respawnDelay: 17, levelOffset: 19,
+    },
+    {
+      id: 'breathhall', name: 'THE HELD BREATH', subtitle: 'Twenty Years of Weather, In One Room.', dress: 'breathhall',
+      cx: 0, cz: -86, radius: 30, baseHeight: -0.3,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 20,
+    },
+  ],
+  pois: [
+    { id: 'ft_still', kind: 'fast_travel', x: 6, z: 96, data: 'The Stilling Gate' },
+    { id: 'npc_bet', kind: 'npc', x: -6, z: 86, rot: 2.4, data: 'bet' },
+    { id: 'vm_st', kind: 'vendor_med', x: 12, z: 88, rot: -1.3 },
+    { id: 'vg_st', kind: 'vendor_gun', x: -14, z: 92, rot: 1.1 },
+    { id: 'sign_st1', kind: 'sign', x: 0, z: 76, rot: 0.1, data: 'THE BECALMED — NO WIND. NO STORM. NO REFUNDS ON QUIET.' },
+    { id: 'sign_st2', kind: 'sign', x: -40, z: -16, rot: 0.6, data: '← HANG FIELDS · BARROW LINE → · BREATHE SOFT' },
+    { id: 'chest_st1', kind: 'chest', x: -80, z: -14, rot: 0.7 },
+    { id: 'chest_st2', kind: 'chest', x: 76, z: -30, rot: -1.2 },
+    { id: 'chest_st3', kind: 'chest', x: 10, z: -70, rot: 2.0 },
+    { id: 'log_st1', kind: 'wirelog', x: -54, z: 4, data: 'log_still1' },
+    { id: 'log_st2', kind: 'wirelog', x: 52, z: -8, data: 'log_still2' },
+  ],
+  spawn: { x: 0, z: 100 },
+  exits: [],
+};
+
 export const MAPS: Record<string, WorldDef> = {
   claudelands: CLAUDELANDS,
   frosthollow: FROSTHOLLOW,
@@ -1621,6 +1717,7 @@ export const MAPS: Record<string, WorldDef> = {
   voltholm: VOLTHOLM,
   vitra_gp: VITRA_GP,
   volt_gp: VOLT_GP,
+  volt_still: VOLT_STILL,
 };
 
 let active: WorldDef = CLAUDELANDS;

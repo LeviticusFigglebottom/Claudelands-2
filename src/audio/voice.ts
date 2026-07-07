@@ -68,6 +68,8 @@ export const VOICES: Record<string, VoiceProfile> = {
   wirelog: { id: 'wirelog', basePitch: 138, range: 0.3, rate: 4.9, wave: 'sawtooth', formantShift: 0.95, breath: 0.28, vibrato: 2, drawl: 1.18, gain: 0.13 },
   // twenty years running a one-woman jarworks: clipped, brisk, storm-proof
   coil: { id: 'coil', basePitch: 152, range: 0.26, rate: 6.2, wave: 'square', formantShift: 1.0, breath: 0.1, vibrato: 1, drawl: 0.92, gain: 0.15 },
+  // twenty years of whispering forecasts to nobody: precise, hushed, dry
+  bet: { id: 'bet', basePitch: 168, range: 0.16, rate: 5.4, wave: 'triangle', formantShift: 1.06, breath: 0.3, vibrato: 0, drawl: 1.1, gain: 0.14 },
 };
 
 export function voiceOf(id: string): VoiceProfile {

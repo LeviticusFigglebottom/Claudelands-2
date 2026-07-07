@@ -279,7 +279,7 @@ export class World {
       const x = (rng() - 0.5) * WORLD.size * 0.95;
       const z = (rng() - 0.5) * WORLD.size * 0.95;
       const dd = districtAt(x, z);
-      if (dd && (dd.dress === 'hub' || dd.dress === 'frosthub' || dd.dress === 'throatgate' || dd.dress === 'porttown' || dd.dress === 'jarworks')) continue;
+      if (dd && (dd.dress === 'hub' || dd.dress === 'frosthub' || dd.dress === 'throatgate' || dd.dress === 'porttown' || dd.dress === 'jarworks' || dd.dress === 'stillgate')) continue;
       if (!this.clearOfAssets(x, z, 2.2)) continue;
       const s = 0.8 + rng() * 2.6;
       const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
@@ -306,7 +306,7 @@ export class World {
       const x = (rng() - 0.5) * WORLD.size * 1.15;
       const z = (rng() - 0.5) * WORLD.size * 1.15;
       const d = districtAt(x, z);
-      if (d && (d.dress === 'hub' || d.dress === 'frosthub' || d.dress === 'throne' || d.dress === 'throatgate' || d.dress === 'porttown' || d.dress === 'castaway' || d.dress === 'cavemouth' || d.dress === 'anchorage' || d.dress === 'jarworks')) continue;
+      if (d && (d.dress === 'hub' || d.dress === 'frosthub' || d.dress === 'throne' || d.dress === 'throatgate' || d.dress === 'porttown' || d.dress === 'castaway' || d.dress === 'cavemouth' || d.dress === 'anchorage' || d.dress === 'jarworks' || d.dress === 'stillgate')) continue;
       if (!this.clearOfAssets(x, z, 1.2)) continue;
       const sc = 0.6 + rng() * 1.3;
       q.setFromEuler(new THREE.Euler(0.15 * (rng() - 0.5), rng() * Math.PI, 0.15 * (rng() - 0.5)));
@@ -419,6 +419,10 @@ export class World {
         case 'conductorrow': this.buildConductorRow(d); break;
         case 'capacitorium': this.buildCapacitorium(d); break;
         case 'eyewall': this.buildEyewall(d); break;
+        case 'stillgate': this.buildStillgate(d); break;
+        case 'hangfields': this.buildHangFields(d); break;
+        case 'barrowline': this.buildBarrowLine(d); break;
+        case 'breathhall': this.buildBreathHall(d); break;
       }
     }
   }
@@ -1767,6 +1771,7 @@ export class World {
       peg: { coat: 0x4a5a66, skin: 0xb89070, hat: 0xd8d0c0, hatKind: 'bun', accent: 0x7dffd4, label: 'TALK TO QUARTERMISTRESS PEG' },
       wick: { coat: 0x3a2f6a, skin: 0xd8b090, hat: 0x2a2244, hatKind: 'hood', accent: 0x9a6aff, label: 'TALK TO WICK' },
       coil: { coat: 0x4a5248, skin: 0xb08868, hat: 0x8a7a2c, hatKind: 'cap', accent: 0xc8d24a, label: 'TALK TO FOREWOMAN COIL' },
+      bet: { coat: 0x3a4a46, skin: 0xd8b090, hat: 0x2c3834, hatKind: 'hood', accent: 0x9adcd0, label: 'TALK TO BAROMETER BET' },
     };
     const look = looks[poi.data ?? ''] ?? looks.brann;
     const y = terrainHeight(poi.x, poi.z);
@@ -4324,6 +4329,171 @@ export class World {
     this.group.add(ringC);
   }
 
+  // ----------------------------------------------------------- THE BECALMED
+
+  /** THE STILLING GATE — Bet's weather station: twenty years of instruments
+   *  reading zero, a dead-vertical windsock, and one warm window. */
+  private buildStillgate(d: DistrictDef): void {
+    const iron = toonMat({ color: 0x3a4440, map: swatch('#343e3a', 60) });
+    // the station hut: squat, instrument-crowned, lamp in the window
+    const hx = d.cx - 8, hz = d.cz - 4;
+    const hy = terrainHeight(hx, hz);
+    const hut = new THREE.Mesh(new THREE.BoxGeometry(5, 3, 4), toonMat({ color: 0x4a5450, map: rockTexture('#424c48') }));
+    hut.position.set(hx, hy + 1.5, hz);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.3, 4.6), iron);
+    roof.position.set(hx, hy + 3.15, hz);
+    const win = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.8, 0.1), glowMat(0xffd88a, 0.95));
+    win.position.set(hx + 1.2, hy + 1.7, hz + 2.02);
+    this.group.add(hut, roof, win);
+    this.staticTargets.push(hut);
+    this.addCollider(hx, hz, 2.8, 2.3, 3.4);
+    // instrument masts: cup anemometers that have not turned in twenty years
+    const rng = mulberry32(818001);
+    for (let i = 0; i < 4; i++) {
+      const a = rng() * Math.PI * 2, r = 6 + rng() * (d.radius * 0.6);
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 1.4)) continue;
+      const y = terrainHeight(x, z);
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 4.6, 6), iron);
+      mast.position.set(x, y + 2.3, z);
+      this.group.add(mast);
+      this.addCollider(x, z, 0.3, 0.3, 4.6);
+      for (let c = 0; c < 3; c++) {
+        const ca = (c / 3) * Math.PI * 2;
+        const cup = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 6), toonMat({ color: 0x8a2e2e }));
+        cup.position.set(x + Math.cos(ca) * 0.5, y + 4.5, z + Math.sin(ca) * 0.5);
+        this.group.add(cup);
+      }
+    }
+    // the famous windsock: hanging straight down, like a flag at a funeral
+    const px = d.cx + 7, pz = d.cz + 6;
+    const py = terrainHeight(px, pz);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 4.4, 6), iron);
+    pole.position.set(px, py + 2.2, pz);
+    const sock = new THREE.Mesh(new THREE.ConeGeometry(0.32, 1.5, 7, 1, true), toonMat({ color: 0xc86a2e }));
+    sock.position.set(px + 0.4, py + 3.4, pz);
+    sock.rotation.z = Math.PI; // dead vertical: the joke IS the dressing
+    this.group.add(pole, sock);
+    this.addCollider(px, pz, 0.3, 0.3, 4.4);
+  }
+
+  /** THE HANG FIELDS — harvest kites frozen mid-flight, cables taut to their
+   *  anchors, twenty years after the wind that held them up went missing. */
+  private buildHangFields(d: DistrictDef): void {
+    const rng = mulberry32(818002);
+    for (let i = 0; i < 8; i++) {
+      const a = rng() * Math.PI * 2, r = 6 + rng() * (d.radius * 0.8);
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 2)) continue;
+      const y = terrainHeight(x, z);
+      // ground anchor
+      const anchor = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.8, 1.1), toonMat({ color: 0x32383e, map: swatch('#2c3238', 60) }));
+      anchor.position.set(x, y + 0.4, z);
+      this.group.add(anchor);
+      this.staticTargets.push(anchor);
+      this.addCollider(x, z, 0.8, 0.8, 0.9);
+      // the kite, hanging on nothing
+      const kh = 8 + rng() * 7;
+      const kx = x + (rng() - 0.5) * 3, kz = z + (rng() - 0.5) * 3;
+      const kite = new THREE.Group();
+      const box1 = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.1, 1.8), new THREE.MeshToonMaterial({ color: 0xc86a2e, transparent: true, opacity: 0.9 }));
+      const box2 = box1.clone();
+      box2.position.y = 1.5;
+      const spar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.8, 5), toonMat({ color: 0x4a3e2e }));
+      spar.position.y = 0.75;
+      kite.add(box1, box2, spar);
+      kite.position.set(kx, y + kh, kz);
+      kite.rotation.y = rng() * Math.PI;
+      kite.rotation.z = (rng() - 0.5) * 0.3;
+      this.group.add(kite);
+      this.staticTargets.push(kite);
+      // the cable: beads from anchor to kite, drawn TAUT (the wind still pulls)
+      for (let b = 1; b < 8; b++) {
+        const t = b / 8;
+        const bead = new THREE.Mesh(new THREE.SphereGeometry(0.05, 5, 5), toonMat({ color: 0x22262a }));
+        bead.position.set(x + (kx - x) * t, y + 0.6 + (kh - 0.6) * t, z + (kz - z) * t);
+        this.group.add(bead);
+      }
+    }
+  }
+
+  /** THE BARROW LINE — the crews that lay down standing up: harvest rigs
+   *  parked in ranks, each with a cold lantern and a cairn of jars. */
+  private buildBarrowLine(d: DistrictDef): void {
+    const rng = mulberry32(818003);
+    const iron = toonMat({ color: 0x3a4440, map: swatch('#343e3a', 60) });
+    for (let i = 0; i < 10; i++) {
+      const t = i / 9;
+      const x = d.cx - d.radius * 0.7 + t * d.radius * 1.4 + (rng() - 0.5) * 10;
+      const z = d.cz + Math.sin(t * Math.PI * 1.6) * d.radius * 0.4 + (rng() - 0.5) * 10;
+      if (!this.clearOfAssets(x, z, 2)) continue;
+      const y = terrainHeight(x, z);
+      // the rig: a person-shaped harvest frame, standing at rest
+      const frame = new THREE.Group();
+      const spine = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 2.4, 6), iron);
+      spine.position.y = 1.2;
+      const shoulders = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.14, 0.14), iron);
+      shoulders.position.y = 2.1;
+      const hood = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.6, 7), iron);
+      hood.position.y = 2.6;
+      frame.add(spine, shoulders, hood);
+      frame.position.set(x, y, z);
+      frame.rotation.y = rng() * Math.PI * 2;
+      frame.rotation.z = (rng() - 0.5) * 0.12; // the lean of a long sleep
+      this.group.add(frame);
+      this.staticTargets.push(frame);
+      this.addCollider(x, z, 0.5, 0.5, 2.8);
+      // cold lantern at the feet + a cairn of empty jars
+      const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.36, 0.3), new THREE.MeshToonMaterial({ color: 0x24302c, transparent: true, opacity: 0.9 }));
+      lamp.position.set(x + 0.7, y + 0.2, z + 0.3);
+      this.group.add(lamp);
+      for (let j = 0; j < 2 + Math.floor(rng() * 3); j++) {
+        const ja = rng() * Math.PI * 2;
+        const jar = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 0.4, 6), new THREE.MeshToonMaterial({ color: 0x6a7a76, transparent: true, opacity: 0.6 }));
+        jar.position.set(x + Math.cos(ja) * 1.1, y + 0.2, z + Math.sin(ja) * 1.1);
+        this.group.add(jar);
+      }
+    }
+  }
+
+  /** THE HELD BREATH's hollow — a smooth bowl ringed by monoliths bent
+   *  INWARD, debris hanging mid-air around the centre where the missing
+   *  wind sits coiled. Nothing here has landed in twenty years. */
+  private buildBreathHall(d: DistrictDef): void {
+    const rng = mulberry32(818004);
+    const slate = toonMat({ color: 0x48524e, map: rockTexture('#424c48') });
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2 + 0.2;
+      const x = d.cx + Math.cos(a) * (d.radius - 4), z = d.cz + Math.sin(a) * (d.radius - 4);
+      const y = terrainHeight(x, z);
+      const h = 5 + rng() * 3.5;
+      const mono = new THREE.Mesh(new THREE.BoxGeometry(1.3, h, 1.0), slate);
+      mono.position.set(x, y + h * 0.42, z);
+      mono.lookAt(d.cx, y + h * 2.6, d.cz); // bowed toward the breath
+      this.group.add(mono);
+      this.staticTargets.push(mono);
+      this.addCollider(x, z, 1.1, 1.1, h);
+    }
+    // suspended debris: rocks and jars orbiting nothing, at every height
+    for (let i = 0; i < 16; i++) {
+      const a = rng() * Math.PI * 2, r = 5 + rng() * (d.radius * 0.6);
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      const y = terrainHeight(x, z) + 1.5 + rng() * 7;
+      const s = 0.25 + rng() * 0.6;
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), slate);
+      rock.position.set(x, y, z);
+      rock.rotation.set(rng() * 3, rng() * 3, rng() * 3);
+      this.group.add(rock);
+    }
+    // the centre: a swirl-worn dais where the wind sits when it's home
+    const cy = terrainHeight(d.cx, d.cz);
+    for (let s = 0; s < 2; s++) {
+      const step = new THREE.Mesh(new THREE.CylinderGeometry(4.6 - s * 1.6, 5.0 - s * 1.6, 0.4, 14), slate);
+      step.position.set(d.cx, cy + 0.2 + s * 0.4, d.cz);
+      this.group.add(step);
+    }
+  }
+
   private buildQuibb(poi: WorldPoi): void {
     const y = terrainHeight(poi.x, poi.z);
     const q = new THREE.Group();
@@ -4763,17 +4933,18 @@ export class World {
         const p = playerPos.clone().add(new THREE.Vector3(Math.cos(a) * r, 7 + Math.random() * 6, Math.sin(a) * r));
         fx.emit(p, new THREE.Vector3(2.2, -16, 0.8), 0x9ab8c8, 0.045, 0.8, 0);
       }
-      // gale channels made visible: streaks racing along the wind
-      if (Math.random() < 40 * dt) {
-        const p = playerPos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 44, 0.4 + Math.random() * 2.4, (Math.random() - 0.5) * 44));
-        const gp = galeAt(p.x, p.z);
-        if (gp) fx.emit(p, new THREE.Vector3(gp.x * 1.6, 0.2, gp.z * 1.6), 0xaad8c8, 0.05, 0.7, 0);
-      }
     } else if (Math.random() < 6 * dt) {
       const a = Math.random() * Math.PI * 2;
       const r = 4 + Math.random() * 14;
       const p = playerPos.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.5 + Math.random() * 3, Math.sin(a) * r));
       fx.emit(p, new THREE.Vector3(0.4, 0.15, 0.15), 0xd8c8a8, 0.05, 2.5, -0.02);
+    }
+    // gale channels made visible: streaks racing along the wind, whatever
+    // else the sky is doing (storm rain on Voltholm, dead air in the Becalmed)
+    if (WORLD.gales && Math.random() < 40 * dt) {
+      const p = playerPos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 44, 0.4 + Math.random() * 2.4, (Math.random() - 0.5) * 44));
+      const gp = galeAt(p.x, p.z);
+      if (gp) fx.emit(p, new THREE.Vector3(gp.x * 1.6, 0.2, gp.z * 1.6), 0xaad8c8, 0.05, 0.7, 0);
     }
     // aurora shimmer
     if (WORLD.biome.aurora) {

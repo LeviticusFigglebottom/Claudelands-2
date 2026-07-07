@@ -620,6 +620,40 @@ ENEMIES.ballast_golem = {
   weight: 8,
 };
 
+// ---- THE BECALMED: the crews who wandered into the quiet and lay down
+// standing up. Sleepwalkers harvest nothing, forever, slowly — until you
+// wake one. The Breathless traded their voices for a rime-cold hush.
+ENEMIES.sleepwalker = {
+  id: 'sleepwalker', name: 'Sleepwalker', badassName: 'Big Damn Dreamer',
+  faction: 'galebound', behavior: 'rusher',
+  flesh: 0.9, shield: 0.1, armor: 0,
+  hpMult: 1.3, damageMult: 1.5, speed: 2.2, attackRange: 2.2, attackRate: 0.8, aggroRange: 14,
+  scale: 1.1, tint: 0x7a8478, dropTier: 1, xp: 26,
+  barks: ['*still on shift, twenty years asleep*', '...five more minutes...', '*harvesting a wind that is not there*'],
+  weight: 26,
+};
+ENEMIES.breathless = {
+  id: 'breathless', name: 'Breathless', badassName: 'Big Damn Hush',
+  faction: 'galebound', behavior: 'gunner',
+  flesh: 0.4, shield: 0.6, armor: 0,
+  hpMult: 1.1, damageMult: 1.1, speed: 3.4, attackRange: 16, attackRate: 0.8, aggroRange: 26,
+  scale: 1.0, tint: 0x9ab8b0, dropTier: 1, xp: 26,
+  barks: ['*a whisper with a rifle*', '*the quiet, aiming*', '*shh. shh. SHH.*'],
+  projectile: { speed: 28, element: 'rime' },
+  weight: 18,
+};
+
+export const BOSS_HELDBREATH: EnemyDef = {
+  id: 'held_breath', name: 'THE HELD BREATH', badassName: 'THE HELD BREATH',
+  faction: 'galebound', behavior: 'brute',
+  flesh: 0.55, shield: 0.45, armor: 0,
+  hpMult: 42, damageMult: 2.4, speed: 3.2, attackRange: 3.4, attackRate: 0.8, aggroRange: 64,
+  scale: 3.0, tint: 0x8a9a90, dropTier: 3, xp: 2000,
+  barks: ['*twenty years of weather, inhaling*', 'the crews SLEEP because I SING.', '*the sound of a sky holding it in*', 'you brought NOISE. i collect that.'],
+  projectile: { speed: 20, element: 'rime', arc: true },
+  weight: 0,
+};
+
 export const BOSS_ABBOT: EnemyDef = {
   id: 'static_abbot', name: 'THE STATIC ABBOT', badassName: 'THE STATIC ABBOT',
   faction: 'galebound', behavior: 'brute',

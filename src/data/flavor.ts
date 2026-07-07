@@ -285,6 +285,25 @@ export const WIRE_LOGS: WireLog[] = [
       'Entry, final: the tithe is not paid TO the storm. It is paid THROUGH it. Upward. To whom, the ledger does not say. The ledger is afraid to ask.',
     ],
   },
+  {
+    id: 'log_still1',
+    speaker: 'HARVEST KITE CREW 12 — FINAL FLIGHT LOG',
+    lines: [
+      'Wind steady at forty. Kites up, jars filling, best haul of the season. Iri says the gusts sound funny today. Like breathing IN.',
+      'Wind forty. Wind twenty. Wind NOTHING. All twelve kites still flying. Repeat: no wind, and the kites are STILL FLYING.',
+      'The crew is walking toward the middle. I asked where. Marlow said, and I am writing this down exactly: five more minutes.',
+      'Kites holding. Crew gone quiet. It is very peaceful. That is the worst part. Signing off to go get them. Back in five.',
+    ],
+  },
+  {
+    id: 'log_still2',
+    speaker: 'BAROMETER BET — MORNING PRESSURE REPORT, DAY 7,201',
+    lines: [
+      'Six a.m. Pressure: unchanged. Wind: none. Sky: holding. Crews: asleep, standing, all shifts. Forecast: same.',
+      'Personal addendum, off the record: I have logged one number for twenty years and the number is a LIE. Pressure like this should CRUSH. It does not, because the weather is not gone. It is coiled in the hollow, and it is COUNTING.',
+      'To whoever finally reads this: do not shout, do not run, and do not trust the calm. A held breath is not peace. It is a SCHEDULE.',
+    ],
+  },
 ];
 
 export const ZAZA_GREETINGS = [

@@ -4,7 +4,7 @@
 // time to loot, shop at the pit vendors, and regret. Best wave persists.
 
 import * as THREE from 'three';
-import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, BOSS_BLOOM, BOSS_ANCHORHEAD, BOSS_MOTHERLODE, BOSS_UNKEEPER, BOSS_ABBOT, BOSS_GALEPRIME, type EnemyDef } from '../data/enemies';
+import { ENEMIES, BOSS_GUTTERBALL, BOSS_WARDEN, BOSS_AVALANCHE, BOSS_FURNACE, BOSS_BLOOM, BOSS_ANCHORHEAD, BOSS_MOTHERLODE, BOSS_UNKEEPER, BOSS_ABBOT, BOSS_GALEPRIME, BOSS_HELDBREATH, type EnemyDef } from '../data/enemies';
 import { enemySpawner, type Enemy } from './enemies';
 import { spawnBoss, type BossId } from './boss';
 import { state } from './state';
@@ -22,6 +22,7 @@ const BOSS_CYCLE: { id: BossId; def: EnemyDef }[] = [
   { id: 'unkeeper', def: BOSS_UNKEEPER },
   { id: 'static_abbot', def: BOSS_ABBOT },
   { id: 'gale_prime', def: BOSS_GALEPRIME },
+  { id: 'held_breath', def: BOSS_HELDBREATH },
 ];
 
 /** Trash pool: a spread of behaviors from every faction — later entries
@@ -36,6 +37,7 @@ const WAVE_POOL = [
   'gloomstalker', 'shardcaster', 'gravemite', 'lantern_wisp', 'spitgrub', 'deep_roller',
   // Voltholm's weather crews clock in last
   'zephyrite', 'conductor', 'stormcrow', 'thunderhead', 'ballast_golem',
+  'sleepwalker', 'breathless',
 ];
 
 const BEST_KEY = 'claudelands2.crucible';

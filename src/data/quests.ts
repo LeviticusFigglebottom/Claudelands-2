@@ -3,7 +3,7 @@
 // progression. All dialogue is original and lives here for the writers.
 
 export type ObjectiveKind = 'goto' | 'kill_faction' | 'collect' | 'boss' | 'kill_elites' | 'notoriety';
-export type QuestGiver = 'quibb' | 'zaza' | 'mayor' | 'brann' | 'mirelle' | 'okto' | 'juno' | 'peg' | 'faro' | 'wick' | 'coil';
+export type QuestGiver = 'quibb' | 'zaza' | 'mayor' | 'brann' | 'mirelle' | 'okto' | 'juno' | 'peg' | 'faro' | 'wick' | 'coil' | 'bet';
 
 /** Everyone who hands out work: display name, where they stand, greetings. */
 export const GIVERS: Record<QuestGiver, { name: string; where: string; mapId: string; x: number; z: number; greetings: string[] }> = {
@@ -82,6 +82,13 @@ export const GIVERS: Record<QuestGiver, { name: string; where: string; mapId: st
     greetings: [
       'Coil. Forewoman, Jarworks. I bottle the weather and the weather resents it. We manage.',
       'Contractor. Good timing — the sky just invoiced us again and I am NOT paying.',
+    ],
+  },
+  bet: {
+    name: 'Barometer Bet', where: 'at the Stilling Gate in the Becalmed', mapId: 'volt_still', x: -6, z: 86,
+    greetings: [
+      'Bet. Forecast officer, Voltholm Harvest Authority. Today’s forecast: nothing. Same as yesterday. Same as the last seven thousand yesterdays. I keep EXCELLENT records.',
+      'Shhh. Not for safety. Habit. Twenty years in a place with no weather makes a person respect the volume knob.',
     ],
   },
 };
@@ -660,6 +667,50 @@ export const QUESTS: QuestDef[] = [
     objective: { kind: 'boss', label: 'Gale Prime brought to ground', count: 1, bossId: 'gale_prime', markerX: 100, markerZ: -85, mapId: 'voltholm' },
     rewardCash: 20000, rewardXp: 22000, rewardItem: 'legendary',
     completeLine: 'The last mooring snapped and the wind fell out of him like a crew going home. The Eyewall opened — actual sky, actual sun, the first anyone on Voltholm has seen in twenty years. Coil stood in it, checked the weather out of habit, and laughed. “Clear,” she said. “Well. Now what do I DO all day?”',
+  },
+  // ---- ARC: THE BECALMED (where Voltholm's wind went)
+  {
+    id: 'q38_deadair',
+    name: 'The Missing Weather',
+    giver: 'coil',
+    briefing: [
+      'One more thing, contractor, and it’s the one nobody at the Jarworks says out loud. Twenty years of storms, gales, SKYFALL — and one patch of the flats where there is NOTHING. No wind. No bolts. The rods out there have never eaten a single strike. We call it the Becalmed and we do not go.',
+      'My forecast officer went, the week the crews wired in. Bet. Best weather-eye on the payroll. Never came back, never died either — the wire still carries a pressure report every morning at six sharp. Twenty years of “no change.”',
+      'The storm is beaten. The sky is open. Go find out where all that missing wind WENT — and tell Bet the office reopened.',
+    ],
+    acceptLine: 'The Stilling Gate, south past the flats! And contractor — when the wind stops, that’s not the ABSENCE of weather. Bet taught me that. That’s weather WAITING!',
+    objective: { kind: 'goto', label: 'Walk into the Becalmed', count: 1, markerX: 0, markerZ: 92, mapId: 'volt_still' },
+    rewardCash: 11000, rewardXp: 14000,
+    completeLine: 'Dead air. Kites hanging overhead like the sky pressed pause. And at the gate — a small, precise person with twenty years of weather logs and a finger to her lips. Bet. Alive. Whispering. “About time,” she says. “Don’t SLAM anything.”',
+    unlocksStation: 'The Stilling Gate',
+  },
+  {
+    id: 'q39_lullaby',
+    name: 'Do Not Wake the Crews',
+    giver: 'bet',
+    briefing: [
+      'Here’s twenty years of forecasting in one line: the wind didn’t stop. Something is HOLDING it. Middle of the zone, past the Barrow Line. It inhaled the night the crews wired in and it has not exhaled since.',
+      'The crews that wander in here stop harvesting and start SLEEPWALKING — it sings to them, under the hearing. They’re not aggressive, exactly. They’re PROTECTIVE. Of their naps. Of it.',
+      'I need the Hang Fields thinned before we go any deeper — ten of the sleepers, put down gently. And I mean it about gently: every one of those rigs still has a person’s name on the requisition.',
+    ],
+    acceptLine: 'Ten sleepers, contractor — and keep your reloads QUIET, everything in here echoes like a held breath!',
+    objective: { kind: 'kill_faction', label: 'Sleepwalking crews laid down', count: 10, faction: 'galebound', markerX: -66, markerZ: -4, mapId: 'volt_still' },
+    rewardCash: 12000, rewardXp: 15000, rewardItem: 'epic',
+    completeLine: 'Ten rigs down, ten names logged in Bet’s neat cold hand. The Hang Fields went quiet — a DIFFERENT quiet, the honest kind. Bet stared at the middle of the zone for a long time. “Barometer’s falling,” she whispered. “First change in twenty years. It knows we’re coming.”',
+  },
+  {
+    id: 'q40_exhale',
+    name: 'Exhale',
+    giver: 'bet',
+    briefing: [
+      'Final forecast, contractor. Everything Voltholm lost is sitting in that hollow — every gale, every gust, every breath of working wind from twenty years of harvest weather, coiled up and HELD. It swallowed a crew kite on night one. Still got it. You’ll see the glow.',
+      'You freed the storm. You cut Gale Prime down. This is the last of it: the wind that hid instead of fighting. I’ve logged it every morning for twenty years and I am telling you, professionally — it is TIRED. Holding your breath is WORK.',
+      'Go to the middle and make it let go. Shoot the kite in its chest — that’s the cork. And when it finally exhales… stand somewhere with a handhold.',
+    ],
+    acceptLine: 'The hollow, dead centre! When it inhales, DIG IN — and when that kite cracks, twenty years of weather comes out ALL AT ONCE!',
+    objective: { kind: 'boss', label: 'The Held Breath released', count: 1, bossId: 'held_breath', markerX: 0, markerZ: -86, mapId: 'volt_still' },
+    rewardCash: 18000, rewardXp: 20000, rewardItem: 'legendary',
+    completeLine: 'The kite cracked and the Becalmed EXHALED — twenty years of wind going home in one long gust that you felt on three other maps. The hanging kites finally landed. The sleepers woke up asking about overtime. And Bet stood in the first breeze of her long career’s second act, checked her instruments, and said — out loud, at full volume — “PARTLY WINDY. Back to work.”',
   },
 ];
 
