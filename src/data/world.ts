@@ -7,7 +7,7 @@
 
 import { clamp01, lerp } from '../util/maff';
 
-export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle' | 'gulchgate' | 'shipbreak' | 'castaway' | 'hullgrave' | 'brinepans' | 'anchorage' | 'cavemouth' | 'gloomgrove' | 'cryptworks' | 'lodecourt' | 'lastlight' | 'chimefield' | 'shardsea' | 'nullbasin' | 'gloamgate' | 'snuffrows' | 'wickbothy' | 'echoorgan' | 'lampfall' | 'jarworks' | 'galeflats' | 'conductorrow' | 'capacitorium' | 'eyewall' | 'stillgate' | 'hangfields' | 'barrowline' | 'breathhall';
+export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle' | 'gulchgate' | 'shipbreak' | 'castaway' | 'hullgrave' | 'brinepans' | 'anchorage' | 'cavemouth' | 'gloomgrove' | 'cryptworks' | 'lodecourt' | 'lastlight' | 'chimefield' | 'shardsea' | 'nullbasin' | 'gloamgate' | 'snuffrows' | 'wickbothy' | 'echoorgan' | 'lampfall' | 'jarworks' | 'galeflats' | 'conductorrow' | 'capacitorium' | 'eyewall' | 'stillgate' | 'hangfields' | 'barrowline' | 'breathhall' | 'boregate' | 'threadway' | 'coreworks';
 
 export interface DistrictDef {
   id: string;
@@ -38,6 +38,11 @@ export interface BiomeDef {
   trees: 'cactus' | 'pine' | 'burnt' | 'palm' | 'mushroom' | 'shard';
   aurora: boolean;
   weeds: boolean;              // tumbleweeds roam
+  /** Rim wall silhouette — each world's horizon has its own handwriting.
+   *  Default 'mesa' (the Claude Prime truncated cones). */
+  rim?: 'mesa' | 'slate' | 'barrow' | 'prism' | 'jungle';
+  /** Instanced ground-cover style. Default 'scrub' (desert cones). */
+  groundLife?: 'scrub' | 'sedge' | 'reeds' | 'shards' | 'fern';
 }
 
 export interface WorldDef {
@@ -518,6 +523,8 @@ export const VELDT: WorldDef = {
     trees: 'palm',
     aurora: false,
     weeds: false,
+    rim: 'jungle',
+    groundLife: 'fern',
   },
   terrain: {
     duneAmp: 2.2,
@@ -745,6 +752,8 @@ export const VELDT_TANGLE: WorldDef = {
     trees: 'palm',
     aurora: false,
     weeds: false,
+    rim: 'jungle',
+    groundLife: 'fern',
   },
   terrain: {
     duneAmp: 0.9,
@@ -834,6 +843,8 @@ export const VELDT_SHALLOWS: WorldDef = {
     trees: 'palm',
     aurora: false,
     weeds: false,
+    rim: 'jungle',
+    groundLife: 'fern',
   },
   terrain: {
     duneAmp: 1.4,
@@ -1034,6 +1045,8 @@ export const VELDT_GP: WorldDef = {
     trees: 'palm',
     aurora: false,
     weeds: false,
+    rim: 'jungle',
+    groundLife: 'fern',
   },
   terrain: {
     duneAmp: 1.6,
@@ -1115,6 +1128,8 @@ const VITRA: WorldDef = {
     trees: 'shard',
     aurora: true,
     weeds: false,
+    rim: 'prism',
+    groundLife: 'shards',
   },
   terrain: {
     duneAmp: 1.7,
@@ -1228,6 +1243,8 @@ export const VITRA_MILE: WorldDef = {
     trees: 'shard',
     aurora: true,
     weeds: false,
+    rim: 'prism',
+    groundLife: 'shards',
   },
   terrain: {
     duneAmp: 1.1,
@@ -1335,6 +1352,8 @@ const VOLTHOLM: WorldDef = {
     trees: 'burnt',
     aurora: false,
     weeds: true,
+    rim: 'slate',
+    groundLife: 'sedge',
   },
   gales: [
     { x0: -18, z0: 62, x1: -66, z1: 14, width: 8, power: 11 },
@@ -1462,6 +1481,8 @@ const VITRA_GP: WorldDef = {
     trees: 'shard',
     aurora: true,
     weeds: false,
+    rim: 'prism',
+    groundLife: 'shards',
   },
   terrain: {
     duneAmp: 1.2,
@@ -1545,6 +1566,8 @@ const VOLT_GP: WorldDef = {
     trees: 'burnt',
     aurora: false,
     weeds: true,
+    rim: 'slate',
+    groundLife: 'sedge',
   },
   gales: [
     { x0: -95, z0: 30, x1: 40, z1: 45, width: 10, power: 15 },  // the tailwind straight
@@ -1631,6 +1654,8 @@ const VOLT_STILL: WorldDef = {
     trees: 'burnt',
     aurora: false,
     weeds: true,
+    rim: 'barrow',
+    groundLife: 'reeds',
   },
   // THE INHALE: every channel runs INWARD to the Held Breath's hall
   gales: [
@@ -1700,6 +1725,115 @@ const VOLT_STILL: WorldDef = {
   exits: [],
 };
 
+// ===========================================================================
+// CLAUDE PRIME SIDE ZONE — THE AUGER. Helix Bore Site One: the Combine's
+// first and deepest hole, abandoned mid-shift when the drill broke into
+// something that hummed back. The whole zone is ONE descending spiral — a
+// thread of road cut two and a half turns down a pit wall, past the parked
+// machines, to the drill head still standing at the bottom. No other map is
+// shaped like this: you can always see where you're going (down) and where
+// you've been (up, behind you, getting further away).
+const AUGER_SPIRAL = [
+  { x: 102, z: 0 }, { x: 89, z: 44 }, { x: 59, z: 77 }, { x: 18, z: 93 },
+  { x: -25, z: 88 }, { x: -60, z: 66 }, { x: -80, z: 32 }, { x: -84, z: -7 },
+  { x: -69, z: -42 }, { x: -42, z: -66 }, { x: -8, z: -76 }, { x: 26, z: -69 },
+  { x: 52, z: -48 }, { x: 65, z: -20 }, { x: 65, z: 11 }, { x: 51, z: 37 },
+  { x: 28, z: 54 }, { x: 1, z: 58 }, { x: -24, z: 50 }, { x: -41, z: 33 },
+  { x: -49, z: 10 }, { x: -46, z: -12 }, { x: -34, z: -29 }, { x: -16, z: -39 },
+  { x: 2, z: -40 }, { x: 19, z: -32 }, { x: 29, z: -19 }, { x: 32, z: -4 },
+  { x: 28, z: 10 }, { x: 19, z: 19 }, { x: 7, z: 23 },
+];
+
+const AUGER: WorldDef = {
+  id: 'auger',
+  name: 'THE AUGER',
+  tagline: 'the Combine\u2019s deepest hole. the shift never clocked out.',
+  size: 250,
+  skyTop: 0x2a1e14,
+  skyHorizon: 0x8a6a3a,
+  sun: { color: 0xffc890, intensity: 1.3, dirX: 0.5, dirY: 0.6, dirZ: -0.3 },
+  ambient: { sky: 0x8a7458, ground: 0x3a2e24, intensity: 1.05 },
+  fog: { color: 0x5a4630, near: 45, far: 230 },
+  biome: {
+    ground: { base: '#6a5238', light: '#8a6c48', dark: '#42311e', crack: 'rgba(84,212,255,0.3)' },
+    rock: '#5c4a34',
+    scrub: 0x7a6a3a,
+    ambientParticle: 'ash', // bore dust, never settled
+    trees: 'burnt',
+    aurora: false,
+    weeds: false,
+  },
+  terrain: {
+    duneAmp: 0.7,
+    roughAmp: 0.7,
+    roads: [],
+    corridor: {
+      pts: AUGER_SPIRAL,
+      width: 10,
+      arenas: [
+        { x: 102, z: 0, r: 24 },  // the gate pad
+        { x: 0, z: 0, r: 30 },    // the drill floor
+      ],
+      wallHeight: 24,
+    },
+  },
+  districts: [
+    {
+      id: 'boregate', name: 'BORE SITE ONE — GATE', subtitle: 'Helix Property. Claim Pending (11 Years).', dress: 'boregate',
+      cx: 102, cz: 0, radius: 26, baseHeight: 0.6,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 9,
+    },
+    {
+      id: 'threadway1', name: 'THE UPPER THREAD', subtitle: 'Machines Parked Mid-Turn.', dress: 'threadway',
+      cx: -60, cz: 66, radius: 26, baseHeight: -5,
+      faction: 'helix',
+      spawnTable: [
+        { enemyId: 'helix_drone', weight: 20 },
+        { enemyId: 'helix_stinger', weight: 18 },
+        { enemyId: 'lattice_warden', weight: 8 },
+      ],
+      maxAlive: 7, respawnDelay: 16, levelOffset: 10,
+    },
+    {
+      id: 'threadway2', name: 'THE LOWER THREAD', subtitle: 'The Hum Gets Personal Down Here.', dress: 'threadway',
+      cx: 52, cz: -48, radius: 26, baseHeight: -11,
+      faction: 'hollow',
+      spawnTable: [
+        { enemyId: 'gloomstalker', weight: 20 },
+        { enemyId: 'shardcaster', weight: 16 },
+        { enemyId: 'gravemite', weight: 14 },
+        { enemyId: 'spitgrub', weight: 10 },
+      ],
+      maxAlive: 7, respawnDelay: 16, levelOffset: 11,
+    },
+    {
+      id: 'coreworks', name: 'THE DRILL FLOOR', subtitle: 'It Broke Through. Something Answered.', dress: 'coreworks',
+      cx: 0, cz: 0, radius: 32, baseHeight: -17,
+      faction: 'hollow',
+      spawnTable: [
+        { enemyId: 'gloomstalker', weight: 16 },
+        { enemyId: 'lantern_wisp', weight: 12 },
+        { enemyId: 'deep_roller', weight: 8 },
+      ],
+      maxAlive: 6, respawnDelay: 18, levelOffset: 12,
+    },
+  ],
+  pois: [
+    { id: 'ft_auger', kind: 'fast_travel', x: 108, z: 8, data: 'Bore Site One' },
+    { id: 'vm_au', kind: 'vendor_med', x: 96, z: -8, rot: 0.8 },
+    { id: 'vg_au', kind: 'vendor_gun', x: 110, z: -4, rot: -1.6 },
+    { id: 'sign_au1', kind: 'sign', x: 100, z: 12, rot: -0.4, data: 'BORE SITE ONE \u2014 SPIRAL GRADE 8%. NO SPRINTING ON THE THREAD. (EVERYONE SPRINTS.)' },
+    { id: 'sign_au2', kind: 'sign', x: 60, z: 74, rot: 0.9, data: 'DEPTH MARKER \u2014 TURN ONE. THE HUM IS NORMAL. THE ANSWERING IS NOT.' },
+    { id: 'chest_au1', kind: 'chest', x: -78, z: 40, rot: 1.2 },
+    { id: 'chest_au2', kind: 'chest', x: 60, z: -34, rot: -0.7 },
+    { id: 'chest_au3', kind: 'chest', x: -8, z: 12, rot: 2.4 },
+    { id: 'log_au1', kind: 'wirelog', x: -80, z: 20, data: 'log_auger1' },
+    { id: 'log_au2', kind: 'wirelog', x: 8, z: -14, data: 'log_auger2' },
+  ],
+  spawn: { x: 108, z: 2 },
+  exits: [],
+};
+
 export const MAPS: Record<string, WorldDef> = {
   claudelands: CLAUDELANDS,
   frosthollow: FROSTHOLLOW,
@@ -1718,6 +1852,7 @@ export const MAPS: Record<string, WorldDef> = {
   vitra_gp: VITRA_GP,
   volt_gp: VOLT_GP,
   volt_still: VOLT_STILL,
+  auger: AUGER,
 };
 
 let active: WorldDef = CLAUDELANDS;

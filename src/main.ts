@@ -1310,7 +1310,7 @@ function frame(): void {
 
   const d = districtAt(player.position.x, player.position.z);
   if (gameMode === 'endless' || pitActive) hud.setDistrict('THE CRUCIBLE', endless.hudLine);
-  else hud.setDistrict(d?.name ?? WORLD.name, d?.subtitle ?? 'The open waste.');
+  else hud.setDistrict(d?.name ?? WORLD.name, d?.subtitle ?? WORLD.tagline); // the wilds speak in the map's own voice
 
   if (player.downed) setDownedOverlay(true, player.downedT / player.downedMax);
   hud.update(player, dt);

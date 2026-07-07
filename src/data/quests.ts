@@ -793,6 +793,37 @@ export const SIDE_QUESTS: QuestDef[] = [
     rewardCash: 5000, rewardXp: 6000, rewardUnique: 'leg_lodestone',
     completeLine: 'The rollers are gravel and the hoard is scattered. Okto says the cave exhaled. He also says take this — the bones down there INSISTED.',
   },
+  // ---- THE AUGER: Brann's oldest open claim
+  {
+    id: 'sq_auger1',
+    name: 'The Open Claim',
+    giver: 'brann',
+    briefing: [
+      'Eleven years, contractor. Claim number 0001 — the FIRST claim I was ever handed, and the only one still open. Helix Bore Site One: deepest hole the Combine ever cut, abandoned mid-shift, no incident report, no site survey, no CLOSURE.',
+      'The file says the drill "encountered acoustic resistance." That is corporate for: it hit something, and the something MINDED. Every adjuster before me marked it unverifiable and moved on. I do not move on.',
+      'The site is a spiral — one road, two and a half turns, straight down. Walk the thread to the bottom, put eyes on the drill head, and my eleven-year headache finally gets a page-one photograph.',
+    ],
+    acceptLine: 'Bore Site One, east past the canyon rim! Walk it DOWN, photograph it, and touch NOTHING that hums!',
+    objective: { kind: 'goto', label: 'Reach the drill floor at the bottom', count: 1, markerX: 0, markerZ: 0, mapId: 'auger' },
+    rewardCash: 4500, rewardXp: 5200,
+    completeLine: 'You stood on the drill floor and the file finally has a photo: the auger, mid-bite, with CRYSTAL growing up its flutes like the planet is healing around a splinter. Brann stared at it for a full minute. Then, quietly: "Claim 0001. Verified." He bought drinks. For EVERYONE.',
+    unlocksStation: 'Bore Site One',
+  },
+  {
+    id: 'sq_auger2',
+    name: 'Acoustic Resistance',
+    giver: 'brann',
+    briefing: [
+      'The photo did it. Helix legal responded in ELEVEN HOURS after eleven years — they want the site "remediated." Corporate for: the things living in my crime scene are eating the evidence.',
+      'The hum down that spiral is the same hum the Hollowdeep sings — the bore broke into the same gallery system. And the biggest things in it have moved into the drill floor like it\u2019s subsidized housing.',
+      'Clear the squatters — four of the big ones — and the claim CLOSES. Eleven years, contractor. I have the stamp ready. I have had the stamp ready since YEAR TWO.',
+    ],
+    acceptLine: 'The drill floor! Four of the big ones! And mind the spiral on the way down — everything below you can hear everything above you!',
+    objective: { kind: 'kill_elites', label: 'Drill-floor squatters evicted', count: 4, markerX: 0, markerZ: 0, mapId: 'auger' },
+    elite: { enemyId: 'shardcaster', count: 4, x: 0, z: 0, mapId: 'auger', levelOffset: 11 },
+    rewardCash: 6000, rewardXp: 7000, rewardUnique: 'leg_depth_gauge',
+    completeLine: 'Four squatters evicted and the claim is CLOSED. Brann stamped the file so hard the desk cracked. He framed the stamp. He gave you the gun from the evidence locker — "eleven years of storage fees," he says, "you\u2019ve earned the interest."',
+  },
 ];
 
 export const QUEST_DONE_IDLE = [

@@ -253,6 +253,82 @@ export class World {
     // NOTE: terrain is NOT in staticTargets — hitscan uses the ray-march in raycastStatics
   }
 
+  /** One rim piece in the active biome's handwriting. Every planet's
+   *  horizon should be recognizable in silhouette alone. */
+  private rimPiece(rng: () => number, w: number, h: number, rockMat: THREE.Material): THREE.Object3D {
+    const style = WORLD.biome.rim ?? 'mesa';
+    switch (style) {
+      case 'slate': { // Voltholm: storm-sheared slab stacks, all leaning downwind
+        const g = new THREE.Group();
+        const tiers = 2 + Math.floor(rng() * 3);
+        let y = 0;
+        for (let t = 0; t < tiers; t++) {
+          const th = h / tiers * (0.8 + rng() * 0.5);
+          const slab = new THREE.Mesh(new THREE.BoxGeometry(w * (1.6 - t * 0.28), th, w * (1.1 - t * 0.15)), rockMat);
+          slab.position.set((rng() - 0.2) * w * 0.3 + t * w * 0.14, y + th / 2, (rng() - 0.5) * w * 0.2);
+          slab.rotation.y = (rng() - 0.5) * 0.4;
+          slab.rotation.z = -0.06 - t * 0.03; // the wind always won
+          g.add(slab);
+          y += th * 0.82;
+        }
+        return g;
+      }
+      case 'barrow': { // the Becalmed: smooth rounded mounds, a quiet skyline
+        const dome = new THREE.Mesh(new THREE.SphereGeometry(w * 1.15, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2), rockMat);
+        dome.scale.y = h / (w * 1.15) * 0.75;
+        return dome;
+      }
+      case 'prism': { // Vitra Null: sheared black-glass prisms with lit edges
+        const g = new THREE.Group();
+        const glass = new THREE.MeshToonMaterial({ color: 0x241c48, transparent: true, opacity: 0.92 });
+        const n = 1 + Math.floor(rng() * 2);
+        for (let k = 0; k < n; k++) {
+          const ph = h * (0.7 + rng() * 0.6);
+          const prism = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.12, w * (0.5 + rng() * 0.3), ph, 3 + Math.floor(rng() * 2)), glass);
+          prism.position.set((rng() - 0.5) * w * 0.8, ph / 2, (rng() - 0.5) * w * 0.8);
+          prism.rotation.y = rng() * Math.PI;
+          prism.rotation.z = (rng() - 0.5) * 0.16;
+          g.add(prism);
+          const vein = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, ph * 0.7, 4), glowMat(rng() < 0.5 ? 0x7af0ff : 0xc06bff, 0.5));
+          vein.position.copy(prism.position);
+          vein.rotation.copy(prism.rotation);
+          g.add(vein);
+        }
+        return g;
+      }
+      case 'jungle': { // Veldt: mossy-capped mesas trailing vines
+        const g = new THREE.Group();
+        const mesa = new THREE.Mesh(new THREE.CylinderGeometry(w * (0.55 + rng() * 0.2), w, h, 5 + Math.floor(rng() * 3)), rockMat);
+        mesa.position.y = h / 2;
+        g.add(mesa);
+        const moss = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.62, w * 0.7, h * 0.14, 7), toonMat({ color: 0x3a7a3a, map: swatch('#2e6a30', 40) }));
+        moss.position.y = h * 0.98;
+        g.add(moss);
+        for (let v = 0; v < 3; v++) {
+          const vl = h * (0.3 + rng() * 0.4);
+          const vine = new THREE.Mesh(new THREE.BoxGeometry(0.3, vl, 0.12), toonMat({ color: 0x2e6a30 }));
+          const va = rng() * Math.PI * 2;
+          vine.position.set(Math.cos(va) * w * 0.62, h * 0.92 - vl / 2, Math.sin(va) * w * 0.62);
+          g.add(vine);
+        }
+        return g;
+      }
+      default: { // 'mesa': the Claude Prime truncated cones
+        const mesa = new THREE.Mesh(new THREE.CylinderGeometry(w * (0.55 + rng() * 0.2), w, h, 5 + Math.floor(rng() * 3)), rockMat);
+        mesa.position.y = h / 2;
+        if (WORLD.biome.trees === 'pine') {
+          const g = new THREE.Group();
+          g.add(mesa);
+          const cap = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.58, w * 0.72, h * 0.12, 6), toonMat({ color: 0xf0f6fa }));
+          cap.position.y = h;
+          g.add(cap);
+          return g;
+        }
+        return mesa;
+      }
+    }
+  }
+
   private buildCanyonRing(): void {
     const rockMat = toonMat({ map: rockTexture(WORLD.biome.rock) });
     const rng = mulberry32(1234);
@@ -262,26 +338,21 @@ export class World {
       const a = (i / n) * Math.PI * 2;
       const h = 18 + rng() * 26;
       const w = 14 + rng() * 12;
-      const mesa = new THREE.Mesh(new THREE.CylinderGeometry(w * (0.55 + rng() * 0.2), w, h, 5 + Math.floor(rng() * 3)), rockMat);
-      mesa.position.set(Math.cos(a) * (ringR + rng() * 14), h / 2 - 2, Math.sin(a) * (ringR + rng() * 14));
-      mesa.rotation.y = rng() * Math.PI;
-      mesa.castShadow = true; mesa.receiveShadow = true;
-      this.group.add(mesa);
-      this.staticTargets.push(mesa);
-      if (WORLD.biome.trees === 'pine') {
-        const cap = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.58, w * 0.72, h * 0.12, 6), toonMat({ color: 0xf0f6fa }));
-        cap.position.copy(mesa.position);
-        cap.position.y = h - 2 + h * 0.02;
-        cap.rotation.y = mesa.rotation.y;
-        this.group.add(cap);
-      }
+      const piece = this.rimPiece(rng, w, h, rockMat);
+      piece.position.x = Math.cos(a) * (ringR + rng() * 14);
+      piece.position.y += -2;
+      piece.position.z = Math.sin(a) * (ringR + rng() * 14);
+      piece.rotation.y = rng() * Math.PI;
+      piece.traverse((o) => { o.castShadow = true; o.receiveShadow = true; });
+      this.group.add(piece);
+      this.staticTargets.push(piece);
     }
     for (let i = 0; i < 10; i++) {
       const a = rng() * Math.PI * 2;
       const h = 46 + rng() * 60;
-      const mesa = new THREE.Mesh(new THREE.CylinderGeometry(20 + rng() * 16, 30 + rng() * 18, h, 6), rockMat);
-      mesa.position.set(Math.cos(a) * (300 + rng() * 120), h / 2 - 6, Math.sin(a) * (300 + rng() * 120));
-      this.group.add(mesa);
+      const far = this.rimPiece(rng, 24 + rng() * 14, h, rockMat);
+      far.position.set(Math.cos(a) * (300 + rng() * 120), -6, Math.sin(a) * (300 + rng() * 120));
+      this.group.add(far);
     }
     // scattered inner rocks
     for (let i = 0; i < 26; i++) {
@@ -302,10 +373,38 @@ export class World {
   }
 
   private buildScatter(): void {
-    // instanced scrub tufts + pebbles — cheap ground life across the map
+    // instanced ground life — each biome grows its own kind
     const rng = mulberry32(31337);
-    const tuftGeo = new THREE.ConeGeometry(0.16, 0.5, 5);
-    const tuftMat = toonMat({ color: WORLD.biome.scrub });
+    const life = WORLD.biome.groundLife ?? 'scrub';
+    let tuftGeo: THREE.BufferGeometry;
+    let tuftMat: THREE.Material;
+    switch (life) {
+      case 'sedge': // Voltholm: storm-combed grass, every blade bent the same way
+        tuftGeo = new THREE.ConeGeometry(0.1, 0.8, 4);
+        tuftGeo.translate(0, 0.4, 0);
+        tuftGeo.rotateZ(-0.55); // combed flat by the gales
+        tuftMat = toonMat({ color: WORLD.biome.scrub });
+        break;
+      case 'reeds': // the Becalmed: tall reeds standing PERFECTLY straight
+        tuftGeo = new THREE.CylinderGeometry(0.02, 0.035, 1.3, 4);
+        tuftGeo.translate(0, 0.65, 0);
+        tuftMat = toonMat({ color: 0x6a7a58 });
+        break;
+      case 'shards': // Vitra: no plants — splinters of standing glass
+        tuftGeo = new THREE.ConeGeometry(0.12, 0.55, 3);
+        tuftGeo.translate(0, 0.27, 0);
+        tuftMat = new THREE.MeshToonMaterial({ color: 0x4a3e8a, transparent: true, opacity: 0.8 });
+        break;
+      case 'fern': // Veldt: wide two-tone fronds
+        tuftGeo = new THREE.ConeGeometry(0.34, 0.5, 6);
+        tuftGeo.scale(1, 1, 0.45);
+        tuftGeo.translate(0, 0.25, 0);
+        tuftMat = toonMat({ color: WORLD.biome.scrub });
+        break;
+      default:
+        tuftGeo = new THREE.ConeGeometry(0.16, 0.5, 5);
+        tuftMat = toonMat({ color: WORLD.biome.scrub });
+    }
     const tufts = new THREE.InstancedMesh(tuftGeo, tuftMat, 700);
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
@@ -432,6 +531,9 @@ export class World {
         case 'hangfields': this.buildHangFields(d); break;
         case 'barrowline': this.buildBarrowLine(d); break;
         case 'breathhall': this.buildBreathHall(d); break;
+        case 'boregate': this.buildBoreGate(d); break;
+        case 'threadway': this.buildThreadway(d); break;
+        case 'coreworks': this.buildCoreworks(d); break;
       }
     }
   }
@@ -4401,28 +4503,52 @@ export class World {
       this.group.add(anchor);
       this.staticTargets.push(anchor);
       this.addCollider(x, z, 0.8, 0.8, 0.9);
-      // the kite, hanging on nothing
-      const kh = 8 + rng() * 7;
-      const kx = x + (rng() - 0.5) * 3, kz = z + (rng() - 0.5) * 3;
+      // the kite: a real BOX KITE — open canvas cells on crossed spars,
+      // nose pulled toward a wind that stopped twenty years ago
+      const kh = 9 + rng() * 6;
+      const kx = x + 2 + rng() * 3, kz = z + (rng() - 0.5) * 4;
       const kite = new THREE.Group();
-      const box1 = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.1, 1.8), new THREE.MeshToonMaterial({ color: 0xc86a2e, transparent: true, opacity: 0.9 }));
-      const box2 = box1.clone();
-      box2.position.y = 1.5;
-      const spar = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.8, 5), toonMat({ color: 0x4a3e2e }));
-      spar.position.y = 0.75;
-      kite.add(box1, box2, spar);
+      const canvas = toonMat({ color: 0xd8c8a8, map: swatch('#c8b898', 50) });
+      const accent = toonMat({ color: 0xc86a2e });
+      const sparMat = toonMat({ color: 0x4a3e2e });
+      // two open canvas cells (thin-walled boxes, hollow look via BackSide pair)
+      const cells: [number, THREE.Material][] = [[0, canvas], [1.35, accent]];
+      for (const [cy, mat] of cells) {
+        for (const sd of [-1, 1]) {
+          const wallX = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.7, 1.5), mat);
+          wallX.position.set(sd * 0.65, cy, 0);
+          kite.add(wallX);
+          const wallZ = new THREE.Mesh(new THREE.BoxGeometry(1.34, 0.7, 0.04), mat);
+          wallZ.position.set(0, cy, sd * 0.73);
+          kite.add(wallZ);
+        }
+      }
+      // four corner spars tying the cells together
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        const spar = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.2, 4), sparMat);
+        spar.position.set(sx * 0.62, 0.68, sz * 0.7);
+        kite.add(spar);
+      }
+      // bridle + tail pennants trailing below
+      for (let t = 0; t < 3; t++) {
+        const pennant = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.4, 3), t % 2 ? accent : canvas);
+        pennant.position.set(0, -0.8 - t * 0.55, 0.2 + t * 0.12);
+        pennant.rotation.x = Math.PI + 0.25;
+        kite.add(pennant);
+      }
       kite.position.set(kx, y + kh, kz);
-      kite.rotation.y = rng() * Math.PI;
-      kite.rotation.z = (rng() - 0.5) * 0.3;
+      kite.rotation.y = Math.atan2(kx - x, kz - z) + Math.PI / 2;
+      kite.rotation.z = 0.32; // nose up into the ghost of the wind
       this.group.add(kite);
       this.staticTargets.push(kite);
-      // the cable: beads from anchor to kite, drawn TAUT (the wind still pulls)
-      for (let b = 1; b < 8; b++) {
-        const t = b / 8;
-        const bead = new THREE.Mesh(new THREE.SphereGeometry(0.05, 5, 5), toonMat({ color: 0x22262a }));
-        bead.position.set(x + (kx - x) * t, y + 0.6 + (kh - 0.6) * t, z + (kz - z) * t);
-        this.group.add(bead);
-      }
+      // the cable: one continuous taut line from anchor drum to bridle
+      const from = new THREE.Vector3(x, y + 0.7, z);
+      const to = new THREE.Vector3(kx, y + kh - 0.9, kz);
+      const len = from.distanceTo(to);
+      const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, len, 4), toonMat({ color: 0x22262a }));
+      cable.position.copy(from).lerp(to, 0.5);
+      cable.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), to.clone().sub(from).normalize());
+      this.group.add(cable);
     }
   }
 
@@ -4501,6 +4627,205 @@ export class World {
       step.position.set(d.cx, cy + 0.2 + s * 0.4, d.cz);
       this.group.add(step);
     }
+  }
+
+  // -------------------------------------------------------------- THE AUGER
+
+  /** Hazard-striped bollard with a working amber beacon — the Combine's
+   *  idea of a warm welcome, repeated all the way down the thread. */
+  private boreBollard(x: number, z: number): void {
+    const y = terrainHeight(x, z);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 1.5, 6),
+      toonMat({ color: 0xd8a020, map: swatch('#c08c14', 60) }));
+    post.position.set(x, y + 0.75, z);
+    this.group.add(post);
+    this.staticTargets.push(post);
+    const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.13, 6, 6), glowMat(0xffb43c, 0.95));
+    beacon.position.set(x, y + 1.62, z);
+    beacon.name = 'blinker';
+    this.group.add(beacon);
+  }
+
+  /** BORE SITE ONE — GATE: the pit head. Winch tower, spoil heaps, the
+   *  company sign nobody took down, and the first depth marker. */
+  private buildBoreGate(d: DistrictDef): void {
+    const rng = mulberry32(919001);
+    const iron = toonMat({ color: 0x4a4440, map: swatch('#423c38', 60) });
+    // the winch tower: an A-frame straddling the thread's first step
+    const ty = terrainHeight(d.cx - 8, d.cz);
+    for (const sd of [-1, 1]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.5, 11, 0.5), iron);
+      leg.position.set(d.cx - 8 + sd * 3.2, ty + 5.5, d.cz + sd * 1.2);
+      leg.rotation.z = sd * 0.18;
+      this.group.add(leg);
+      this.staticTargets.push(leg);
+      this.addCollider(d.cx - 8 + sd * 3.2, d.cz + sd * 1.2, 0.6, 0.6, 11);
+    }
+    const cross = new THREE.Mesh(new THREE.BoxGeometry(7.5, 0.5, 0.5), iron);
+    cross.position.set(d.cx - 8, ty + 10.6, d.cz);
+    const wheel = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.16, 6, 14), iron);
+    wheel.position.set(d.cx - 8, ty + 9.4, d.cz);
+    wheel.name = 'ft_ring'; // spins lazily, like it never got the memo
+    const hook = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 4.5, 4), toonMat({ color: 0x22262a }));
+    hook.position.set(d.cx - 8, ty + 7, d.cz);
+    this.group.add(cross, wheel, hook);
+    // spoil heaps: cones of what came out of the hole
+    for (let i = 0; i < 4; i++) {
+      const a = rng() * Math.PI * 2, r = 8 + rng() * 12;
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 3)) continue;
+      const hh = 1.6 + rng() * 1.8;
+      const heap = new THREE.Mesh(new THREE.ConeGeometry(hh * 1.4, hh, 8), toonMat({ map: rockTexture('#4e3e2c') }));
+      heap.position.set(x, terrainHeight(x, z) + hh * 0.45, z);
+      this.group.add(heap);
+      this.staticTargets.push(heap);
+      this.addCollider(x, z, hh, hh, hh);
+    }
+    // the company sign, corporate-cheerful about an 11-year-old disaster
+    const sy = terrainHeight(d.cx + 4, d.cz + 14);
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(6.5, 2.2),
+      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['HELIX BORE SITE ONE', 'DAYS SINCE INCIDENT: 0', '(COUNTER BROKEN)'], style: 'warning', bg: '#e8e0cc', fg: '#1a1a1a', accent: '#d8a020' }, 6.5 / 2.2), side: THREE.DoubleSide }));
+    board.position.set(d.cx + 4, sy + 2.6, d.cz + 14);
+    board.rotation.y = Math.PI + 0.3;
+    const postL = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 3.2, 6), iron);
+    postL.position.set(d.cx + 1, sy + 1.6, d.cz + 14);
+    const postR = postL.clone();
+    postR.position.x = d.cx + 7;
+    this.group.add(board, postL, postR);
+    this.addCollider(d.cx + 4, d.cz + 14, 3.4, 0.5, 3);
+    this.boreBollard(d.cx - 2, d.cz - 12);
+    this.boreBollard(d.cx + 10, d.cz + 4);
+  }
+
+  /** THE THREAD — the spiral road itself: parked haulers, core-sample
+   *  racks, depth markers, and bollards walking you down the turn. */
+  private buildThreadway(d: DistrictDef): void {
+    const rng = mulberry32(919000 + Math.floor(d.cx));
+    const iron = toonMat({ color: 0x4a4440, map: swatch('#423c38', 60) });
+    // a dead hauler parked mid-turn, forever
+    const hx = d.cx + (rng() - 0.5) * 8, hz = d.cz + (rng() - 0.5) * 8;
+    if (this.clearOfAssets(hx, hz, 4)) {
+      const hy = terrainHeight(hx, hz);
+      const bed = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.4, 2.2), toonMat({ color: 0xe8e4da, map: swatch('#d8d4ca', 60) }));
+      bed.position.set(hx, hy + 1.1, hz);
+      const cab = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 2.0), iron);
+      cab.position.set(hx + 2.6, hy + 1.3, hz);
+      this.group.add(bed, cab);
+      this.staticTargets.push(bed, cab);
+      this.addCollider(hx, hz, 3.6, 1.4, 2.4);
+      for (const [wx, wz] of [[-1.6, -1.2], [-1.6, 1.2], [1.6, -1.2], [1.6, 1.2]] as [number, number][]) {
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.4, 10), toonMat({ color: 0x22262a }));
+        wheel.position.set(hx + wx, hy + 0.55, hz + wz);
+        wheel.rotation.x = Math.PI / 2;
+        this.group.add(wheel);
+      }
+    }
+    // core sample racks: tubes of striped stone in cradles
+    for (let i = 0; i < 3; i++) {
+      const a = rng() * Math.PI * 2, r = 6 + rng() * (d.radius * 0.5);
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 2)) continue;
+      const y = terrainHeight(x, z);
+      const cradle = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.5, 1.0), iron);
+      cradle.position.set(x, y + 0.25, z);
+      cradle.rotation.y = rng() * Math.PI;
+      this.group.add(cradle);
+      this.staticTargets.push(cradle);
+      this.addCollider(x, z, 1.3, 0.8, 0.9);
+      for (let c = 0; c < 3; c++) {
+        const core = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 2.2, 6),
+          toonMat({ color: c === 1 ? 0x6a5a8a : 0x5c4a34, map: swatch(c === 1 ? '#5a4a7a' : '#4e3e2c', 50) }));
+        core.position.set(x, y + 0.62 + c * 0.06, z);
+        core.rotation.z = Math.PI / 2;
+        core.rotation.y = cradle.rotation.y + (rng() - 0.5) * 0.1;
+        this.group.add(core);
+      }
+    }
+    // depth marker: a big stenciled number board facing up-thread
+    const my = terrainHeight(d.cx, d.cz + 8);
+    const marker = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.4),
+      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: d.id === 'threadway1' ? ['TURN 1', '-40m'] : ['TURN 2', '-80m'], style: 'warning', bg: '#d8a020', fg: '#1a1a1a', accent: '#1a1a1a' }, 2.2 / 1.4), side: THREE.DoubleSide }));
+    marker.position.set(d.cx, my + 1.8, d.cz + 8);
+    marker.rotation.y = rng() * Math.PI * 2;
+    this.group.add(marker);
+    for (let i = 0; i < 3; i++) {
+      const a = rng() * Math.PI * 2, r = 8 + rng() * (d.radius * 0.6);
+      this.boreBollard(d.cx + Math.cos(a) * r, d.cz + Math.sin(a) * r);
+    }
+  }
+
+  /** THE DRILL FLOOR — the bottom of the spiral: the auger itself, mid-bite,
+   *  crystal growth climbing its flutes from whatever it broke into. */
+  private buildCoreworks(d: DistrictDef): void {
+    const rng = mulberry32(919009);
+    const iron = toonMat({ color: 0x4a4440, map: swatch('#423c38', 60) });
+    const cy = terrainHeight(d.cx, d.cz);
+    // the drill: a fat fluted screw standing in its own hole
+    const drill = new THREE.Group();
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.8, 13, 10), toonMat({ color: 0x8a7458, map: swatch('#7a6448', 70) }));
+    shaft.position.y = 6.5;
+    drill.add(shaft);
+    for (let i = 0; i < 5; i++) { // the flutes: a descending helix of blades
+      const blade = new THREE.Mesh(new THREE.TorusGeometry(2.3, 0.28, 6, 18, Math.PI * 1.5), iron);
+      blade.position.y = 1.6 + i * 2.3;
+      blade.rotation.x = Math.PI / 2;
+      blade.rotation.z = i * 1.2;
+      drill.add(blade);
+    }
+    // the crystals answering back, climbing the flutes
+    for (let i = 0; i < 6; i++) {
+      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.5 + rng() * 0.7, 0),
+        new THREE.MeshToonMaterial({ color: 0x54a8c8, transparent: true, opacity: 0.85 }));
+      const a = rng() * Math.PI * 2;
+      crystal.position.set(Math.cos(a) * (1.6 + rng()), 0.8 + rng() * 5, Math.sin(a) * (1.6 + rng()));
+      crystal.rotation.set(rng() * 3, rng() * 3, 0);
+      drill.add(crystal);
+      const glow = new THREE.Mesh(new THREE.OctahedronGeometry(0.2, 0), glowMat(0x54d4ff, 0.7));
+      glow.position.copy(crystal.position);
+      glow.name = 'blinker';
+      drill.add(glow);
+    }
+    drill.position.set(d.cx, cy, d.cz);
+    this.group.add(drill);
+    this.staticTargets.push(drill);
+    this.addCollider(d.cx, d.cz, 2.6, 2.6, 13);
+    // the gantry ring around the drill, half-collapsed
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      if (i === 2 || i === 5) continue; // the collapsed spans
+      const x = d.cx + Math.cos(a) * 8, z = d.cz + Math.sin(a) * 8;
+      const y = terrainHeight(x, z);
+      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.4, 4.5, 0.4), iron);
+      strut.position.set(x, y + 2.25, z);
+      this.group.add(strut);
+      this.staticTargets.push(strut);
+      this.addCollider(x, z, 0.5, 0.5, 4.5);
+      const span = new THREE.Mesh(new THREE.BoxGeometry(8 * Math.PI / 3, 0.25, 1.1), iron);
+      span.position.set(d.cx + Math.cos(a + Math.PI / 6) * 8, y + 4.4, d.cz + Math.sin(a + Math.PI / 6) * 8);
+      span.rotation.y = -(a + Math.PI / 6) + Math.PI / 2;
+      this.group.add(span);
+    }
+    // abandoned kit: crates, a toppled light rig still burning
+    for (let i = 0; i < 5; i++) {
+      const a = rng() * Math.PI * 2, r = 11 + rng() * (d.radius * 0.5);
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 1.6)) continue;
+      const y = terrainHeight(x, z);
+      const crate = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.0, 1.2), toonMat({ color: 0xe8e4da, map: swatch('#d8d4ca', 60) }));
+      crate.position.set(x, y + 0.5, z);
+      crate.rotation.y = rng() * Math.PI;
+      this.group.add(crate);
+      this.staticTargets.push(crate);
+      this.addCollider(x, z, 0.85, 0.85, 1.1);
+    }
+    const lx = d.cx + 13, lz = d.cz - 6;
+    const ly = terrainHeight(lx, lz);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 5, 6), iron);
+    mast.position.set(lx, ly + 1.8, lz);
+    mast.rotation.z = 1.1; // toppled, propped on a crate that left
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), glowMat(0xffe8b0, 0.95));
+    lamp.position.set(lx - 2.2, ly + 3.1, lz);
+    this.group.add(mast, lamp);
   }
 
   private buildQuibb(poi: WorldPoi): void {

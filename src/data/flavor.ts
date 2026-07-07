@@ -304,6 +304,24 @@ export const WIRE_LOGS: WireLog[] = [
       'To whoever finally reads this: do not shout, do not run, and do not trust the calm. A held breath is not peace. It is a SCHEDULE.',
     ],
   },
+  {
+    id: 'log_auger1',
+    speaker: 'BORE SITE ONE — SHIFT SUPERVISOR, TURN ONE STATION',
+    lines: [
+      'Depth forty and the thread holds grade. The crews hate the spiral — you can see your own lunch spot two turns up, all shift. Morale: dizzy.',
+      'Depth sixty. The drill started returning cores we did not cut. Perfect cylinders. Wrong stone. Geology says impossible. Geology has stopped coming down.',
+      'Depth eighty. You can hear the drill from anywhere on the thread. Today, between bites, we heard it PAUSE. Drills do not pause. Filing under acoustics.',
+    ],
+  },
+  {
+    id: 'log_auger2',
+    speaker: 'DRILL OPERATOR YEE — FINAL ENTRY, RECOVERED AT THE FLOOR',
+    lines: [
+      'Last bite of the shift. The head dropped through into open air — a gallery, big one, reading WARM. And the hum the deep crews talk about came up the shaft like a tide.',
+      'Here is the thing nobody upstairs will print: the hum matched the drill. Same pitch, same rhythm. It was not echoing us. It was SINGING ALONG.',
+      'Combine called full stop and pulled the crews up the spiral at a run. I was last out. I looked back from turn one. The drill was dark. The hole was not.',
+    ],
+  },
 ];
 
 export const ZAZA_GREETINGS = [

@@ -50,7 +50,7 @@ interface LoopVoice { src: AudioBufferSourceNode; gain: GainNode; id: string }
 // Claude Prime keeps the original four; the outer rocks get their own.
 const PLANET_OF: Record<string, string> = {
   claudelands: 'claudeprime', frosthollow: 'claudeprime', cinderthroat: 'claudeprime',
-  brasshaven: 'claudeprime', crucible: 'claudeprime', rustgulch: 'claudeprime',
+  brasshaven: 'claudeprime', crucible: 'claudeprime', rustgulch: 'claudeprime', auger: 'claudeprime',
   veldt: 'veldtminor', veldt_tangle: 'veldtminor', veldt_shallows: 'veldtminor',
   veldt_caves: 'veldtminor', veldt_gp: 'veldtminor',
   vitra: 'vitranull', vitra_mile: 'vitranull', vitra_gp: 'vitranull',

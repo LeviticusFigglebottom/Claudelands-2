@@ -150,6 +150,12 @@ export const LEGENDARIES: LegendaryDef[] = [
     effectLabel: 'Volt hits chain twice instead of once.',
     effect: { kind: 'bouncing_orbs' }, forceElement: 'volt', questOnly: true,
   },
+  {
+    id: 'leg_depth_gauge', name: 'Depth Gauge', maker: 'vulkram', type: 'sniper',
+    redText: '\u201cIt hit something. The something minded.\u201d',
+    effectLabel: 'Echo round answers every shot from below.',
+    effect: { kind: 'echo_round', delay: 0.4 }, forceElement: 'blast', questOnly: true,
+  },
 ];
 
 export function legendaryFor(type: WeaponType, roll: number): LegendaryDef | null {

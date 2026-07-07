@@ -52,6 +52,7 @@ districts, quests, jokes) is data. See `DECISIONS.md` for the why and
 | ![Interplanetary travel](docs/screenshots/ship-space.png) | ![The Bloom Mother](docs/screenshots/bloom-mother.png) |
 | ![Voltholm: the Jarworks](docs/screenshots/voltholm.png) | ![SKYFALL on the Gale Flats](docs/screenshots/skyfall.png) |
 | ![The Shatterline (linear GP)](docs/screenshots/shatterline.png) | ![The Jar Run (linear GP)](docs/screenshots/jarrun.png) |
+| ![THE AUGER — the spiral](docs/screenshots/auger.png) | ![The Hang Fields' kites](docs/screenshots/hangfields.png) |
 | ![ECHO map](docs/screenshots/echo-map.png) | ![ECHO backpack](docs/screenshots/echo-backpack.png) |
 | ![Skill trees](docs/screenshots/skill-tree.png) | ![Art sandbox](docs/screenshots/art-sandbox.png) |
 
