@@ -155,7 +155,10 @@ export class World {
     (sunDisc.material as THREE.MeshBasicMaterial).fog = false;
     this.skyAnchor.add(sunDisc);
 
-    const cloudMat = flatMat(0xf4ead8, cloudTexture());
+    // clouds wear the planet's palette — storm-grey over Voltholm, sea-glass
+    // over the Veldt, violet dusk over Vitra — instead of one universal puff
+    const cloudTint = new THREE.Color(WORLD.skyHorizon).lerp(new THREE.Color(0xffffff), 0.55);
+    const cloudMat = flatMat(cloudTint.getHex(), cloudTexture());
     cloudMat.transparent = true; cloudMat.opacity = 0.85; cloudMat.fog = false;
     const rng = mulberry32(777);
     for (let i = 0; i < 12; i++) {
@@ -313,6 +316,44 @@ export class World {
         }
         return g;
       }
+      case 'floe': { // Frosthollow: jagged ice peaks in rafted clusters
+        const g = new THREE.Group();
+        const ice = toonMat({ color: 0xd8ecf8, map: swatch('#c8e0f0', 40) });
+        const deepIce = toonMat({ color: 0x9ac8e8 });
+        const n = 2 + Math.floor(rng() * 3);
+        for (let k = 0; k < n; k++) {
+          const ph = h * (0.6 + rng() * 0.7);
+          const peak = new THREE.Mesh(new THREE.ConeGeometry(w * (0.35 + rng() * 0.3), ph, 5), k === 0 ? ice : deepIce);
+          peak.position.set((rng() - 0.5) * w * 1.1, ph / 2, (rng() - 0.5) * w * 1.1);
+          peak.rotation.y = rng() * Math.PI;
+          peak.rotation.z = (rng() - 0.5) * 0.22; // rafted, not grown
+          g.add(peak);
+        }
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.9, w * 1.1, h * 0.16, 7), rockMat);
+        base.position.y = h * 0.06;
+        g.add(base);
+        return g;
+      }
+      case 'basalt': { // Cinder Throat: hex column organs, cracks still warm
+        const g = new THREE.Group();
+        const charcoal = toonMat({ color: 0x3a3230, map: rockTexture('#332c28') });
+        const n = 3 + Math.floor(rng() * 3);
+        for (let k = 0; k < n; k++) {
+          const ch = h * (0.45 + rng() * 0.75);
+          const col = new THREE.Mesh(new THREE.CylinderGeometry(w * 0.28, w * 0.3, ch, 6), charcoal);
+          const ca = (k / n) * Math.PI * 2;
+          col.position.set(Math.cos(ca) * w * 0.42, ch / 2, Math.sin(ca) * w * 0.42);
+          col.rotation.y = rng();
+          g.add(col);
+          if (rng() < 0.4) { // an ember seam glowing between columns
+            const seam = new THREE.Mesh(new THREE.BoxGeometry(0.3, ch * 0.5, 0.3), glowMat(0xff6a1a, 0.7));
+            seam.position.set(Math.cos(ca) * w * 0.42, ch * 0.35, Math.sin(ca) * w * 0.42 + w * 0.16);
+            seam.name = 'blinker';
+            g.add(seam);
+          }
+        }
+        return g;
+      }
       default: { // 'mesa': the Claude Prime truncated cones
         const mesa = new THREE.Mesh(new THREE.CylinderGeometry(w * (0.55 + rng() * 0.2), w, h, 5 + Math.floor(rng() * 3)), rockMat);
         mesa.position.y = h / 2;
@@ -359,7 +400,7 @@ export class World {
       const x = (rng() - 0.5) * WORLD.size * 0.95;
       const z = (rng() - 0.5) * WORLD.size * 0.95;
       const dd = districtAt(x, z);
-      if (dd && (dd.dress === 'hub' || dd.dress === 'frosthub' || dd.dress === 'throatgate' || dd.dress === 'porttown' || dd.dress === 'jarworks' || dd.dress === 'stillgate')) continue;
+      if (dd && (dd.dress === 'hub' || dd.dress === 'frosthub' || dd.dress === 'throatgate' || dd.dress === 'porttown' || dd.dress === 'jarworks' || dd.dress === 'stillgate' || dd.dress === 'paddygate')) continue;
       if (!this.clearOfAssets(x, z, 2.2)) continue;
       const s = 0.8 + rng() * 2.6;
       const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(s, 0), rockMat);
@@ -414,7 +455,7 @@ export class World {
       const x = (rng() - 0.5) * WORLD.size * 1.15;
       const z = (rng() - 0.5) * WORLD.size * 1.15;
       const d = districtAt(x, z);
-      if (d && (d.dress === 'hub' || d.dress === 'frosthub' || d.dress === 'throne' || d.dress === 'throatgate' || d.dress === 'porttown' || d.dress === 'castaway' || d.dress === 'cavemouth' || d.dress === 'anchorage' || d.dress === 'jarworks' || d.dress === 'stillgate')) continue;
+      if (d && (d.dress === 'hub' || d.dress === 'frosthub' || d.dress === 'throne' || d.dress === 'throatgate' || d.dress === 'porttown' || d.dress === 'castaway' || d.dress === 'cavemouth' || d.dress === 'anchorage' || d.dress === 'jarworks' || d.dress === 'stillgate' || d.dress === 'paddygate')) continue;
       if (!this.clearOfAssets(x, z, 1.2)) continue;
       const sc = 0.6 + rng() * 1.3;
       q.setFromEuler(new THREE.Euler(0.15 * (rng() - 0.5), rng() * Math.PI, 0.15 * (rng() - 0.5)));
@@ -534,6 +575,9 @@ export class World {
         case 'boregate': this.buildBoreGate(d); break;
         case 'threadway': this.buildThreadway(d); break;
         case 'coreworks': this.buildCoreworks(d); break;
+        case 'paddygate': this.buildPaddyGate(d); break;
+        case 'terrace': this.buildTerrace(d); break;
+        case 'gardencrown': this.buildGardenCrown(d); break;
       }
     }
   }
@@ -4826,6 +4870,171 @@ export class World {
     const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), glowMat(0xffe8b0, 0.95));
     lamp.position.set(lx - 2.2, ly + 3.1, lz);
     this.group.add(mast, lamp);
+  }
+
+  // ------------------------------------------------------------ THE TERRACES
+
+  /** A carved stone lantern-idol: squat pedestal, hollow head, warm ember. */
+  private terraceLantern(x: number, z: number, lit = true): void {
+    const y = terrainHeight(x, z);
+    const stone = toonMat({ color: 0x8a8468, map: rockTexture('#7a7458') });
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.6), stone);
+    base.position.set(x, y + 0.45, z);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 0.8), stone);
+    head.position.set(x, y + 1.15, z);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.6, 0.4, 4), stone);
+    cap.position.set(x, y + 1.6, z);
+    cap.rotation.y = Math.PI / 4;
+    this.group.add(base, head, cap);
+    this.staticTargets.push(base, head);
+    this.addCollider(x, z, 0.5, 0.5, 1.8);
+    if (lit) {
+      const ember = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 6), glowMat(0xffc86a, 0.95));
+      ember.position.set(x, y + 1.15, z);
+      ember.name = 'blinker';
+      this.group.add(ember);
+    }
+  }
+
+  /** THE PADDY GATE — Juno's field camp at the foot of the stairs: research
+   *  tent, seedling trays, and the first flooded paddy behind a low wall. */
+  private buildPaddyGate(d: DistrictDef): void {
+    const rng = mulberry32(929001);
+    const canvasMat = toonMat({ color: 0x3a8a5a, map: swatch('#328050', 60) });
+    // the tent: an open A-frame with a workbench under it
+    const tx = d.cx - 9, tz = d.cz - 2;
+    const ty = terrainHeight(tx, tz);
+    for (const sd of [-1, 1]) {
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.12, 3.2), canvasMat);
+      panel.position.set(tx, ty + 2.5, tz + sd * 1.1);
+      panel.rotation.x = sd * 0.72;
+      this.group.add(panel);
+    }
+    const bench = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.9, 0.9), toonMat({ color: 0x8a6a4a, map: swatch('#7a5c3e', 50) }));
+    bench.position.set(tx, ty + 0.45, tz);
+    this.group.add(bench);
+    this.staticTargets.push(bench);
+    this.addCollider(tx, tz, 2.4, 1.6, 2.6);
+    // seedling trays in rows: little green dots in white flats
+    for (let r = 0; r < 3; r++) {
+      const flat = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.14, 0.6), toonMat({ color: 0xe8e4da }));
+      flat.position.set(d.cx + 5, terrainHeight(d.cx + 5, d.cz + 4 + r) + 0.3, d.cz + 4 + r * 1.0);
+      this.group.add(flat);
+      for (let i = 0; i < 5; i++) {
+        const sprout = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.22, 4), toonMat({ color: 0x6adc4a }));
+        sprout.position.set(d.cx + 4.2 + i * 0.4, flat.position.y + 0.18, d.cz + 4 + r * 1.0);
+        this.group.add(sprout);
+      }
+    }
+    // the first paddy: a shallow flooded square behind a low stone lip,
+    // set east of the walkway so arrivals don't wade through it
+    this.water(d.cx + 14, d.cz - 8, 6.5, { level: terrainHeight(d.cx + 14, d.cz - 8) + 0.18 });
+    for (let i = 0; i < 4; i++) this.terraceLantern(d.cx - 14 + i * 9, d.cz + 10, i % 2 === 0);
+  }
+
+  /** A TERRACE — one step of the garden: retaining wall along the downhill
+   *  lip, a flooded paddy with planted rows, and the waterfall it spills. */
+  private buildTerrace(d: DistrictDef): void {
+    const rng = mulberry32(929100 + Math.floor(d.cz));
+    const stone = toonMat({ color: 0x8a8468, map: rockTexture('#7a7458') });
+    // retaining wall: an arc of stacked stone segments along the downhill
+    // (south, +z) edge, right where the terrain steps down
+    const lipZ = d.cz + d.radius * 0.78;
+    for (let i = -3; i <= 3; i++) {
+      const wx = d.cx + i * 5.4;
+      const wy = terrainHeight(wx, lipZ + 3);
+      const seg = new THREE.Mesh(new THREE.BoxGeometry(5.2, 2.6 + rng() * 0.8, 1.4), stone);
+      seg.position.set(wx, wy + 1.1, lipZ + (Math.abs(i) * 0.4));
+      seg.rotation.y = i * 0.06;
+      this.group.add(seg);
+      this.staticTargets.push(seg);
+    }
+    // the fall: this step's water pouring over the lip
+    this.waterfall(d.cx + (rng() - 0.5) * 10, lipZ + 4.5, Math.PI, 5.5, 4);
+    // the paddy: flooded pool with planted rows marching across it
+    const px = d.cx + (rng() - 0.5) * 8, pz = d.cz - 4;
+    const level = terrainHeight(px, pz) + 0.2;
+    this.water(px, pz, 9, { level });
+    for (let row = 0; row < 4; row++) {
+      for (let i = 0; i < 7; i++) {
+        const sx = px - 6 + i * 2.0 + (rng() - 0.5) * 0.4;
+        const sz = pz - 4.5 + row * 3.0 + (rng() - 0.5) * 0.4;
+        if (Math.hypot(sx - px, sz - pz) > 8) continue;
+        const shoot = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.7 + rng() * 0.3, 4), toonMat({ color: 0x4a9a3a }));
+        shoot.position.set(sx, level + 0.3, sz);
+        this.group.add(shoot);
+      }
+    }
+    // lanterns mark the climb through this step
+    for (let i = 0; i < 3; i++) {
+      const a = rng() * Math.PI * 2, r = 10 + rng() * (d.radius * 0.5);
+      const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
+      if (!this.clearOfAssets(x, z, 1.4)) continue;
+      this.terraceLantern(x, z, rng() < 0.7);
+    }
+  }
+
+  /** THE GARDEN CROWN — the summit: a ring of carved idol heads facing the
+   *  altar bloom at the centre, prayer-lines strung between them. */
+  private buildGardenCrown(d: DistrictDef): void {
+    const rng = mulberry32(929009);
+    const stone = toonMat({ color: 0x8a8468, map: rockTexture('#7a7458') });
+    const heads: THREE.Vector3[] = [];
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + 0.26;
+      const x = d.cx + Math.cos(a) * (d.radius - 8), z = d.cz + Math.sin(a) * (d.radius - 8);
+      const y = terrainHeight(x, z);
+      const g = new THREE.Group();
+      const brow = new THREE.Mesh(new THREE.BoxGeometry(2.2, 3.4, 1.8), stone);
+      brow.position.y = 1.7;
+      const nose = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.3, 0.5), stone);
+      nose.position.set(0, 1.5, -1.0);
+      const moss = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.5, 1.9), toonMat({ color: 0x3a7a3a, map: swatch('#2e6a30', 40) }));
+      moss.position.y = 3.5;
+      g.add(brow, nose, moss);
+      for (const sd of [-1, 1]) { // heavy-lidded carved eyes, faintly lit
+        const eye = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.16, 0.1), glowMat(0x9adc4a, 0.7));
+        eye.position.set(sd * 0.55, 2.2, -0.92);
+        g.add(eye);
+      }
+      g.position.set(x, y, z);
+      g.lookAt(d.cx, y, d.cz); // every head watches the altar
+      this.group.add(g);
+      this.staticTargets.push(g);
+      this.addCollider(x, z, 1.4, 1.2, 3.8);
+      heads.push(new THREE.Vector3(x, y + 3.8, z));
+    }
+    // prayer-lines: petals strung head to head around the ring
+    for (let i = 0; i < heads.length; i++) {
+      const p1 = heads[i], p2 = heads[(i + 1) % heads.length];
+      for (let b = 1; b < 6; b++) {
+        const t = b / 6;
+        const bead = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.24, 3),
+          toonMat({ color: b % 2 ? 0xd8b028 : 0xff5a86 }));
+        bead.position.lerpVectors(p1, p2, t);
+        bead.position.y -= Math.sin(t * Math.PI) * 0.8;
+        bead.rotation.x = Math.PI;
+        this.group.add(bead);
+      }
+    }
+    // the altar bloom: a giant flower open at the centre of the crown
+    const cy = terrainHeight(d.cx, d.cz);
+    const dais = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.8, 0.6, 10), stone);
+    dais.position.set(d.cx, cy + 0.3, d.cz);
+    this.group.add(dais);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const petal = new THREE.Mesh(new THREE.ConeGeometry(0.7, 2.6, 5), toonMat({ color: i % 2 ? 0xff5a86 : 0xd83a68 }));
+      petal.position.set(d.cx + Math.cos(a) * 1.5, cy + 1.4, d.cz + Math.sin(a) * 1.5);
+      petal.rotation.set(Math.sin(a) * 0.85, 0, -Math.cos(a) * 0.85);
+      this.group.add(petal);
+      this.staticTargets.push(petal);
+    }
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.65, 10, 10), glowMat(0xffd23c, 0.95));
+    core.position.set(d.cx, cy + 1.4, d.cz);
+    core.name = 'blinker';
+    this.group.add(core);
+    this.addCollider(d.cx, d.cz, 2.2, 2.2, 2.6);
   }
 
   private buildQuibb(poi: WorldPoi): void {

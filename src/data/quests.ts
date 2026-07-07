@@ -824,6 +824,37 @@ export const SIDE_QUESTS: QuestDef[] = [
     rewardCash: 6000, rewardXp: 7000, rewardUnique: 'leg_depth_gauge',
     completeLine: 'Four squatters evicted and the claim is CLOSED. Brann stamped the file so hard the desk cracked. He framed the stamp. He gave you the gun from the evidence locker — "eleven years of storage fees," he says, "you\u2019ve earned the interest."',
   },
+  // ---- THE TERRACES: Juno's oldest unanswered question
+  {
+    id: 'sq_stairs1',
+    name: 'The Garden Before the God',
+    giver: 'juno',
+    briefing: [
+      'Contractor! Field question, possibly career-defining: the Verdant worship the Bloom, yes? Except their FARMING is older than their religion. Satellite pass found terraced paddies up a canyon east of the shelf — five stepped fields, five waterfalls, still planted, still FLOODING ON SCHEDULE. Nobody tends them. Officially.',
+      'Terrace agriculture needs coordination. Coordination needs people. So either the tribe is running a secret farm they never chant about — or the garden has been running ITSELF since before the drums.',
+      'Climb it for me. All five steps, to the crown at the top. Photograph the idols, count the rows, and DO NOT eat anything, I know how field trips go.',
+    ],
+    acceptLine: 'The Terraces, east canyon! Five steps up — count EVERYTHING, touch NOTHING, and if the water flows uphill anywhere, TIME IT!',
+    objective: { kind: 'goto', label: 'Climb to the Garden Crown', count: 1, markerX: 0, markerZ: -74, mapId: 'veldt_stairs' },
+    rewardCash: 4200, rewardXp: 5000,
+    completeLine: 'You climbed all five steps and stood in the crown — six carved heads older than the tribe, all facing a flower that blooms on a SCHEDULE. Juno went through your photos twice and got very quiet. Then, reverently: "The garden didn\u2019t join the religion. The garden FOUNDED it."',
+    unlocksStation: 'The Paddy Gate',
+  },
+  {
+    id: 'sq_stairs2',
+    name: 'Crop Rotation',
+    giver: 'juno',
+    briefing: [
+      'Follow-up, and it\u2019s urgent: the tribe noticed my drone. Now their biggest totem-carriers have moved onto the terraces as PERMANENT GROUNDSKEEPERS, and their idea of weeding is anything that walks on two legs and owns a camera.',
+      'I need three more survey passes and I cannot get ONE while the Fifth Step is patrolled by walking shrubbery the size of a shed.',
+      'Four of the big groundskeepers, gently retired. The terraces have run themselves for a thousand years — they will survive a staffing change.',
+    ],
+    acceptLine: 'The upper steps! Four totem-carriers! And save me a cutting from anything that SCREAMS when you prune it!',
+    objective: { kind: 'kill_elites', label: 'Groundskeepers retired', count: 4, markerX: 0, markerZ: -36, mapId: 'veldt_stairs' },
+    elite: { enemyId: 'totem_bruiser', count: 4, x: 0, z: -36, mapId: 'veldt_stairs', levelOffset: 10 },
+    rewardCash: 5500, rewardXp: 6400, rewardUnique: 'leg_green_thumb',
+    completeLine: 'Four groundskeepers composted, three survey passes flown, and Juno\u2019s paper is titled: "Agricultural Theology: the Farm That Grew a God." She gave you the shotgun she keeps for field work. "It plants things," she said. "In a way."',
+  },
 ];
 
 export const QUEST_DONE_IDLE = [

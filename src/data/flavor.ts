@@ -322,6 +322,24 @@ export const WIRE_LOGS: WireLog[] = [
       'Combine called full stop and pulled the crews up the spiral at a run. I was last out. I looked back from turn one. The drill was dark. The hole was not.',
     ],
   },
+  {
+    id: 'log_stairs1',
+    speaker: 'VERDANT PLANTING SONG — TAUGHT TO EVERY CHILD, TRANSLATED LOOSELY',
+    lines: [
+      'verse: one step for the seed, two steps for the rain, three steps for the water walking down again.',
+      'verse: four steps for the mothers who cut the stone rows. five steps for the garden, who was here before.',
+      'chorus, whispered: we did not plant the terraces. the terraces planted US.',
+    ],
+  },
+  {
+    id: 'log_stairs2',
+    speaker: 'DR. JUNO CALLA — FIELD RECORDER, DRAFT NOTES (DO NOT PUBLISH YET)',
+    lines: [
+      'Draft one: the irrigation is gravity-fed from a spring at the crown. Elegant. Pre-tribal. Fine. NORMAL.',
+      'Draft two: the flow rate ADJUSTS. Dry week, the falls narrow. Seedlings wilting on step two, step three sends extra. There is no mechanism. I have LOOKED.',
+      'Draft three, 3 a.m.: farms need farmers. Nothing tends this garden. Unless you stop asking WHO tends the garden and start asking what the garden considers a TOOL. Going back up with the drone. And a hat.',
+    ],
+  },
 ];
 
 export const ZAZA_GREETINGS = [

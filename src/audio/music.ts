@@ -52,7 +52,7 @@ const PLANET_OF: Record<string, string> = {
   claudelands: 'claudeprime', frosthollow: 'claudeprime', cinderthroat: 'claudeprime',
   brasshaven: 'claudeprime', crucible: 'claudeprime', rustgulch: 'claudeprime', auger: 'claudeprime',
   veldt: 'veldtminor', veldt_tangle: 'veldtminor', veldt_shallows: 'veldtminor',
-  veldt_caves: 'veldtminor', veldt_gp: 'veldtminor',
+  veldt_caves: 'veldtminor', veldt_gp: 'veldtminor', veldt_stairs: 'veldtminor',
   vitra: 'vitranull', vitra_mile: 'vitranull', vitra_gp: 'vitranull',
   voltholm: 'voltholm', volt_gp: 'voltholm', volt_still: 'voltholm',
 };

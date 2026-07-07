@@ -156,6 +156,12 @@ export const LEGENDARIES: LegendaryDef[] = [
     effectLabel: 'Echo round answers every shot from below.',
     effect: { kind: 'echo_round', delay: 0.4 }, forceElement: 'blast', questOnly: true,
   },
+  {
+    id: 'leg_green_thumb', name: 'Green Thumb', maker: 'cordwood', type: 'shotgun',
+    redText: '\u201cIt plants things. In a way.\u201d',
+    effectLabel: 'Extra pellet spread — a full seed drill of bile.',
+    effect: { kind: 'pellet_storm', pellets: 7 }, forceElement: 'bile', questOnly: true,
+  },
 ];
 
 export function legendaryFor(type: WeaponType, roll: number): LegendaryDef | null {

@@ -7,7 +7,7 @@
 
 import { clamp01, lerp } from '../util/maff';
 
-export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle' | 'gulchgate' | 'shipbreak' | 'castaway' | 'hullgrave' | 'brinepans' | 'anchorage' | 'cavemouth' | 'gloomgrove' | 'cryptworks' | 'lodecourt' | 'lastlight' | 'chimefield' | 'shardsea' | 'nullbasin' | 'gloamgate' | 'snuffrows' | 'wickbothy' | 'echoorgan' | 'lampfall' | 'jarworks' | 'galeflats' | 'conductorrow' | 'capacitorium' | 'eyewall' | 'stillgate' | 'hangfields' | 'barrowline' | 'breathhall' | 'boregate' | 'threadway' | 'coreworks';
+export type DistrictDress = 'hub' | 'fort' | 'boneyard' | 'slagflats' | 'throne' | 'frosthub' | 'pinebreak' | 'fathom' | 'icebox' | 'throatgate' | 'cindercamp' | 'ashflats' | 'kilnyard' | 'foundrycourt' | 'brassplaza' | 'crucible' | 'porttown' | 'verdantcamp' | 'grove' | 'jungle' | 'gulchgate' | 'shipbreak' | 'castaway' | 'hullgrave' | 'brinepans' | 'anchorage' | 'cavemouth' | 'gloomgrove' | 'cryptworks' | 'lodecourt' | 'lastlight' | 'chimefield' | 'shardsea' | 'nullbasin' | 'gloamgate' | 'snuffrows' | 'wickbothy' | 'echoorgan' | 'lampfall' | 'jarworks' | 'galeflats' | 'conductorrow' | 'capacitorium' | 'eyewall' | 'stillgate' | 'hangfields' | 'barrowline' | 'breathhall' | 'boregate' | 'threadway' | 'coreworks' | 'paddygate' | 'terrace' | 'gardencrown';
 
 export interface DistrictDef {
   id: string;
@@ -40,7 +40,7 @@ export interface BiomeDef {
   weeds: boolean;              // tumbleweeds roam
   /** Rim wall silhouette — each world's horizon has its own handwriting.
    *  Default 'mesa' (the Claude Prime truncated cones). */
-  rim?: 'mesa' | 'slate' | 'barrow' | 'prism' | 'jungle';
+  rim?: 'mesa' | 'slate' | 'barrow' | 'prism' | 'jungle' | 'floe' | 'basalt';
   /** Instanced ground-cover style. Default 'scrub' (desert cones). */
   groundLife?: 'scrub' | 'sedge' | 'reeds' | 'shards' | 'fern';
 }
@@ -219,6 +219,7 @@ export const FROSTHOLLOW: WorldDef = {
     scrub: 0x4a6a5a,
     ambientParticle: 'snow',
     trees: 'pine',
+    rim: 'floe',
     aurora: true,
     weeds: false,
   },
@@ -320,6 +321,7 @@ export const CINDERTHROAT: WorldDef = {
     scrub: 0x5a4a3a,
     ambientParticle: 'ash',
     trees: 'burnt',
+    rim: 'basalt',
     aurora: false,
     weeds: false,
   },
@@ -1834,6 +1836,124 @@ const AUGER: WorldDef = {
   exits: [],
 };
 
+// ===========================================================================
+// VELDT MINOR SIDE ZONE — THE TERRACES. The Verdant's oldest garden: a
+// staircase of flooded paddies carved up a canyon long before the tribe
+// found religion, each step spilling a waterfall onto the one below. You
+// climb the whole zone — five terraces, five falls — and the map's shape IS
+// the pilgrimage: switchback up through planted rows to the Garden Crown,
+// where the idols keep their eyes on the harvest. Mirror of the Auger:
+// that one screws down into the dark; this one stairs up into the light.
+const STAIRS_PATH = [
+  { x: 0, z: 100 }, { x: -6, z: 78 }, { x: -25, z: 62 }, { x: 12, z: 48 },
+  { x: 25, z: 34 }, { x: -14, z: 20 }, { x: -25, z: 6 }, { x: 14, z: -10 },
+  { x: 25, z: -24 }, { x: -12, z: -40 }, { x: -20, z: -54 }, { x: 6, z: -68 },
+  { x: 0, z: -82 },
+];
+
+const VELDT_STAIRS: WorldDef = {
+  id: 'veldt_stairs',
+  name: 'THE TERRACES',
+  tagline: 'five steps. five falls. the garden climbs with you.',
+  size: 240,
+  skyTop: 0x2a6a9a,
+  skyHorizon: 0xc8e8b8,
+  sun: { color: 0xfff2c8, intensity: 1.9, dirX: -0.35, dirY: 0.75, dirZ: 0.3 },
+  ambient: { sky: 0x8ac8c0, ground: 0x3a5a34, intensity: 1.2 },
+  fog: { color: 0x9ac8a8, near: 55, far: 260 },
+  biome: {
+    ground: { base: '#4a7a3a', light: '#6a9a4c', dark: '#2e5228', crack: 'rgba(40,80,50,0.4)' },
+    rock: '#5f7d4b',
+    scrub: 0x4a9a3a,
+    ambientParticle: 'dust',
+    trees: 'palm',
+    aurora: false,
+    weeds: false,
+    rim: 'jungle',
+    groundLife: 'fern',
+  },
+  terrain: {
+    duneAmp: 0.6,
+    roughAmp: 0.6,
+    roads: [],
+    corridor: {
+      pts: STAIRS_PATH,
+      width: 14,
+      arenas: [
+        { x: 0, z: 92, r: 26 },
+        { x: 0, z: -74, r: 28 },
+      ],
+      wallHeight: 34,
+    },
+  },
+  districts: [
+    {
+      id: 'paddygate', name: 'THE PADDY GATE', subtitle: 'Dr. Calla\u2019s Field Camp. Mind the Seedlings.', dress: 'paddygate',
+      cx: 0, cz: 88, radius: 28, baseHeight: 0.5,
+      faction: 'none', spawnTable: [], maxAlive: 0, respawnDelay: 999, levelOffset: 8,
+    },
+    {
+      id: 'terrace1', name: 'THE FIRST STEP', subtitle: 'Planted Before the Drums.', dress: 'terrace',
+      cx: 0, cz: 48, radius: 27, baseHeight: 6,
+      faction: 'verdant',
+      spawnTable: [
+        { enemyId: 'frond_stalker', weight: 20 },
+        { enemyId: 'sporeling', weight: 16 },
+        { enemyId: 'dartlurker', weight: 12 },
+      ],
+      maxAlive: 7, respawnDelay: 16, levelOffset: 9,
+    },
+    {
+      id: 'terrace2', name: 'THE THIRD STEP', subtitle: 'The Shamans Sing the Water Uphill.', dress: 'terrace',
+      cx: 0, cz: 4, radius: 27, baseHeight: 13,
+      faction: 'verdant',
+      spawnTable: [
+        { enemyId: 'shaman', weight: 16 },
+        { enemyId: 'razorbeak', weight: 14 },
+        { enemyId: 'frond_stalker', weight: 12 },
+        { enemyId: 'thorn_hurler', weight: 10 },
+      ],
+      maxAlive: 7, respawnDelay: 16, levelOffset: 10,
+    },
+    {
+      id: 'terrace3', name: 'THE FIFTH STEP', subtitle: 'Almost Holy Ground. Wipe Your Boots.', dress: 'terrace',
+      cx: 0, cz: -36, radius: 27, baseHeight: 20,
+      faction: 'verdant',
+      spawnTable: [
+        { enemyId: 'totem_bruiser', weight: 12 },
+        { enemyId: 'thorn_hurler', weight: 14 },
+        { enemyId: 'shaman', weight: 12 },
+        { enemyId: 'razorbeak', weight: 10 },
+      ],
+      maxAlive: 7, respawnDelay: 17, levelOffset: 11,
+    },
+    {
+      id: 'gardencrown', name: 'THE GARDEN CROWN', subtitle: 'The Idols Watch the Harvest. Now They Watch You.', dress: 'gardencrown',
+      cx: 0, cz: -74, radius: 30, baseHeight: 27,
+      faction: 'verdant',
+      spawnTable: [
+        { enemyId: 'totem_bruiser', weight: 10 },
+        { enemyId: 'shaman', weight: 10 },
+      ],
+      maxAlive: 5, respawnDelay: 18, levelOffset: 12,
+    },
+  ],
+  pois: [
+    { id: 'ft_stairs', kind: 'fast_travel', x: 8, z: 94, data: 'The Paddy Gate' },
+    { id: 'vm_ts', kind: 'vendor_med', x: -10, z: 90, rot: 1.0 },
+    { id: 'vg_ts', kind: 'vendor_gun', x: 14, z: 84, rot: -1.2 },
+    { id: 'sign_ts1', kind: 'sign', x: 0, z: 76, rot: 0.1, data: 'THE TERRACES \u2014 FIVE STEPS UP. THE WATER COMES DOWN. TAKE TURNS.' },
+    { id: 'sign_ts2', kind: 'sign', x: 8, z: 2, rot: -0.6, data: 'STEP THREE \u2014 NO SAMPLING THE SACRED PADDIES. (DR. CALLA. YES, YOU.)' },
+    { id: 'chest_ts1', kind: 'chest', x: -18, z: 42, rot: 0.8 },
+    { id: 'chest_ts2', kind: 'chest', x: 20, z: -2, rot: -1.0 },
+    { id: 'chest_ts3', kind: 'chest', x: -10, z: -70, rot: 2.2 },
+    { id: 'log_ts1', kind: 'wirelog', x: 16, z: 40, data: 'log_stairs1' },
+    { id: 'log_ts2', kind: 'wirelog', x: -14, z: -32, data: 'log_stairs2' },
+  ],
+  spawn: { x: 0, z: 96 },
+  exits: [],
+};
+
 export const MAPS: Record<string, WorldDef> = {
   claudelands: CLAUDELANDS,
   frosthollow: FROSTHOLLOW,
@@ -1853,6 +1973,7 @@ export const MAPS: Record<string, WorldDef> = {
   volt_gp: VOLT_GP,
   volt_still: VOLT_STILL,
   auger: AUGER,
+  veldt_stairs: VELDT_STAIRS,
 };
 
 let active: WorldDef = CLAUDELANDS;
