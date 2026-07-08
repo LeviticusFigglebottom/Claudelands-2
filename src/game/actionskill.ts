@@ -197,6 +197,9 @@ export class ActionSkillSystem {
   playerPos: () => THREE.Vector3 = () => new THREE.Vector3();
   healPlayer: (amt: number) => void = () => {};
   playerMaxHealth: () => number = () => 100;
+  playerHealth: () => number = () => 100;
+  /** Release the Beast: this Mist was triggered in the red. */
+  private beastActive = false;
 
   // Stormcaller: Tempest Shell state
   tempestRemaining = 0;
@@ -247,6 +250,13 @@ export class ActionSkillSystem {
       this.mistRemaining = PLAYER_CLASS.actionSkill.duration * statsys.mult('turretDuration');
       this.slamTimer = 0.4;
       this.cooldownRemaining = this.cooldownTotal;
+      // RELEASE THE BEAST: triggered in the red, the pit opens back up —
+      // full heal now, harder Mist, most of the cooldown refunded at the end
+      this.beastActive = statsys.bonus('releaseBeast') > 0 && this.playerHealth() <= this.playerMaxHealth() * 0.35;
+      if (this.beastActive) {
+        this.healPlayer(this.playerMaxHealth());
+        fx.burst(playerPos.clone().add(new THREE.Vector3(0, 1.2, 0)), 0xff1a1a, 70, 9, 0.2, 1.2, 4);
+      }
       audio.turretDeploy();
       audio.elemental('blast');
       fx.burst(playerPos.clone().add(new THREE.Vector3(0, 1, 0)), 0xff3a2a, 40, 7, 0.16, 1, 4);
@@ -281,6 +291,18 @@ export class ActionSkillSystem {
       audio.elemental('volt');
       audio.turretDeploy();
       fx.burst(playerPos.clone().add(new THREE.Vector3(0, 1.4, 0)), 0x38c8ff, 34, 6, 0.14, 0.9, 3);
+      // RUIN: the shell arrives as a triple-element verdict on the room
+      if (state.hasAugment('tempest_ruin')) {
+        const elems = ['volt', 'ember', 'bile'] as const;
+        const near = this.enemies().filter((e) => e.alive && e.position.distanceTo(playerPos) < 12);
+        near.slice(0, 6).forEach((e, i) => {
+          const el = elems[i % 3];
+          fx.lightningArc(playerPos.clone().add(new THREE.Vector3(0, 1.6, 0)), e.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
+          applyDamage(e, 14 * levelScale(state.level) * statsys.mult('elemDamage'), el, {
+            source: 'player', elemChance: 0.8, elemDps: 6 * levelScale(state.level),
+          });
+        });
+      }
       return true;
     }
     const duration = PLAYER_CLASS.actionSkill.duration * statsys.mult('turretDuration');
@@ -336,8 +358,14 @@ export class ActionSkillSystem {
         audio.shot('heavy', 0.8);
         if (anyNear && state.hasAugment('mist_leech')) this.healPlayer(this.playerMaxHealth() * 0.03);
       }
-      if (this.mistRemaining <= 0) this.cooldownRemaining = this.cooldownTotal;
+      if (this.mistRemaining <= 0) {
+        // Release the Beast refunds most of the cooldown — back in the pit
+        this.cooldownRemaining = this.cooldownTotal * (this.beastActive ? 0.4 : 1);
+        this.beastActive = false;
+      }
     }
+    statsys.redBeast = this.beastActive && this.mistActive;
+    statsys.skillActive = this.activeCount > 0;
 
     statsys.tempestHaste = this.tempestHaste;
     // Tempest Shell: crackling aura + periodic chain arcs off the player
@@ -361,6 +389,18 @@ export class ActionSkillSystem {
           applyDamage(t, 8 * levelScale(state.level) * statsys.mult('elemDamage'), 'volt', {
             source: 'player', elemChance: 0.45, elemDps: 5 * levelScale(state.level),
           });
+          // CONVERGE: the arc drags the neighbours into the strike zone
+          if (state.hasAugment('tempest_converge')) {
+            for (const e of this.enemies()) {
+              if (!e.alive || e === t) continue;
+              const d = e.position.distanceTo(t.position);
+              if (d > 1.5 && d < 9) {
+                const pull = t.position.clone().sub(e.position).setY(0).normalize();
+                e.position.addScaledVector(pull, Math.min(3, d - 1.2));
+                fx.emit(e.position.clone().add(new THREE.Vector3(0, 1, 0)), pull.clone().multiplyScalar(3), 0x38c8ff, 0.08, 0.3, 0);
+              }
+            }
+          }
         }
       }
       if (this.tempestRemaining <= 0) {

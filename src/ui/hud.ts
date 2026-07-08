@@ -179,7 +179,14 @@ export class Hud {
     e['lbl-xp'].textContent = `LEVEL ${state.level}${state.skillPoints > 0 ? ` — ${state.skillPoints} SKILL POINT${state.skillPoints > 1 ? 'S' : ''} [K]` : ''}`;
 
     const ks = statsys.activeKillBuffCount;
-    e['hud-killskill'].textContent = ks > 0 ? `⚡ KILL SKILLS ×${ks}` : '';
+    const scrap = statsys.stackCount('scrap');
+    const salt = statsys.stackCount('salt');
+    const chips = [
+      ks > 0 ? `⚡ KILL SKILLS ×${ks}` : '',
+      scrap > 0 ? `⚙ SCRAP ×${scrap}` : '',
+      salt > 0 ? `✚ SALT ×${salt}` : '',
+    ].filter(Boolean);
+    e['hud-killskill'].textContent = chips.join('   ');
 
     // dynamic crosshair spread + ADS reticle morphing
     const px = 6 + player.lastSpreadDeg * 9;

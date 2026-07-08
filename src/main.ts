@@ -136,6 +136,7 @@ setPlayerDamageRouter((amount, element, from) => player.damage(amount * coopEnem
 actionSkill.playerPos = () => player.position;
 actionSkill.healPlayer = (amt) => player.heal(amt);
 actionSkill.playerMaxHealth = () => player.maxFlesh;
+actionSkill.playerHealth = () => player.flesh;
 
 /** Co-op duels only: the live opponent's avatar proxy joins the target lists.
  *  Outside a duel this is empty — party members are bulletproof to each other. */
@@ -200,6 +201,9 @@ setEnemyHooks({
     if (!enemy.puppet) questSystem.recordKill(enemy);
     coop.notifyEnemyKilled(enemy);
     actionSkill.onKillWhileActive();
+    // Get Some: every kill shaves seconds off the action-skill cooldown
+    const shave = statsys.bonus('getSome');
+    if (shave > 0) actionSkill.cooldownRemaining = Math.max(0, actionSkill.cooldownRemaining - shave);
     bus.emit('kill', { xp, worldPos: enemy.position, crit: false, overkill });
     if (player.downed) player.secondWind();
     if (enemy.def.dropTier >= 3) {
@@ -1582,7 +1586,7 @@ canvas.addEventListener('click', () => {
   openDialogueDebug: (giver: QuestGiver) => { dialogueGiver = giver; setPanel('dialogue'); },
   get mapId() { return activeMap().id; },
   maps: MAPS,
-  vehicles, race, respawnCine,
+  vehicles, race, respawnCine, statsys, bus,
   get pitActive() { return pitActive; },
   enterBuggyDebug: () => {
     if (!vehicles.buggy) return false;

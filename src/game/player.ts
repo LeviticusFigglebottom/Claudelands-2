@@ -91,6 +91,8 @@ export class Player implements Damageable {
   private focusHeat = 0;
   private fireHeat = 0;           // sustained-fire bloom for the crosshair
   private overkillBank = 0;
+  private nthCounter = 0;         // The Nth Degree ricochet counter
+  private reloadWasEmpty = false; // Anarchy: empty-mag reloads feed the pile
   private shieldDelayT = 0;
   private baseFov = 75;
   private bobT = 0;
@@ -123,6 +125,22 @@ export class Player implements Damageable {
     this.viewmodel.position.set(0.28, -0.26, -0.5);
     camera.position.set(this.position.x, this.position.y + EYE_HEIGHT, this.position.z);
     camera.rotation.set(this.pitch, this.yaw, 0, 'YXZ');
+
+    // on-kill build mechanics (skill-gated; all read live off the trees)
+    bus.on('kill', (p) => {
+      if (this.downed || !this.alive) return;
+      // Blood-Soaked Plating: kills refill the shield, health pays the fee
+      if (statsys.bonus('bloodSoaked') > 0 && state.shield && this.shield < this.maxShield) {
+        this.shield = this.maxShield;
+        this.flesh = Math.max(1, this.flesh - this.maxFlesh * 0.02);
+      }
+      // Sweet Release: kills while the action skill is live heal you
+      const reaper = statsys.bonus('reaper');
+      if (reaper > 0 && actionSkill.activeCount > 0) this.heal(this.maxFlesh * reaper);
+      // Thrill of the Kill: overkill comes back as dinner
+      const thrill = statsys.bonus('thrillKill');
+      if (thrill > 0 && p.overkill > 0) this.heal(Math.min(p.overkill * thrill, this.maxFlesh * 0.25));
+    });
   }
 
   // ------------------------------------------------------------------ input
@@ -236,8 +254,19 @@ export class Player implements Damageable {
     if (hadShield && this.shield <= 0 && sh?.special?.id === 'nova') {
       splashDamage(this.position.clone(), 5, sh.special.power, 'blast', { source: 'player' });
     }
+    // Salt the Wound: every hit taken files a receipt (cleared on full shield)
+    if (statsys.rawBonus('saltWound') > 0) statsys.addStack('salt', 1, 20);
     if (this.flesh > 0 && this.flesh < this.maxFlesh * 0.35) playerVoice.onBigHurt();
-    if (this.flesh <= 0 && !this.downed) this.enterDowned();
+    if (this.flesh <= 0 && !this.downed) {
+      // Foreman's Grit: a chance to flat-out ignore the hit that would drop you
+      if (Math.random() < statsys.bonus('grit')) {
+        this.flesh = 1;
+        fx.burst(this.position.clone().add(new THREE.Vector3(0, 1.2, 0)), 0xffd23c, 18, 4, 0.12, 0.6, 4);
+        audio.secondWind();
+      } else {
+        this.enterDowned();
+      }
+    }
   }
 
   onDeath(): void {
@@ -398,6 +427,12 @@ export class Player implements Damageable {
       }
     }
     statsys.roidBonus = sh?.special?.id === 'berserk' && this.shield <= 0 ? sh.special.power / 100 : 0;
+    // build-mechanic bookkeeping: Fleet reads bare shields, Salt clears on a
+    // full recharge, Sustenance drips health back
+    statsys.shieldsDown = this.shield <= 0.01;
+    if (this.shield >= this.maxShield - 0.01 && statsys.stackCount('salt') > 0) statsys.clearStacks('salt');
+    const regen = statsys.bonus('regen');
+    if (regen > 0 && !this.downed) this.heal(this.maxFlesh * regen * dt);
 
     if (this.downed) {
       this.downedT += dt;
@@ -686,7 +721,9 @@ export class Player implements Damageable {
       this.focusHeat = Math.min(4, this.focusHeat + 0.5);
     }
     this.fireHeat = Math.min(4, this.fireHeat + 0.6);
-    const spreadDeg = (100 - acc) * 0.05 * (1 - this.adsAmount * 0.5) * (this.grounded ? 1 : 1.6);
+    // Scrap Anarchy widens the cone — power has a tax and this is it
+    const bloom = 1 + statsys.bonus('bloom');
+    const spreadDeg = (100 - acc) * 0.05 * (1 - this.adsAmount * 0.5) * (this.grounded ? 1 : 1.6) * bloom;
     this.lastSpreadDeg = spreadDeg + this.fireHeat * 0.4;
 
     const dmgMult = statsys.mult('gunDamage')
@@ -702,6 +739,9 @@ export class Player implements Damageable {
       dmg += this.overkillBank;
       this.overkillBank = 0;
     }
+    // Money Shot: the LAST round in the mag hits like it owes you money
+    const moneyShot = statsys.bonus('moneyShot');
+    if (moneyShot > 0 && this.magazine <= 0) dmg *= 1 + moneyShot;
     const sh = state.shield;
     if (sh?.special?.id === 'amp' && this.shield >= this.maxShield * 0.98) dmg += sh.special.power;
 
@@ -755,6 +795,20 @@ export class Player implements Damageable {
         source: 'player',
       });
       fx.impact(hit.point, w.element);
+      // Drill Rounds: bore through the first body into the one behind it
+      if (hit.enemy && statsys.bonus('drillRounds') > 0) {
+        const ray2 = new THREE.Raycaster(hit.point.clone().addScaledVector(dir, 0.8), dir, 0.1, 60);
+        const hit2 = this.raycastTargets(ray2);
+        if (hit2?.enemy && hit2.enemy !== hit.enemy) {
+          applyDamage(hit2.target, dmg * 0.6, w.element, {
+            crit: hit2.isCrit, critMult: this.currentCritMult,
+            elemChance: w.stats.elemChance, elemDps: w.stats.elemDps * statsys.mult('elemDamage'),
+            source: 'player',
+          });
+          fx.tracer(hit.point, hit2.point, 0xffe8b0);
+          fx.impact(hit2.point, w.element);
+        }
+      }
       if (hit.enemy) this.afterHit(w, hit.enemy, hit.point, dmg, dealt, hit.isCrit, leg);
       else {
         document.getElementById('hitmarker')?.classList.add('show');
@@ -782,6 +836,19 @@ export class Player implements Damageable {
 
     if (isCrit) state.recordGrit('crit');
     if (leg?.effect.kind === 'vampire') this.heal(dealt * leg.effect.leech);
+    // Life Tap: while the kill-skill buff runs, your shots feed you
+    const lifesteal = statsys.bonus('lifesteal');
+    if (lifesteal > 0) this.heal(dealt * lifesteal);
+    // The Nth Degree: every 7th connecting bullet ricochets onward
+    if (statsys.bonus('nthDegree') > 0 && ++this.nthCounter >= 7) {
+      this.nthCounter = 0;
+      const others = enemySpawner.enemies.filter((e) => e.alive && e !== enemy && e.position.distanceTo(enemy.position) < 16);
+      if (others.length) {
+        const next = others[Math.floor(Math.random() * others.length)];
+        fx.tracer(point, next.position.clone().add(new THREE.Vector3(0, 1.2, 0)), 0xffb43c);
+        applyDamage(next, dmg * 0.5, w.element, { source: 'player' });
+      }
+    }
 
     if (leg?.effect.kind === 'echo_round') {
       const delay = leg.effect.delay * 1000;
@@ -877,6 +944,7 @@ export class Player implements Damageable {
       if (reserve <= 0 && this.magazine <= 0) audio.dryFire();
       return;
     }
+    this.reloadWasEmpty = this.magazine <= 0;
     const maker = makerById(w.maker);
     if (maker.gimmick === 'throw_reload') {
       this.throwGunReload(w);
@@ -914,6 +982,8 @@ export class Player implements Damageable {
     this.reloadT = -1;
     this.resetReloadProps();
     if (!w) return;
+    // Scrap Anarchy: a bone-dry reload feeds the pile (the classic rule)
+    if (this.reloadWasEmpty) { statsys.onEmptyReload(); this.reloadWasEmpty = false; }
     const reserve = state.ammo.get(w.type) ?? 0;
     const magMax = Math.round(w.stats.magSize * statsys.mult('magSize'));
     const need = magMax - this.magazine;
