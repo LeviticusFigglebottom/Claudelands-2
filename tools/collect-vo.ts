@@ -113,6 +113,13 @@ const THUG_TAGS: Record<string, string> = {
   'EXPOSEEEE ME! EXPOSEEEE ME!!': 'desperate dramatic wailing scream, drawn out',
   'I\u2019M GOONING IN MY FUCKING PISS BRO!!': 'unhinged overwhelmed screaming',
   'Enemy? Dead. Balloon knot? Heh\u2026 bred.': 'smug self-satisfied one-liner with a low chuckle',
+  'AMBATUKAM!! OMAYGOT!!': 'ecstatic screaming, drawn out syllables',
+  'BUS. BUS. BUS!! I\u2019M BUSSIN\u2019!!': 'rapid urgent chanting building to a scream',
+  'YES KING!! YEEES KING!!': 'enthusiastic submissive hollering, drawn out',
+  'WHO MADE THAT MESS? YOU MADE THAT MESS!!': 'call-and-response shouting, accusatory then delighted',
+  'GET ME PREGNANT!!': 'desperate dramatic screaming',
+  'OH MY GOD!! OH MY GOOOOD!!': 'overwhelmed ecstatic screaming, second one longer',
+  'CAN I CUM? CAN I CUM?! PLEASE!!': 'begging escalating to a wail',
 };
 for (const line of THUG_LINES) add('thug', line, line, THUG_TAGS[line] ?? 'screaming, ecstatic');
 

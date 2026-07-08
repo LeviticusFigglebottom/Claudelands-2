@@ -117,6 +117,7 @@ export class Enemy implements Damageable {
   private peekPos: THREE.Vector3 | null = null;
   private peekCycles = 0;
   private coverCooldown = 0;
+  private stuckT = 0;
   private grenadeT = 5 + Math.random() * 7;
   private crouchK = 0;
   private noLosT = 0;
@@ -667,18 +668,49 @@ export class Enemy implements Damageable {
     this.settleToGround(true);
   }
 
-  /** Move along dir, refusing steep uphill (ridge walls). Flyers ignore. */
-  protected moveBlocked(dir: THREE.Vector3, dist: number): void {
+  /** Body radius for prop collision — big enemies get big shoulders. */
+  protected get bodyRadius(): number {
+    return Math.min(1.5, Math.max(0.5, 0.55 * this.def.scale));
+  }
+
+  /** Move along dir, refusing steep uphill (ridge walls) and SLIDING along
+   *  prop colliders instead of grinding into (or morphing through) them.
+   *  Substepped so thin walls can't be tunneled. Returns true if any real
+   *  progress happened — tactics use this to notice they're stuck. */
+  protected moveBlocked(dir: THREE.Vector3, dist: number): boolean {
     if (this.def.behavior === 'flyer') {
       this.position.addScaledVector(dir, dist);
-      return;
+      return true;
     }
-    const hBefore = terrainHeight(this.position.x, this.position.z);
-    const nx = this.position.x + dir.x * dist, nz = this.position.z + dir.z * dist;
-    if (terrainHeight(nx, nz) - hBefore > dist * 1.1) return;
-    this.position.x = nx;
-    this.position.z = nz;
-    hooks.resolveCollision?.(this.position, 0.6);
+    const r = this.bodyRadius;
+    const steps = Math.max(1, Math.ceil(dist / 0.3));
+    const step = dist / steps;
+    let moved = false;
+    for (let i = 0; i < steps; i++) {
+      const sx = this.position.x, sz = this.position.z;
+      const h0 = terrainHeight(sx, sz);
+      const nx = sx + dir.x * step, nz = sz + dir.z * step;
+      if (terrainHeight(nx, nz) - h0 > step * 1.1) break; // ridge wall
+      this.position.x = nx;
+      this.position.z = nz;
+      hooks.resolveCollision?.(this.position, r);
+      if (Math.hypot(this.position.x - sx, this.position.z - sz) < step * 0.35) {
+        // a prop ate the move: slide along whichever axis still works
+        this.position.x = sx; this.position.z = sz;
+        let slid = false;
+        for (const [ax, az] of [[dir.x, 0], [0, dir.z]] as const) {
+          if (Math.abs(ax) + Math.abs(az) < 1e-4) continue;
+          this.position.x = sx + ax * step;
+          this.position.z = sz + az * step;
+          hooks.resolveCollision?.(this.position, r);
+          if (Math.hypot(this.position.x - sx, this.position.z - sz) >= step * 0.3) { slid = true; break; }
+          this.position.x = sx; this.position.z = sz;
+        }
+        if (!slid) return moved;
+      }
+      moved = true;
+    }
+    return moved;
   }
 
   protected settleToGround(moving = false): void {
@@ -828,7 +860,8 @@ export class Enemy implements Damageable {
         // orbit with a gentle correction back into the band
         const radial = dist > engage * 0.85 ? 0.45 : dist < engage * 0.45 ? -0.55 : 0;
         const move = side.add(dir.multiplyScalar(radial)).normalize();
-        this.moveBlocked(move, speed * 0.8 * dt);
+        // strafing into a wall reverses the orbit instead of treadmilling
+        if (!this.moveBlocked(move, speed * 0.8 * dt)) { this.strafeSign *= -1; this.tacticT = Math.max(this.tacticT, 0.8); }
         this.settleToGround(true);
         if (!los && this.noLosT > 1.4) { this.tactic = 'advance'; this.tacticT = 0.6; }
         break;
@@ -839,8 +872,20 @@ export class Enemy implements Damageable {
         if (to.length() < 1.1) {
           this.tactic = 'hold';
           this.tacticT = 1 + Math.random() * 1.2;
+          this.stuckT = 0;
         } else {
-          this.moveBlocked(to.normalize(), speed * 1.15 * dt);
+          const progressed = this.moveBlocked(to.normalize(), speed * 1.15 * dt);
+          this.stuckT = progressed ? 0 : this.stuckT + dt;
+          if (this.stuckT > 0.7) {
+            // the route is a wall — abandon the spot instead of moonwalking
+            // into a shed, and shop for a different one soon
+            this.stuckT = 0;
+            this.coverPos = null;
+            this.tactic = 'strafe';
+            this.tacticT = 0.8 + Math.random();
+            this.coverCooldown = Math.min(this.coverCooldown, 2);
+            break;
+          }
           this.settleToGround(true);
           this.group.rotation.y = Math.atan2(to.x, to.z) + Math.PI; // face the run
         }
@@ -1181,6 +1226,28 @@ export class EnemySpawner {
     }
 
     for (const e of this.enemies) e.update(dt);
+    // separation: a squad is scarier when it isn't a single occupied pixel —
+    // grounded enemies shoulder each other apart instead of stacking
+    for (let i = 0; i < this.enemies.length; i++) {
+      const a = this.enemies[i];
+      if (!a.alive || a.def.behavior === 'flyer') continue;
+      for (let j = i + 1; j < this.enemies.length; j++) {
+        const b = this.enemies[j];
+        if (!b.alive || b.def.behavior === 'flyer') continue;
+        const dx = b.position.x - a.position.x, dz = b.position.z - a.position.z;
+        const d = Math.hypot(dx, dz);
+        const want = 1.15 * ((a.def.scale + b.def.scale) / 2);
+        if (d > 1e-4 && d < want) {
+          const push = (want - d) * 0.5;
+          const ux = dx / d, uz = dz / d;
+          a.position.x -= ux * push; a.position.z -= uz * push;
+          b.position.x += ux * push; b.position.z += uz * push;
+          // a shoulder-check must not shove anyone through a shed
+          hooks.resolveCollision?.(a.position, 0.5);
+          hooks.resolveCollision?.(b.position, 0.5);
+        }
+      }
+    }
     this.enemies = this.enemies.filter((e) => {
       if (!e.alive) this.scene.remove(e.group);
       return e.alive;

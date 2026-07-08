@@ -5,6 +5,7 @@
 
 import { bus } from './state';
 import { voice, voiceOf } from '../audio/voice';
+import { voClip } from '../audio/vo';
 import { PLAYER_LINES, THUG_LINES } from '../data/playerlines';
 import { PLAYER_CLASS } from '../data/classes';
 import { pick } from '../util/rng';
@@ -68,9 +69,13 @@ class PlayerVoice {
     if (voice.speaking) return false; // never talk over story dialogue
     trig.last = this.t;
     this.globalGap = 2.5;
-    // THUG MODE: one glorious pool, every trigger, maximum volume
+    // THUG MODE: one glorious pool, every trigger, maximum volume.
+    // RECORDED takes only when the bake is loaded — the synth fallback
+    // reads as a text-to-speech warble, which defeats the entire bit.
     if (prefs().thugMode) {
-      voice.speak(pick(Math.random as never, THUG_LINES), voiceOf('thug'));
+      const prof = voiceOf('thug');
+      const voiced = THUG_LINES.filter((l) => voClip(prof.id, l));
+      voice.speak(pick(Math.random as never, voiced.length ? voiced : THUG_LINES), prof);
       return true;
     }
     voice.speak(pick(Math.random as never, lines), voiceOf(set.voiceId));

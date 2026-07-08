@@ -173,6 +173,9 @@ setEnemyHooks({
   playerPos: () => player.position,
   damagePlayer: (amount, element, from) => player.damage(amount * coopEnemyScale().dmg, element, from),
   groundHeight: (x, z) => world.groundHeight(x, z),
+  // walls are load-bearing for enemies too — without this they morph
+  // straight through sheds on their way to cover
+  resolveCollision: (pos, radius) => world.resolveCollision(pos, radius),
   tauntTarget: () => actionSkill.tauntTarget(),
   bark,
   hasLOS: (from, to) => {

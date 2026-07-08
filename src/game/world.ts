@@ -6115,7 +6115,17 @@ export class World {
         pos.x = nx + (dx / d) * radius;
         pos.z = nz + (dz / d) * radius;
       } else if (d2 <= 1e-6) {
-        pos.x = c.maxX + radius;
+        // center is INSIDE the box: exit through the NEAREST face — always
+        // dumping to +x teleported bodies through thin walls
+        const exits = [
+          { d: pos.x - c.minX, x: c.minX - radius, z: pos.z },
+          { d: c.maxX - pos.x, x: c.maxX + radius, z: pos.z },
+          { d: pos.z - c.minZ, x: pos.x, z: c.minZ - radius },
+          { d: c.maxZ - pos.z, x: pos.x, z: c.maxZ - radius },
+        ];
+        exits.sort((a, b) => a.d - b.d);
+        pos.x = exits[0].x;
+        pos.z = exits[0].z;
       }
     }
   }
