@@ -100,14 +100,54 @@ export class World {
   private raycaster = new THREE.Raycaster();
 
   constructor(scene: THREE.Scene) {
+    // GP maps race down the corridor floor: the centerline is a keep-out
+    // for anything solid, and the shoulders get race dressing
+    this.raceLine = WORLD.id.endsWith('_gp') && WORLD.terrain.corridor ? WORLD.terrain.corridor.pts : null;
     this.buildSky(scene);
     this.buildTerrain();
     this.buildDistricts();
     this.buildPois();
+    this.buildCharm();
+    if (this.raceLine) this.buildRaceDecor();
     this.buildCanyonRing();
     this.buildScatter();
     this.buildCritters();
     scene.add(this.group);
+  }
+
+  /** The active race centerline (GP maps only) — solid props keep off it. */
+  private raceLine: { x: number; z: number }[] | null = null;
+
+  /** Closest point on the racing line; d = Infinity when no race here. */
+  private trackClosest(x: number, z: number): { d: number; px: number; pz: number; nx: number; nz: number } {
+    const pts = this.raceLine;
+    if (!pts) return { d: Infinity, px: 0, pz: 0, nx: 0, nz: 0 };
+    let best = Infinity, px = 0, pz = 0, nx = 0, nz = 1;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz)));
+      const cx = a.x + dx * t, cz = a.z + dz * t;
+      const d = Math.hypot(x - cx, z - cz);
+      if (d < best) {
+        best = d; px = cx; pz = cz;
+        const len = Math.hypot(dx, dz) || 1;
+        nx = -dz / len; nz = dx / len; // segment normal, for degenerate pushes
+      }
+    }
+    return { d: best, px, pz, nx, nz };
+  }
+
+  private trackDist(x: number, z: number): number { return this.trackClosest(x, z).d; }
+
+  /** Race maps: shove a POI perpendicular off the racing line to a safe
+   *  shoulder — rods still shelter the track without standing in it. */
+  private offTrack<T extends { x: number; z: number }>(poi: T, min: number): T {
+    const c = this.trackClosest(poi.x, poi.z);
+    if (c.d >= min || !isFinite(c.d)) return poi;
+    let nx = c.nx, nz = c.nz;
+    if (c.d > 0.01) { nx = (poi.x - c.px) / c.d; nz = (poi.z - c.pz) / c.d; }
+    return { ...poi, x: c.px + nx * min, z: c.pz + nz * min };
   }
 
   /** Tear down for a map switch: remove everything this world added. */
@@ -468,6 +508,682 @@ export class World {
     this.group.add(tufts);
   }
 
+  // ---------------------------------------------------------------- race decor
+
+  /** GP tracks: make the ribbon READABLE at 47 scrap-klicks — glow studs
+   *  down both shoulders and chevron boards leaning into every bend. */
+  private buildRaceDecor(): void {
+    const pts = this.raceLine!;
+    const studGeo = new THREE.SphereGeometry(0.24, 6, 6);
+    const studL = glowMat(0xffd23c, 0.85);
+    const studR = glowMat(0x54d4ff, 0.85);
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const len = Math.hypot(dx, dz) || 1;
+      const nx = -dz / len, nz = dx / len;
+      const steps = Math.max(1, Math.floor(len / 14));
+      for (let s = 0; s < steps; s++) {
+        const t = (s + 0.5) / steps;
+        const x = a.x + dx * t, z = a.z + dz * t;
+        for (const side of [-1, 1] as const) {
+          const sx = x + nx * 12.5 * side, sz = z + nz * 12.5 * side;
+          const stud = new THREE.Mesh(studGeo, side < 0 ? studL : studR);
+          stud.position.set(sx, terrainHeight(sx, sz) + 0.26, sz);
+          this.group.add(stud);
+        }
+      }
+    }
+    // chevron boards on the OUTSIDE of each bend, facing the incoming leg
+    for (let i = 1; i + 1 < pts.length; i++) {
+      const p0 = pts[i - 1], p1 = pts[i], p2 = pts[i + 1];
+      const inX = p1.x - p0.x, inZ = p1.z - p0.z;
+      const outX = p2.x - p1.x, outZ = p2.z - p1.z;
+      const cross = inX * outZ - inZ * outX;
+      if (Math.abs(cross) < 40) continue; // basically straight — no board
+      const inLen = Math.hypot(inX, inZ) || 1;
+      let nx = -inZ / inLen, nz = inX / inLen; // left of travel
+      if (cross > 0) { nx = -nx; nz = -nz; }   // outside = away from the turn
+      const bx = p1.x + nx * 13.5, bz = p1.z + nz * 13.5;
+      const by = terrainHeight(bx, bz);
+      // chevrons point INTO the turn (screen-left when the track bends left)
+      const glyph = cross > 0 ? '◀◀◀' : '▶▶▶';
+      const tex = posterTexture({ lines: [glyph], style: 'warning', bg: '#b4321e', fg: '#f4ead8', accent: '#f4ead8' }, 2.2);
+      const board = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.6),
+        new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+      board.position.set(bx, by + 1.7, bz);
+      board.rotation.y = Math.atan2(-inX, -inZ);
+      this.group.add(board);
+      const legMat = toonMat({ color: 0x3a3a42 });
+      for (const s of [-1.4, 1.4]) {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.8, 5), legMat);
+        leg.position.set(bx + Math.cos(board.rotation.y) * s, by + 0.9, bz - Math.sin(board.rotation.y) * s);
+        this.group.add(leg);
+      }
+      this.addCollider(bx, bz, 0.5, 0.5, 3);
+    }
+  }
+
+  // --------------------------------------------------------------- map charm
+  // Little lived-in touches, keyed per map — nothing quest-critical, just
+  // proof that somebody's day keeps happening when the player looks away.
+
+  private buildCharm(): void {
+    const rng = mulberry32(350035);
+    switch (WORLD.id) {
+      case 'claudelands': {
+        const hub = WORLD.districts.find((d) => d.dress === 'hub');
+        if (!hub) break;
+        this.laundryLine(hub.cx - 16, hub.cz + 8, hub.cx - 8, hub.cz + 13, rng);
+        this.laundryLine(hub.cx + 10, hub.cz - 14, hub.cx + 17, hub.cz - 9, rng);
+        this.scrapWindmill(hub.cx + 27, hub.cz + 17);
+        this.hubcapShrine(hub.cx - 22, hub.cz - 15);
+        break;
+      }
+      case 'frosthollow': {
+        const lake = WORLD.terrain.lake;
+        if (lake) this.iceCamp(lake.x + lake.r * 0.35, lake.z + lake.r * 0.2);
+        const hub = WORLD.districts.find((d) => d.dress === 'frosthub');
+        if (hub) {
+          this.snowman(hub.cx + 14, hub.cz + 12, rng);
+          for (const [ox, oz] of [[-8, -6], [6, 4], [12, -10]] as const) {
+            this.smokePlume(hub.cx + ox, hub.cz + oz);
+          }
+        }
+        break;
+      }
+      case 'cinderthroat': {
+        const kiln = WORLD.districts.find((d) => d.dress === 'kilnyard');
+        if (!kiln) break;
+        for (let i = 0; i < 3; i++) {
+          const a = rng() * Math.PI * 2, r = 10 + rng() * (kiln.radius * 0.45);
+          const x = kiln.cx + Math.cos(a) * r, z = kiln.cz + Math.sin(a) * r;
+          if (this.clearOfAssets(x, z, 2.4)) this.kilnMound(x, z, rng);
+        }
+        this.ingotStack(kiln.cx - 12, kiln.cz + 8);
+        this.ingotStack(kiln.cx + 9, kiln.cz - 11);
+        break;
+      }
+      case 'brasshaven': {
+        const plaza = WORLD.districts.find((d) => d.dress === 'brassplaza');
+        if (!plaza) break;
+        this.bunting(plaza.cx - 14, plaza.cz - 6, plaza.cx + 12, plaza.cz - 2, rng);
+        this.bunting(plaza.cx - 10, plaza.cz + 10, plaza.cx + 14, plaza.cz + 6, rng);
+        this.marketBarrow(plaza.cx + 16, plaza.cz + 12, rng);
+        this.marketBarrow(plaza.cx - 18, plaza.cz + 14, rng);
+        break;
+      }
+      case 'rustgulch': {
+        const pit = WORLD.districts.find((d) => d.dress === 'gulchgate');
+        if (!pit) break;
+        this.drumFire(pit.cx - 16, pit.cz + 18);
+        this.drumFire(pit.cx + 18, pit.cz + 20);
+        this.drumFire(pit.cx + 2, pit.cz + 34);
+        break;
+      }
+      case 'veldt': {
+        const port = WORLD.districts.find((d) => d.dress === 'porttown');
+        if (!port) break;
+        for (const [ox, oz] of [[-12, 14], [-4, 18], [6, 17], [14, 12]] as const) {
+          const x = port.cx + ox, z = port.cz + oz;
+          if (this.flatEnough(x, z, 1.2, 1.2)) this.tikiTorch(x, z);
+        }
+        this.fishRack(port.cx + 18, port.cz - 4);
+        break;
+      }
+      case 'veldt_shallows': {
+        const lake = WORLD.terrain.lake;
+        if (lake) {
+          for (let i = 0; i < 4; i++) {
+            const a = rng() * Math.PI * 2, r = lake.r * (0.3 + rng() * 0.4);
+            this.buoy(lake.x + Math.cos(a) * r, lake.z + Math.sin(a) * r, lake.level + 0.2);
+          }
+        }
+        const anch = WORLD.districts.find((d) => d.dress === 'anchorage');
+        if (anch) {
+          this.rowboat(anch.cx + 15, anch.cz + 10, rng() * Math.PI);
+          this.netSpool(anch.cx - 12, anch.cz + 8);
+        }
+        break;
+      }
+      case 'veldt_caves': {
+        const mouth = WORLD.districts.find((d) => d.dress === 'cavemouth');
+        if (mouth) {
+          for (let i = 0; i < 5; i++) {
+            const a = rng() * Math.PI * 2, r = 8 + rng() * (mouth.radius * 0.5);
+            const x = mouth.cx + Math.cos(a) * r, z = mouth.cz + Math.sin(a) * r;
+            if (this.clearOfAssets(x, z, 1.4)) this.mushroomCluster(x, z, rng);
+          }
+          this.minecart(mouth.cx - 10, mouth.cz - 8, rng() * Math.PI);
+        }
+        break;
+      }
+      case 'vitra': {
+        const chime = WORLD.districts.find((d) => d.dress === 'chimefield');
+        if (chime) {
+          this.glassChimes(chime.cx + 10, chime.cz - 8, rng);
+          this.glassChimes(chime.cx - 12, chime.cz + 10, rng);
+          this.stargazerCamp(chime.cx - 4, chime.cz + 18);
+        }
+        break;
+      }
+      case 'voltholm': {
+        const jar = WORLD.districts.find((d) => d.dress === 'jarworks');
+        if (jar) {
+          this.jarRack(jar.cx + 20, jar.cz + 6, rng);
+          this.jarRack(jar.cx - 22, jar.cz + 2, rng);
+          this.weathervane(jar.cx + 8, jar.cz + 22);
+          this.weathervane(jar.cx - 10, jar.cz - 18);
+        }
+        break;
+      }
+    }
+  }
+
+  /** Two poles, a sagging line, somebody's wash drying over the alley. */
+  private laundryLine(x1: number, z1: number, x2: number, z2: number, rng: Rng): void {
+    const poleMat = toonMat({ color: 0x5a4a3a, map: swatch('#4e3f30', 50) });
+    const y1 = terrainHeight(x1, z1), y2 = terrainHeight(x2, z2);
+    for (const [x, z, y] of [[x1, z1, y1], [x2, z2, y2]] as const) {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 3.2, 5), poleMat);
+      pole.position.set(x, y + 1.6, z);
+      this.group.add(pole);
+    }
+    const top1 = new THREE.Vector3(x1, y1 + 3.0, z1), top2 = new THREE.Vector3(x2, y2 + 3.0, z2);
+    for (let b = 1; b < 9; b++) {
+      const t = b / 9;
+      const bead = new THREE.Mesh(new THREE.SphereGeometry(0.035, 4, 4), toonMat({ color: 0x2a2622 }));
+      bead.position.lerpVectors(top1, top2, t);
+      bead.position.y -= Math.sin(t * Math.PI) * 0.5;
+      this.group.add(bead);
+    }
+    const colors = [0xb4543a, 0x5a7a9a, 0xc8b464, 0x7a9a5a];
+    for (let i = 0; i < 3 + Math.floor(rng() * 2); i++) {
+      const t = 0.18 + i * 0.22 + rng() * 0.06;
+      const cloth = new THREE.Mesh(new THREE.PlaneGeometry(0.7 + rng() * 0.5, 0.8 + rng() * 0.4),
+        new THREE.MeshToonMaterial({ color: colors[i % colors.length], side: THREE.DoubleSide }));
+      cloth.position.lerpVectors(top1, top2, t);
+      cloth.position.y -= Math.sin(t * Math.PI) * 0.5 + 0.45;
+      cloth.rotation.y = Math.atan2(x2 - x1, z2 - z1) + Math.PI / 2;
+      cloth.rotation.x = (rng() - 0.5) * 0.15;
+      this.group.add(cloth);
+    }
+  }
+
+  /** A scrap windmill that still turns water nobody remembers plumbing. */
+  private scrapWindmill(x: number, z: number): void {
+    const y = terrainHeight(x, z);
+    const g = new THREE.Group();
+    const frameMat = toonMat({ color: 0x6a5a4a, map: corrugatedTexture('#5e5040') });
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.4, 8, 6), frameMat);
+    mast.position.y = 4;
+    g.add(mast);
+    const hub = new THREE.Mesh(new THREE.SphereGeometry(0.3, 6, 6), toonMat({ color: 0x3a3a42 }));
+    hub.position.set(0, 8, -0.4);
+    g.add(hub);
+    for (let i = 0; i < 4; i++) {
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.5, 3.2, 0.06), frameMat);
+      blade.position.set(0, 8, -0.5);
+      blade.rotation.z = (i / 4) * Math.PI * 2 + 0.4;
+      blade.translateY(1.8);
+      g.add(blade);
+    }
+    const vane = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.8, 1.4), frameMat);
+    vane.position.set(0, 7.6, 1.2);
+    g.add(vane);
+    g.position.set(x, y, z);
+    g.traverse((o) => (o.castShadow = true));
+    this.group.add(g);
+    this.staticTargets.push(g);
+    this.addCollider(x, z, 0.5, 0.5, 8);
+  }
+
+  /** Roadside shrine of polished hubcaps — the gulch prays to horsepower. */
+  private hubcapShrine(x: number, z: number): void {
+    const y = terrainHeight(x, z);
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.3, 2.6, 0.2), toonMat({ color: 0x4e3f30, map: swatch('#443626', 50) }));
+    post.position.set(x, y + 1.3, z);
+    this.group.add(post);
+    const capMat = toonMat({ color: 0xb8bcc4, map: swatch('#a8acb4', 80) });
+    for (const [oy, s] of [[2.2, 0.42], [1.5, 0.3], [0.9, 0.24]] as const) {
+      const cap = new THREE.Mesh(new THREE.CircleGeometry(s, 10), capMat);
+      cap.position.set(x, y + oy, z + 0.12);
+      this.group.add(cap);
+    }
+    for (let i = 0; i < 3; i++) {
+      const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.16, 5), toonMat({ color: 0xe8e0c8 }));
+      candle.position.set(x - 0.3 + i * 0.3, y + 0.08, z + 0.4);
+      this.group.add(candle);
+      const flame = new THREE.Mesh(new THREE.SphereGeometry(0.04, 4, 4), glowMat(0xffb84a, 0.95));
+      flame.position.set(candle.position.x, y + 0.2, candle.position.z);
+      flame.name = 'blinker';
+      this.group.add(flame);
+    }
+    this.addCollider(x, z, 0.4, 0.3, 2.6);
+  }
+
+  /** Chimney smoke standing over a hut — the day keeps happening inside.
+   *  Anchors to a real roof (nearest collider top): no roof, no smoke. */
+  private smokePlume(x: number, z: number): void {
+    let top = -Infinity;
+    for (const c of this.colliders) {
+      if (x > c.minX - 2 && x < c.maxX + 2 && z > c.minZ - 2 && z < c.maxZ + 2) top = Math.max(top, c.top);
+    }
+    if (!isFinite(top)) return;
+    const mat = new THREE.MeshToonMaterial({ color: 0xc8ccd4, transparent: true, opacity: 0.35 });
+    for (let i = 0; i < 4; i++) {
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(0.3 + i * 0.22, 6, 6), mat);
+      puff.position.set(x + i * 0.25, top + 0.3 + i * 0.9, z + (i % 2) * 0.2);
+      this.group.add(puff);
+    }
+  }
+
+  /** Ice-fishing camp: a dark hole, a stool, a lantern, endless patience. */
+  private iceCamp(x: number, z: number): void {
+    const y = terrainHeight(x, z);
+    const hole = new THREE.Mesh(new THREE.CircleGeometry(0.9, 12), new THREE.MeshBasicMaterial({ color: 0x0c1a26 }));
+    hole.rotation.x = -Math.PI / 2;
+    hole.position.set(x, y + 0.1, z);
+    this.group.add(hole);
+    const stool = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.5, 7), toonMat({ color: 0x5a4a3a }));
+    stool.position.set(x + 1.7, y + 0.25, z + 0.4);
+    this.group.add(stool);
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.035, 1.7, 4), toonMat({ color: 0x4e3f30 }));
+    rod.position.set(x + 0.9, y + 0.7, z + 0.2);
+    rod.rotation.z = 0.7;
+    this.group.add(rod);
+    const lantern = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 6), glowMat(0xffd88a, 0.95));
+    lantern.position.set(x + 2.1, y + 0.62, z - 0.4);
+    lantern.name = 'blinker';
+    this.group.add(lantern);
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.5), toonMat({ color: 0x6a5a4a, map: swatch('#5e5040', 50) }));
+    crate.position.set(x - 1.6, y + 0.25, z + 0.8);
+    this.group.add(crate);
+  }
+
+  /** Snowman. Coal eyes. Judging you. */
+  private snowman(x: number, z: number, rng: Rng): void {
+    const y = terrainHeight(x, z);
+    const snow = toonMat({ color: 0xf0f6fa });
+    for (const [oy, s] of [[0.55, 0.62], [1.35, 0.45], [1.95, 0.3]] as const) {
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(s, 8, 8), snow);
+      ball.position.set(x, y + oy, z);
+      this.group.add(ball);
+    }
+    for (const ox of [-0.1, 0.1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035, 4, 4), toonMat({ color: 0x181818 }));
+      eye.position.set(x + ox, y + 2.05, z - 0.27);
+      this.group.add(eye);
+    }
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.3, 5), toonMat({ color: 0xd88428 }));
+    nose.position.set(x, y + 1.95, z - 0.4);
+    nose.rotation.x = -Math.PI / 2;
+    this.group.add(nose);
+    for (const side of [-1, 1]) {
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, 0.9, 4), toonMat({ color: 0x4e3f30 }));
+      arm.position.set(x + side * 0.6, y + 1.45, z);
+      arm.rotation.z = side * (1.1 + rng() * 0.3);
+      this.group.add(arm);
+    }
+    this.addCollider(x, z, 0.55, 0.55, 2.2);
+  }
+
+  /** Charcoal kiln: an earthen dome venting embers through its seams. */
+  private kilnMound(x: number, z: number, rng: Rng): void {
+    const y = terrainHeight(x, z);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(1.7, 9, 7), toonMat({ color: 0x3a3230, map: rockTexture('#342c2a') }));
+    dome.position.set(x, y + 0.5, z);
+    dome.scale.y = 0.75;
+    this.group.add(dome);
+    this.staticTargets.push(dome);
+    for (let i = 0; i < 3; i++) {
+      const a = rng() * Math.PI * 2;
+      const seam = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 0.12), glowMat(0xff6a1a, 0.8));
+      seam.position.set(x + Math.cos(a) * 1.3, y + 0.9, z + Math.sin(a) * 1.3);
+      seam.name = 'blinker';
+      this.group.add(seam);
+    }
+    this.addCollider(x, z, 1.5, 1.5, 1.8);
+    this.smokePlume(x, z); // rides the kiln's own collider top
+  }
+
+  /** Cooling brass ingots stacked in a courses — the day shift's receipts. */
+  private ingotStack(x: number, z: number): void {
+    const y = terrainHeight(x, z);
+    const brass = toonMat({ color: 0xb08a3c, map: swatch('#9a7834', 70) });
+    for (let r = 0; r < 3; r++) {
+      for (let i = 0; i < 3 - r; i++) {
+        const ingot = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.28, 0.4), brass);
+        ingot.position.set(x + i * 0.85 + r * 0.42 - 0.85, y + 0.14 + r * 0.3, z + (r % 2) * 0.1);
+        this.group.add(ingot);
+      }
+    }
+    const glow = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.28, 0.4), glowMat(0xff8a3a, 0.6));
+    glow.position.set(x - 0.85, y + 0.14, z - 0.5);
+    this.group.add(glow);
+    this.addCollider(x, z, 1.4, 0.7, 1.2);
+  }
+
+  /** Festival bunting: little flags strung pole-to-pole over the plaza. */
+  private bunting(x1: number, z1: number, x2: number, z2: number, rng: Rng): void {
+    const poleMat = toonMat({ color: 0x8a6a3c, map: swatch('#7a5c32', 60) });
+    for (const [px, pz] of [[x1, z1], [x2, z2]] as const) {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 4.6, 6), poleMat);
+      pole.position.set(px, terrainHeight(px, pz) + 2.3, pz);
+      this.group.add(pole);
+      const finial = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 6), toonMat({ color: 0xd8b44a }));
+      finial.position.set(px, terrainHeight(px, pz) + 4.65, pz);
+      this.group.add(finial);
+    }
+    const y1 = terrainHeight(x1, z1) + 4.4, y2 = terrainHeight(x2, z2) + 4.4;
+    const a = new THREE.Vector3(x1, y1, z1), b = new THREE.Vector3(x2, y2, z2);
+    const colors = [0xd88428, 0x54d4ff, 0xc06bff, 0xc8d24a, 0xb4543a];
+    const n = 11;
+    for (let i = 1; i < n; i++) {
+      const t = i / n;
+      const flag = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.42, 3),
+        new THREE.MeshToonMaterial({ color: colors[i % colors.length], side: THREE.DoubleSide }));
+      flag.position.lerpVectors(a, b, t);
+      flag.position.y -= Math.sin(t * Math.PI) * 1.0 + 0.2;
+      flag.rotation.x = Math.PI; // point down
+      flag.rotation.y = rng() * 0.6;
+      this.group.add(flag);
+    }
+  }
+
+  /** A market barrow parked mid-errand: two wheels, awning, produce. */
+  private marketBarrow(x: number, z: number, rng: Rng): void {
+    const y = terrainHeight(x, z);
+    const g = new THREE.Group();
+    const wood = toonMat({ color: 0x8a6a4a, map: swatch('#7a5c3e', 50) });
+    const bed = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.3, 1.1), wood);
+    bed.position.y = 0.7;
+    g.add(bed);
+    for (const side of [-1, 1]) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.1, 10), toonMat({ color: 0x3a3a42 }));
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(side * 0.95, 0.4, 0);
+      g.add(wheel);
+    }
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.4, 4), wood);
+    post.position.set(-0.7, 1.5, -0.4);
+    g.add(post);
+    const awning = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.2),
+      new THREE.MeshToonMaterial({ color: 0xb4543a, side: THREE.DoubleSide }));
+    awning.position.set(0, 2.15, -0.1);
+    awning.rotation.x = -1.25;
+    g.add(awning);
+    const produce = [0xd88428, 0xc8d24a, 0xb4543a];
+    for (let i = 0; i < 7; i++) {
+      const fruit = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 6), toonMat({ color: produce[i % 3] }));
+      fruit.position.set((rng() - 0.5) * 1.4, 0.95, (rng() - 0.5) * 0.8);
+      g.add(fruit);
+    }
+    g.position.set(x, y, z);
+    g.rotation.y = rng() * Math.PI * 2;
+    g.traverse((o) => (o.castShadow = true));
+    this.group.add(g);
+    this.staticTargets.push(g);
+    this.addCollider(x, z, 1.1, 0.8, 1.6);
+  }
+
+  /** Oil-drum fire: pit row's central heating. */
+  private drumFire(x: number, z: number): void {
+    const y = terrainHeight(x, z);
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.95, 10), toonMat({ color: 0x6a4a3a, map: corrugatedTexture('#5e4030') }));
+    drum.position.set(x, y + 0.48, z);
+    this.group.add(drum);
+    this.staticTargets.push(drum);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.7, 6), glowMat(0xff8a3a, 0.9));
+    flame.position.set(x, y + 1.25, z);
+    flame.name = 'blinker';
+    this.group.add(flame);
+    this.addCollider(x, z, 0.5, 0.5, 1.2);
+    this.barrelFlames.push(new THREE.Vector3(x, y + 1.1, z));
+  }
+
+  /** Tiki torch: the port's boardwalk lighting budget. */
+  private tikiTorch(x: number, z: number): void {
+    const y = terrainHeight(x, z);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 2.2, 5), toonMat({ color: 0x6a5030, map: swatch('#5e4628', 50) }));
+    pole.position.set(x, y + 1.1, z);
+    this.group.add(pole);
+    const head = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.1, 0.3, 6), toonMat({ color: 0x8a6a4a }));
+    head.position.set(x, y + 2.3, z);
+    this.group.add(head);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.4, 5), glowMat(0xffb84a, 0.95));
+    flame.position.set(x, y + 2.6, z);
+    flame.name = 'blinker';
+    this.group.add(flame);
+    this.barrelFlames.push(new THREE.Vector3(x, y + 2.5, z));
+  }
+
+  /** Fish drying rack — the catch, publicly audited by seabirds. */
+  private fishRack(x: number, z: number): void {
+    const y = terrainHeight(x, z);
+    const wood = toonMat({ color: 0x6a5030, map: swatch('#5e4628', 50) });
+    for (const ox of [-1.1, 1.1]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 1.8, 5), wood);
+      post.position.set(x + ox, y + 0.9, z);
+      this.group.add(post);
+    }
+    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.3, 4), wood);
+    rail.rotation.z = Math.PI / 2;
+    rail.position.set(x, y + 1.65, z);
+    this.group.add(rail);
+    const silver = toonMat({ color: 0x9ab4bc, map: swatch('#8aa4ac', 80) });
+    for (let i = 0; i < 5; i++) {
+      const fish = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 5), silver);
+      fish.position.set(x - 0.9 + i * 0.45, y + 1.35, z);
+      fish.rotation.x = Math.PI; // hung by the tail
+      this.group.add(fish);
+    }
+    this.addCollider(x, z, 1.2, 0.3, 1.8);
+  }
+
+  /** Mooring buoy riding the lagoon swell (the swell is decorative). */
+  private buoy(x: number, z: number, level: number): void {
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), toonMat({ color: 0xb4543a, map: swatch('#9e4630', 70) }));
+    ball.position.set(x, level + 0.15, z);
+    this.group.add(ball);
+    const stripe = new THREE.Mesh(new THREE.CylinderGeometry(0.51, 0.51, 0.16, 10), toonMat({ color: 0xf0e8d8 }));
+    stripe.position.set(x, level + 0.2, z);
+    this.group.add(stripe);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.08, 5, 5), glowMat(0xffd23c, 0.9));
+    tip.position.set(x, level + 0.85, z);
+    tip.name = 'blinker';
+    this.group.add(tip);
+    const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.6, 4), toonMat({ color: 0x3a3a42 }));
+    mast.position.set(x, level + 0.55, z);
+    this.group.add(mast);
+  }
+
+  /** A rowboat pulled up past the tideline, oars shipped, story over. */
+  private rowboat(x: number, z: number, rot: number): void {
+    const y = terrainHeight(x, z);
+    const g = new THREE.Group();
+    const hullMat = toonMat({ color: 0x7a5c3e, map: swatch('#6a4e32', 50) });
+    const hull = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.65, 3.4, 8, 1, false, 0, Math.PI), hullMat);
+    hull.rotation.set(Math.PI / 2, 0, Math.PI / 2);
+    hull.position.y = 0.55;
+    g.add(hull);
+    for (const oz of [-0.7, 0.5]) {
+      const bench = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.1, 0.3), hullMat);
+      bench.position.set(0, 0.6, oz);
+      g.add(bench);
+    }
+    const oar = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 2.4, 4), hullMat);
+    oar.rotation.set(0, 0, Math.PI / 2 - 0.15);
+    oar.position.set(0.3, 0.75, -0.1);
+    g.add(oar);
+    g.position.set(x, y, z);
+    g.rotation.y = rot;
+    g.traverse((o) => (o.castShadow = true));
+    this.group.add(g);
+    this.staticTargets.push(g);
+    this.addCollider(x, z, 1.7, 1.0, 1.2);
+  }
+
+  /** Net spool: half the port's economy, wound up for the night. */
+  private netSpool(x: number, z: number): void {
+    const y = terrainHeight(x, z);
+    const spool = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1.1, 10), toonMat({ color: 0x6a5030, map: swatch('#5e4628', 50) }));
+    spool.rotation.z = Math.PI / 2;
+    spool.position.set(x, y + 0.7, z);
+    this.group.add(spool);
+    this.staticTargets.push(spool);
+    const net = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.8, 10), toonMat({ color: 0x4a5a48 }));
+    net.rotation.z = Math.PI / 2;
+    net.position.set(x, y + 0.7, z);
+    this.group.add(net);
+    this.addCollider(x, z, 0.8, 0.8, 1.4);
+  }
+
+  /** Glow mushrooms — the caves' street lighting, self-installing. */
+  private mushroomCluster(x: number, z: number, rng: Rng): void {
+    const y = terrainHeight(x, z);
+    const n = 3 + Math.floor(rng() * 3);
+    for (let i = 0; i < n; i++) {
+      const a = rng() * Math.PI * 2, r = rng() * 0.8;
+      const mx = x + Math.cos(a) * r, mz = z + Math.sin(a) * r;
+      const h = 0.25 + rng() * 0.5;
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, h, 5), toonMat({ color: 0xd8d4c8 }));
+      stem.position.set(mx, y + h / 2, mz);
+      this.group.add(stem);
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(h * 0.5, 7, 5), glowMat(rng() < 0.5 ? 0x6adcb8 : 0x8ab8ff, 0.75));
+      cap.position.set(mx, y + h, mz);
+      cap.scale.y = 0.55;
+      if (rng() < 0.4) cap.name = 'blinker';
+      this.group.add(cap);
+    }
+  }
+
+  /** A tipped mine cart that never made its last delivery. */
+  private minecart(x: number, z: number, rot: number): void {
+    const y = terrainHeight(x, z);
+    const g = new THREE.Group();
+    const iron = toonMat({ color: 0x4a4a52, map: swatch('#3f3f47', 60) });
+    const tub = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.8, 0.9), iron);
+    tub.position.y = 0.75;
+    tub.rotation.z = 0.5; // tipped
+    g.add(tub);
+    for (const [ox, oz] of [[-0.5, -0.35], [-0.5, 0.35], [0.5, -0.35], [0.5, 0.35]] as const) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.08, 8), toonMat({ color: 0x2a2a30 }));
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(ox, 0.35, oz);
+      g.add(wheel);
+    }
+    const oreMat = toonMat({ color: 0x8ab8ff });
+    for (let i = 0; i < 4; i++) {
+      const ore = new THREE.Mesh(new THREE.DodecahedronGeometry(0.14, 0), oreMat);
+      ore.position.set(-0.9 - i * 0.25, 0.12, (i % 2) * 0.4 - 0.2);
+      g.add(ore);
+    }
+    g.position.set(x, y, z);
+    g.rotation.y = rot;
+    g.traverse((o) => (o.castShadow = true));
+    this.group.add(g);
+    this.staticTargets.push(g);
+    this.addCollider(x, z, 1.0, 0.8, 1.2);
+  }
+
+  /** Glass chimes strung from a shard arch — Vitra's wind has one job left. */
+  private glassChimes(x: number, z: number, rng: Rng): void {
+    const y = terrainHeight(x, z);
+    const shardMat = new THREE.MeshToonMaterial({ color: 0x6a5adf, transparent: true, opacity: 0.75 });
+    for (const side of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.ConeGeometry(0.2, 3.4, 4), shardMat);
+      post.position.set(x + side * 1.4, y + 1.7, z);
+      post.rotation.z = -side * 0.2;
+      this.group.add(post);
+    }
+    const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.8, 4), toonMat({ color: 0x2e2652 }));
+    bar.rotation.z = Math.PI / 2;
+    bar.position.set(x, y + 3.0, z);
+    this.group.add(bar);
+    for (let i = 0; i < 5; i++) {
+      const len = 0.5 + rng() * 0.7;
+      const sliver = new THREE.Mesh(new THREE.BoxGeometry(0.08, len, 0.03),
+        new THREE.MeshToonMaterial({ color: i % 2 ? 0x7af0ff : 0xb0a0ff, transparent: true, opacity: 0.8 }));
+      sliver.position.set(x - 1.0 + i * 0.5, y + 2.9 - len / 2 - 0.1, z);
+      sliver.rotation.y = rng() * 0.6;
+      this.group.add(sliver);
+    }
+    this.addCollider(x, z, 1.4, 0.3, 3.2);
+  }
+
+  /** Somebody watches the aurora from here. Blanket, telescope, thermos. */
+  private stargazerCamp(x: number, z: number): void {
+    const y = terrainHeight(x, z);
+    const blanket = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.6), toonMat({ color: 0x8a4a6a }));
+    blanket.rotation.x = -Math.PI / 2;
+    blanket.rotation.z = 0.4;
+    blanket.position.set(x, y + 0.04, z);
+    this.group.add(blanket);
+    const tripod = new THREE.Group();
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 1.3, 4), toonMat({ color: 0x3a3a42 }));
+      leg.position.set(Math.cos(a) * 0.35, 0.6, Math.sin(a) * 0.35);
+      leg.rotation.z = Math.cos(a) * 0.4;
+      leg.rotation.x = -Math.sin(a) * 0.4;
+      tripod.add(leg);
+    }
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.9, 8), toonMat({ color: 0x5a48a8 }));
+    tube.position.set(0, 1.35, 0);
+    tube.rotation.x = 0.9;
+    tripod.add(tube);
+    tripod.position.set(x + 1.4, y, z + 0.6);
+    this.group.add(tripod);
+    const thermos = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.24, 6), toonMat({ color: 0xb4543a }));
+    thermos.position.set(x - 0.5, y + 0.16, z + 0.3);
+    this.group.add(thermos);
+  }
+
+  /** Racked lightning in mason jars — Voltholm's export, aging nicely. */
+  private jarRack(x: number, z: number, rng: Rng): void {
+    const y = terrainHeight(x, z);
+    const wood = toonMat({ color: 0x5a5248, map: swatch('#4e483e', 50) });
+    for (const ox of [-1.3, 1.3]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.0, 0.14), wood);
+      post.position.set(x + ox, y + 1.0, z);
+      this.group.add(post);
+    }
+    for (let s = 0; s < 3; s++) {
+      const shelf = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.08, 0.5), wood);
+      shelf.position.set(x, y + 0.55 + s * 0.6, z);
+      this.group.add(shelf);
+      for (let i = 0; i < 6; i++) {
+        if (rng() < 0.25) continue; // sold out
+        const jar = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.11, 0.3, 6), glowMat(0xc8d24a, 0.55 + rng() * 0.3));
+        jar.position.set(x - 1.1 + i * 0.44, y + 0.75 + s * 0.6, z);
+        if (rng() < 0.2) jar.name = 'blinker';
+        this.group.add(jar);
+      }
+    }
+    this.addCollider(x, z, 1.5, 0.4, 2.0);
+  }
+
+  /** A weathervane that has never once been wrong, or still. */
+  private weathervane(x: number, z: number): void {
+    const y = terrainHeight(x, z);
+    const iron = toonMat({ color: 0x32383e, map: swatch('#2c3238', 60) });
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 3.6, 5), iron);
+    pole.position.set(x, y + 1.8, z);
+    this.group.add(pole);
+    const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.5, 4), iron);
+    arrow.rotation.z = -Math.PI / 2;
+    arrow.position.set(x + 0.35, y + 3.5, z);
+    this.group.add(arrow);
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.25, 0.04), iron);
+    tail.position.set(x - 0.3, y + 3.5, z);
+    this.group.add(tail);
+    const cups = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.05, 5, 8), iron);
+    cups.rotation.x = Math.PI / 2;
+    cups.position.set(x, y + 3.1, z);
+    this.group.add(cups);
+  }
+
   // ------------------------------------------------------------------ districts
   private addCollider(x: number, z: number, hw: number, hd: number, height = 2.4): void {
     const g = terrainHeight(x, z);
@@ -537,6 +1253,8 @@ export class World {
     if (!this.clearOfExits(x, z)) return false;
     // a lenient global slope gate: random scatter never climbs the walls
     if (!this.flatEnough(x, z, 1.8, 2.2)) return false;
+    // GP maps: the racing line is sacred — no prop parks on it
+    if (this.trackDist(x, z) < 11) return false;
     return true;
   }
 
@@ -1696,7 +2414,8 @@ export class World {
         case 'pit': this.buildPitDoor(poi); break;
         case 'cargo': this.buildCargo(poi); break;
         case 'vent': this.buildVent(poi); break;
-        case 'rod': this.buildRod(poi); break;
+        // rods shelter the racers from SKYFALL — beside the line, not in it
+        case 'rod': this.buildRod(this.offTrack(poi, 12.5)); break;
       }
     }
     this.buildZoneExits();
@@ -2239,16 +2958,27 @@ export class World {
   /** Pit row: Rita's garage, the start/finish arch, bleachers, tire walls. */
   private buildGulchGate(d: DistrictDef): void {
     const rng = mulberry32(4242);
-    // start/finish arch over the west straight (relative: any circuit's
-    // paddock district centers on its own start straight)
-    const archX = d.cx, archZ = d.cz + 8;
+    // start/finish arch spans ACROSS the local racing line. Rust Gulch's
+    // grid runs along +z; the GP corridors run diagonals, so the gate reads
+    // its heading off the first track segment instead of assuming one.
+    let vx = 0, vz = 1;           // direction of travel
+    let archX = d.cx, archZ = d.cz + 8;
+    if (this.raceLine && this.raceLine.length > 1) {
+      const a = this.raceLine[0], b = this.raceLine[1];
+      const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+      vx = (b.x - a.x) / len; vz = (b.z - a.z) / len;
+      const c = this.trackClosest(d.cx, d.cz);
+      archX = c.px + vx * 8; archZ = c.pz + vz * 8;
+    }
+    const ux = -vz, uz = vx;      // across the track
     const gy = terrainHeight(archX, archZ);
     const poleMat = toonMat({ color: 0xd88428, map: swatch('#c1731f', 70) });
     for (const side of [-1, 1]) {
+      const px = archX + ux * side * 11, pz = archZ + uz * side * 11;
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 9, 10), poleMat);
-      pole.position.set(archX + side * 11, gy + 4.5, archZ);
+      pole.position.set(px, terrainHeight(px, pz) + 4.5, pz);
       this.group.add(pole);
-      this.addCollider(archX + side * 11, archZ, 0.8, 0.8);
+      this.addCollider(px, pz, 0.8, 0.8);
     }
     // the arch names ITS track — the gulch is Rita's, the GP paddocks brand
     // themselves after their own map
@@ -2257,33 +2987,39 @@ export class World {
       return words.length > 1 ? [words.slice(0, -1).join(' '), words[words.length - 1]] : [WORLD.name];
     })();
     const bannerTex = posterTexture({ lines: archLines, style: 'ad', bg: '#2a2622', fg: '#ffd23c', accent: '#ff5a86' }, 20 / 2.6);
+    const bannerYaw = Math.atan2(-vx, -vz);
     for (const flip of [0, Math.PI]) { // readable from both directions
       const banner = new THREE.Mesh(new THREE.PlaneGeometry(20, 2.6), new THREE.MeshBasicMaterial({ map: bannerTex }));
-      banner.position.set(archX, gy + 8.6, archZ + (flip === 0 ? 0.05 : -0.05));
-      banner.rotation.y = flip;
+      const off = flip === 0 ? 0.05 : -0.05;
+      banner.position.set(archX + vx * off, gy + 8.6, archZ + vz * off);
+      banner.rotation.y = bannerYaw + flip;
       this.group.add(banner);
     }
-    // checkered start line painted on the road — laid as short segments,
-    // each seated on ITS OWN patch of ground, so a cambered grid can't
-    // leave any part of the stripe floating in mid-air
+    // checkered start line painted on the road — laid as short segments
+    // across the travel direction, each seated on ITS OWN patch of ground,
+    // so a cambered grid can't leave any part of the stripe floating
     const lineTex = posterTexture({ lines: ['▚▚'], style: 'warning', bg: '#f0e8d8', fg: '#181818', accent: '#181818' }, 1.5);
     const lineMat = new THREE.MeshBasicMaterial({ map: lineTex, transparent: true, opacity: 0.85 });
+    const spin = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.atan2(-uz, ux));
     for (let s = 0; s < 6; s++) {
-      const sx = archX - 7.5 + s * 3;
+      const along = -7.5 + s * 3;
+      const sx = archX + ux * along, sz = archZ + uz * along;
       const seg = new THREE.Mesh(new THREE.PlaneGeometry(3.06, 2), lineMat);
-      const sn = terrainNormal(sx, archZ);
-      seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(sn.x, sn.y, sn.z).normalize());
-      seg.position.set(sx, terrainHeight(sx, archZ) + 0.1, archZ);
+      const sn = terrainNormal(sx, sz);
+      seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(sn.x, sn.y, sn.z).normalize()).multiply(spin);
+      seg.position.set(sx, terrainHeight(sx, sz) + 0.1, sz);
       this.group.add(seg);
     }
 
     // Rita's garage: lean-to + workbench + a work lamp so the inside reads.
     // On the GP paddocks the default spot can land on a corridor wall — the
     // garage shops around for level ground before pouring a slab
+    const garageSpot = (x: number, z: number): boolean => this.flatEnough(x, z, 3.4, 1.6) && this.trackDist(x, z) > 14;
     let gx = d.cx + 10, gz = d.cz + 28;
-    if (!this.flatEnough(gx, gz, 3.4, 1.6)) { gx = d.cx - 12; gz = d.cz - 8; }
-    if (!this.flatEnough(gx, gz, 3.4, 1.6)) { gx = d.cx + 12; gz = d.cz - 10; }
-    const garageOk = this.flatEnough(gx, gz, 3.4, 1.8);
+    if (!garageSpot(gx, gz)) { gx = d.cx - 12; gz = d.cz - 8; }
+    if (!garageSpot(gx, gz)) { gx = d.cx + 12; gz = d.cz - 10; }
+    if (!garageSpot(gx, gz)) { gx = d.cx - 14; gz = d.cz + 14; }
+    const garageOk = this.flatEnough(gx, gz, 3.4, 1.8) && this.trackDist(gx, gz) > 14;
     const gyy = terrainHeight(gx, gz);
     if (garageOk) {
     const shack = new THREE.Group();
@@ -2330,8 +3066,9 @@ export class World {
       const a = rng() * Math.PI * 2;
       const r = 12 + rng() * 22;
       const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
-      if (Math.abs(x - archX) < 10) continue; // keep the whole start straight clear
-      if (roadFactor(x, z) > 0.15) continue;  // never on any racing line
+      if (Math.abs((x - archX) * ux + (z - archZ) * uz) < 10 && Math.abs((x - archX) * vx + (z - archZ) * vz) < 6) continue; // the grid box stays clear
+      if (roadFactor(x, z) > 0.15) continue;      // never on any racing line
+      if (this.trackDist(x, z) < 12.5) continue;  // ...including the GP corridors
       if (!this.flatEnough(x, z, 1.2, 0.9)) continue; // never up the paddock walls
       const stackH = 1 + Math.floor(rng() * 3);
       for (let s = 0; s < stackH; s++) {
@@ -2344,9 +3081,10 @@ export class World {
       this.addCollider(x, z, 0.75, 0.75);
     }
 
-    // plank bleachers facing the straight (only where the ground allows)
-    const bleachX = archX + 16, bleachZ = archZ - 8;
-    if (this.flatEnough(bleachX, bleachZ, 3, 1.4)) {
+    // plank bleachers facing the straight (only where the ground allows,
+    // and always OFF the ribbon itself)
+    const bleachX = archX + ux * 16 - vx * 8, bleachZ = archZ + uz * 16 - vz * 8;
+    if (this.flatEnough(bleachX, bleachZ, 3, 1.4) && this.trackDist(bleachX, bleachZ) > 13.5) {
       for (let row = 0; row < 3; row++) {
         const plank = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.22, 10), toonMat({ color: 0x8a6a4a, map: swatch('#7a5a3e', 60) }));
         plank.position.set(bleachX + row * 1.1, terrainHeight(bleachX, bleachZ) + 0.5 + row * 0.55, bleachZ);
@@ -2359,7 +3097,8 @@ export class World {
     // string lights from the arch to the garage
     if (garageOk) for (let i = 0; i < 6; i++) {
       const t = i / 5;
-      const lx = archX + 11 + (gx - archX - 11) * t, lz = archZ + (gz - archZ) * t;
+      const ax = archX + ux * 11, az = archZ + uz * 11; // from the nearer pole
+      const lx = ax + (gx - ax) * t, lz = az + (gz - az) * t;
       const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), glowMat([0xffd23c, 0xff5a86, 0x54d4ff][i % 3], 0.9));
       bulb.position.set(lx, terrainHeight(lx, lz) + 4.6 - Math.sin(t * Math.PI) * 0.7, lz);
       this.group.add(bulb);
@@ -4499,6 +5238,9 @@ export class World {
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * Math.PI * 2 + 0.1;
       const x = d.cx + Math.cos(a) * (d.radius - 4), z = d.cz + Math.sin(a) * (d.radius - 4);
+      // on the Jar Run the finish straight cuts through this ring — the
+      // monoliths on the racing line politely never grew there
+      if (this.trackDist(x, z) < 12) continue;
       const y = terrainHeight(x, z);
       const h = 4.5 + rng() * 4;
       const mono = new THREE.Mesh(new THREE.BoxGeometry(1.2 + rng() * 0.8, h, 1.0 + rng() * 0.6), slate);
@@ -4530,12 +5272,15 @@ export class World {
       }
     }
     // dead centre: the mooring Gale Prime kept, a lone ring bolted to a slab
-    const cy = terrainHeight(d.cx, d.cz);
+    // — except when the centre IS the finish line (the Jar Run parks it off
+    // to the shoulder instead of ending every race with a wall)
+    const slabP = this.offTrack({ x: d.cx, z: d.cz }, 13);
+    const cy = terrainHeight(slabP.x, slabP.z);
     const slabC = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 3.0, 0.7, 10), slate);
-    slabC.position.set(d.cx, cy + 0.35, d.cz);
+    slabC.position.set(slabP.x, cy + 0.35, slabP.z);
     this.group.add(slabC);
     const ringC = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.14, 8, 14), glowMat(0x9adcff, 0.8));
-    ringC.position.set(d.cx, cy + 1.15, d.cz);
+    ringC.position.set(slabP.x, cy + 1.15, slabP.z);
     ringC.rotation.x = 0.4;
     ringC.name = 'blinker';
     this.group.add(ringC);

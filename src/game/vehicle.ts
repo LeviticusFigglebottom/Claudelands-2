@@ -428,8 +428,58 @@ export class Vehicle {
     }
     this.prevPos.copy(this.pos);
     this.pos.addScaledVector(this.vel, dt);
+    // ---- walls are walls, even at speed: a rise steeper than ~40° rejects
+    // the wheels. Slide along the wall instead of summiting the canyon —
+    // the 'linear' race corridors stay linear.
+    {
+      const mx = this.pos.x - this.prevPos.x, mz = this.pos.z - this.prevPos.z;
+      const horiz = Math.hypot(mx, mz);
+      if (horiz > 1e-5) {
+        const hPrev = terrainHeight(this.prevPos.x, this.prevPos.z);
+        const hNew = terrainHeight(this.pos.x, this.pos.z);
+        const steep = hNew - hPrev > horiz * 0.85;
+        if (steep && (this.grounded || hNew > this.pos.y + 0.5)) {
+          const hX = terrainHeight(this.prevPos.x + mx, this.prevPos.z);
+          const hZ = terrainHeight(this.prevPos.x, this.prevPos.z + mz);
+          if (hX - hPrev <= Math.abs(mx) * 0.85 + 0.02) {
+            this.pos.x = this.prevPos.x + mx; this.pos.z = this.prevPos.z;
+          } else if (hZ - hPrev <= Math.abs(mz) * 0.85 + 0.02) {
+            this.pos.x = this.prevPos.x; this.pos.z = this.prevPos.z + mz;
+          } else {
+            this.pos.x = this.prevPos.x; this.pos.z = this.prevPos.z;
+          }
+          // the wall scrubs the speed it absorbed — no free wall-grinding
+          if (dt > 0) {
+            const kept = 0.92;
+            this.vel.x = ((this.pos.x - this.prevPos.x) / dt) * kept;
+            this.vel.z = ((this.pos.z - this.prevPos.z) / dt) * kept;
+          }
+        }
+      }
+    }
     const g = terrainHeight(this.pos.x, this.pos.z);
     const wasGrounded = this.grounded;
+    // steep faces don't hold wheels: touching down on a >~42° grade skids
+    // the buggy back downhill instead of grounding — no hop-ratcheting up
+    // the corridor walls, doubly so under low gravity
+    if (this.pos.y <= g && !wasGrounded) {
+      const gxh = terrainHeight(this.pos.x + 0.9, this.pos.z) - terrainHeight(this.pos.x - 0.9, this.pos.z);
+      const gzh = terrainHeight(this.pos.x, this.pos.z + 0.9) - terrainHeight(this.pos.x, this.pos.z - 0.9);
+      const dn = Math.hypot(gxh, gzh);
+      if (dn / 1.8 > 0.9) {
+        const dnx = -gxh / dn, dnz = -gzh / dn; // downhill, in the xz plane
+        const uphill = -(this.vel.x * dnx + this.vel.z * dnz);
+        if (uphill > 0) { // reflect what was carrying it up the face
+          this.vel.x += dnx * uphill * 1.3;
+          this.vel.z += dnz * uphill * 1.3;
+        }
+        this.vel.x += dnx * 6;
+        this.vel.z += dnz * 6;
+        this.pos.y = g + 0.05;
+        this.vel.y = 0;
+        if (isPlayer) fx.burst(this.pos.clone(), 0xc8a878, 6, 3, 0.09, 0.4, 3);
+      }
+    }
     if (this.pos.y <= g) {
       if (!this.grounded && this.vel.y < -7) {
         // landing: crunch + suspension squash scaled to fall speed
@@ -505,6 +555,37 @@ export class Vehicle {
     const half = world.arenaHalf - 2;
     this.pos.x = clamp(this.pos.x, -half, half);
     this.pos.z = clamp(this.pos.z, -half, half);
+
+    // corridor maps: the canyon is the fence. Terrain noise sometimes opens
+    // sub-critical ramps up the walls — the chassis still never leaves the
+    // corridor (or its paddock arenas), it bounces back in instead.
+    const cor = WORLD.terrain.corridor;
+    if (cor) {
+      const pts = cor.pts;
+      let best = Infinity, px = 0, pz = 0;
+      for (let i = 0; i + 1 < pts.length; i++) {
+        const a = pts[i], b = pts[i + 1];
+        const dx = b.x - a.x, dz = b.z - a.z;
+        const t = clamp(((this.pos.x - a.x) * dx + (this.pos.z - a.z) * dz) / (dx * dx + dz * dz), 0, 1);
+        const cx = a.x + dx * t, cz = a.z + dz * t;
+        const d = Math.hypot(this.pos.x - cx, this.pos.z - cz);
+        if (d < best) { best = d; px = cx; pz = cz; }
+      }
+      const lim = cor.width + 3.5; // the bank's lower shoulder — past this it's cliff
+      let legal = best <= lim;
+      if (!legal) {
+        for (const ar of cor.arenas ?? []) {
+          if (Math.hypot(this.pos.x - ar.x, this.pos.z - ar.z) <= ar.r + 2) { legal = true; break; }
+        }
+      }
+      if (!legal && best > 0) {
+        const ux = (this.pos.x - px) / best, uz = (this.pos.z - pz) / best;
+        this.pos.x = px + ux * lim;
+        this.pos.z = pz + uz * lim;
+        const vn = this.vel.x * ux + this.vel.z * uz;
+        if (vn > 0) { this.vel.x -= ux * vn * 1.5; this.vel.z -= uz * vn * 1.5; }
+      }
+    }
 
     // ---- ram damage: the bull bar is a weapon
     const speed = this.vel.length();
