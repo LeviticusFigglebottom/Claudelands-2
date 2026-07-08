@@ -4083,16 +4083,19 @@ export class World {
   private waterfall(x: number, z: number, faceRot: number, height = 8, width = 5): void {
     const y = terrainHeight(x, z);
     const g = new THREE.Group();
-    const rockMat = toonMat({ color: 0x5f7d4b, map: rockTexture('#5f7d4b') });
-    // the shelf the water pours over
-    const cliff = new THREE.Mesh(new THREE.BoxGeometry(width + 5, height, 3.4), rockMat);
-    cliff.position.set(0, height / 2, -1.8);
+    // plain biome rock — a tinted map DOUBLE-darkens under toon lighting and
+    // the whole shelf reads as a black cube
+    const rockMat = toonMat({ map: rockTexture(WORLD.biome.rock) });
+    // the shelf the water pours over, sunk into the hill
+    const cliff = new THREE.Mesh(new THREE.BoxGeometry(width + 3, height + 0.8, 3.4), rockMat);
+    cliff.position.set(0, height / 2 - 0.5, -1.8);
     const capL = new THREE.Mesh(new THREE.DodecahedronGeometry(2.0, 0), rockMat);
-    capL.position.set(-(width / 2 + 1.8), height * 0.85, -0.6);
+    capL.position.set(-(width / 2 + 1.4), height * 0.85, -0.6);
     const capR = capL.clone();
-    capR.position.x = width / 2 + 1.8;
+    capR.position.x = width / 2 + 1.4;
     g.add(cliff, capL, capR);
-    // pile boulders down the back so the shelf reads as an outcrop, not a slab
+    // boulders clad BOTH faces so it reads as an outcrop from every angle,
+    // not a slab with a rocky back
     for (let i = 0; i < 5; i++) {
       const t = i / 4;
       const r = 1.6 + (1 - t) * 1.8;
@@ -4105,13 +4108,25 @@ export class World {
       rock.rotation.set(i * 0.7, i * 1.3, i * 0.5);
       g.add(rock);
     }
-    // the falling sheet — texture scrolls downward
+    for (const side of [-1, 1]) { // front corners, framing the sheet
+      const fr = new THREE.Mesh(new THREE.DodecahedronGeometry(1.5, 0), rockMat);
+      fr.position.set(side * (width / 2 + 1.2), 1.0, 0.4);
+      fr.rotation.set(side, side * 2.1, 0.4);
+      g.add(fr);
+    }
+    // the falling sheet — texture scrolls downward, with a lip tongue where
+    // the water actually leaves the shelf
     const sheetTex = fallTexture();
     sheetTex.repeat.set(2, 2);
     const sheet = new THREE.Mesh(new THREE.PlaneGeometry(width, height),
       new THREE.MeshBasicMaterial({ map: sheetTex, transparent: true, opacity: 0.82, side: THREE.DoubleSide }));
     sheet.position.set(0, height / 2 + 0.2, 0.06);
     g.add(sheet);
+    const tongue = new THREE.Mesh(new THREE.PlaneGeometry(width * 0.9, 1.4),
+      new THREE.MeshBasicMaterial({ map: sheetTex, transparent: true, opacity: 0.75, side: THREE.DoubleSide }));
+    tongue.position.set(0, height + 0.35, -0.5);
+    tongue.rotation.x = -1.05;
+    g.add(tongue);
     this.scrollTex.push({ tex: sheetTex, vy: -1.6 });
     // splash pool + foam
     const poolTex = waterTexture();
@@ -5533,6 +5548,23 @@ export class World {
     const hook = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 4.5, 4), toonMat({ color: 0x22262a }));
     hook.position.set(d.cx - 8, ty + 7, d.cz);
     this.group.add(cross, wheel, hook);
+    // braces, a cable drum, and skids: the A-frame reads as a MACHINE that
+    // was parked, not sticks that grew there
+    for (const sd of [-1, 1]) {
+      const brace = new THREE.Mesh(new THREE.BoxGeometry(0.3, 6.4, 0.3), iron);
+      brace.position.set(d.cx - 8 + sd * 1.7, ty + 3.4, d.cz - sd * 0.4);
+      brace.rotation.z = -sd * 0.42;
+      this.group.add(brace);
+      const skid = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.4, 4.4), iron);
+      skid.position.set(d.cx - 8 + sd * 3.2, ty + 0.2, d.cz);
+      this.group.add(skid);
+    }
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 2.2, 10), toonMat({ color: 0x6a5a3c, map: swatch('#5e5034', 60) }));
+    drum.rotation.z = Math.PI / 2;
+    drum.position.set(d.cx - 8, ty + 1.1, d.cz);
+    this.group.add(drum);
+    this.staticTargets.push(drum);
+    this.addCollider(d.cx - 8, d.cz, 1.4, 1.2, 2);
     // spoil heaps: cones of what came out of the hole — sun-dried tailings,
     // parked on the pad's rim so they never swallow the vendors
     for (let i = 0; i < 4; i++) {
@@ -5551,11 +5583,13 @@ export class World {
     const board = new THREE.Mesh(new THREE.PlaneGeometry(6.5, 2.2),
       new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['HELIX BORE SITE ONE', 'DAYS SINCE INCIDENT: 0', '(COUNTER BROKEN)'], style: 'warning', bg: '#e8e0cc', fg: '#1a1a1a', accent: '#d8a020' }, 6.5 / 2.2), side: THREE.DoubleSide }));
     board.position.set(d.cx + 4, sy + 2.6, d.cz + 14);
-    board.rotation.y = Math.PI + 0.3;
+    // squared up to greet arrivals walking in from the gate pad — the old
+    // yaw showed them the sign edge-on, a striped sliver in mid-air
+    board.rotation.y = Math.PI - 0.16;
     const postL = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 3.2, 6), iron);
-    postL.position.set(d.cx + 1, sy + 1.6, d.cz + 14);
+    postL.position.set(d.cx + 0.95, sy + 1.6, d.cz + 13.5); // under the rotated board ends
     const postR = postL.clone();
-    postR.position.x = d.cx + 7;
+    postR.position.set(d.cx + 7.05, sy + 1.6, d.cz + 14.5);
     this.group.add(board, postL, postR);
     this.addCollider(d.cx + 4, d.cz + 14, 3.4, 0.5, 3);
     this.boreBollard(d.cx - 2, d.cz - 12);
@@ -5731,25 +5765,34 @@ export class World {
   // ------------------------------------------------------------ THE TERRACES
 
   /** A carved stone lantern-idol: squat pedestal, hollow head, warm ember. */
+  /** Garden lantern: stone plinth, wooden post, a glowing paper head under
+   *  a wide cap — it reads LANTERN from across the terrace, not chimney. */
   private terraceLantern(x: number, z: number, lit = true): void {
     const y = terrainHeight(x, z);
-    const stone = toonMat({ color: 0x8a8468, map: rockTexture('#7a7458') });
-    const base = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.6), stone);
-    base.position.set(x, y + 0.45, z);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 0.8), stone);
-    head.position.set(x, y + 1.15, z);
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.6, 0.4, 4), stone);
-    cap.position.set(x, y + 1.6, z);
-    cap.rotation.y = Math.PI / 4;
-    this.group.add(base, head, cap);
-    this.staticTargets.push(base, head);
-    this.addCollider(x, z, 0.5, 0.5, 1.8);
-    if (lit) {
-      const ember = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 6), glowMat(0xffc86a, 0.95));
-      ember.position.set(x, y + 1.15, z);
-      ember.name = 'blinker';
-      this.group.add(ember);
+    const stone = toonMat({ color: 0x9a947a, map: rockTexture('#8a8468') });
+    const wood = toonMat({ color: 0x6a5030, map: swatch('#5e4628', 50) });
+    const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 0.3, 6), stone);
+    plinth.position.set(x, y + 0.15, z);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.085, 1.3, 5), wood);
+    post.position.set(x, y + 0.95, z);
+    // the paper head: a warm glowing box held in four dark ribs
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.5, 0.44),
+      lit ? glowMat(0xffd88a, 0.9) : toonMat({ color: 0xe8e0cc }));
+    head.position.set(x, y + 1.85, z);
+    if (lit) head.name = 'blinker';
+    for (const [rx, rz] of [[-0.23, -0.23], [-0.23, 0.23], [0.23, -0.23], [0.23, 0.23]] as const) {
+      const rib = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.54, 0.05), wood);
+      rib.position.set(x + rx, y + 1.85, z + rz);
+      this.group.add(rib);
     }
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.52, 0.32, 4), wood);
+    cap.position.set(x, y + 2.24, z);
+    cap.rotation.y = Math.PI / 4;
+    const finial = new THREE.Mesh(new THREE.SphereGeometry(0.06, 5, 5), stone);
+    finial.position.set(x, y + 2.44, z);
+    this.group.add(plinth, post, head, cap, finial);
+    this.staticTargets.push(post);
+    this.addCollider(x, z, 0.35, 0.35, 2.3);
   }
 
   /** THE PADDY GATE — Juno's field camp at the foot of the stairs: research
@@ -5796,33 +5839,44 @@ export class World {
     // the first paddy: a shallow flooded square behind a low stone lip,
     // set east of the walkway so arrivals don't wade through it
     this.water(d.cx - 16, d.cz - 10, 6.5, { level: terrainHeight(d.cx - 16, d.cz - 10) + 0.18 });
-    for (let i = 0; i < 4; i++) this.terraceLantern(d.cx - 14 + i * 9, d.cz + 10, i % 2 === 0);
+    for (let i = 0; i < 4; i++) this.terraceLantern(d.cx - 14 + i * 9, d.cz + 10, true);
   }
 
   /** A TERRACE — one step of the garden: retaining wall along the downhill
    *  lip, a flooded paddy with planted rows, and the waterfall it spills. */
   private buildTerrace(d: DistrictDef): void {
     const rng = mulberry32(929100 + Math.floor(d.cz));
-    const stone = toonMat({ color: 0x8a8468, map: rockTexture('#7a7458') });
-    // retaining wall: an arc of stacked stone segments along the downhill
-    // (south, +z) edge, right where the terrain steps down
+    const stone = toonMat({ map: rockTexture('#8a8468') });
+    const capStone = toonMat({ color: 0xa8a288 });
+    // the fall SPANS the actual step and FACES downhill (+z): sheet and
+    // splash pool on the lower terrace, shelf buried in the step
     const lipZ = d.cz + d.radius * 0.78;
-    for (let i = -3; i <= 3; i++) {
-      const wx = d.cx + i * 5.4;
-      const wy = terrainHeight(wx, lipZ + 3);
-      const seg = new THREE.Mesh(new THREE.BoxGeometry(5.2, 2.6 + rng() * 0.8, 1.4), stone);
-      seg.position.set(wx, wy + 1.1, lipZ + (Math.abs(i) * 0.4));
-      seg.rotation.y = i * 0.06;
-      this.group.add(seg);
-      this.staticTargets.push(seg);
-    }
-    // the fall SPANS the actual step: top of the sheet at this terrace's
-    // level, splash pool on the terrace below — measured, not guessed
     const fallX = d.cx + (rng() - 0.5) * 6;
     const hTop = terrainHeight(fallX, lipZ - 3);
     const baseZ = lipZ + 9;
     const hBase = terrainHeight(fallX, baseZ);
-    this.waterfall(fallX, baseZ, Math.PI, Math.max(4, hTop - hBase + 1.2), 4);
+    this.waterfall(fallX, baseZ, 0, Math.max(4, hTop - hBase + 1.2), 4);
+    // retaining wall: stone courses seated INTO the step — each segment is
+    // sized to the drop it actually holds, and flat ground gets no wall
+    for (let i = -3; i <= 3; i++) {
+      const wx = d.cx + i * 5.4;
+      if (Math.abs(wx - fallX) < 4.6) continue; // the fall owns its slot
+      const hUp = terrainHeight(wx, lipZ - 5);
+      const hDn = terrainHeight(wx, lipZ + 7);
+      const drop = hUp - hDn;
+      if (drop < 1.2) continue;
+      const wh = Math.min(drop + 0.5, 4.4);
+      const seg = new THREE.Mesh(new THREE.BoxGeometry(5.2, wh, 1.6), stone);
+      seg.position.set(wx, hDn + wh / 2 - 0.25, lipZ + 1.5);
+      seg.rotation.y = i * 0.05;
+      seg.rotation.x = -0.09; // leans back into the hill it holds
+      this.group.add(seg);
+      this.staticTargets.push(seg);
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.3, 1.9), capStone);
+      cap.position.set(wx, hDn + wh - 0.15, lipZ + 1.4);
+      cap.rotation.y = i * 0.05;
+      this.group.add(cap);
+    }
     // the paddy: flooded pool with planted rows, kept ON the flat plateau
     const px = d.cx + (rng() - 0.5) * 6, pz = d.cz - 2;
     const level = terrainHeight(px, pz) + 0.2;

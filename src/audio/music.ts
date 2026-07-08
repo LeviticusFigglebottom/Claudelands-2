@@ -50,7 +50,11 @@ interface LoopVoice { src: AudioBufferSourceNode; gain: GainNode; id: string }
 // Claude Prime keeps the original four; the outer rocks get their own.
 const PLANET_OF: Record<string, string> = {
   claudelands: 'claudeprime', frosthollow: 'claudeprime', cinderthroat: 'claudeprime',
-  brasshaven: 'claudeprime', crucible: 'claudeprime', rustgulch: 'claudeprime', auger: 'claudeprime',
+  brasshaven: 'claudeprime', crucible: 'claudeprime', rustgulch: 'claudeprime',
+  // the Auger is Claude Prime dirt, but a kilometre of it straight DOWN —
+  // surface punk-rock has no business in the hole; it fights to machines
+  // and the crystalline something answering from below
+  auger: 'auger',
   veldt: 'veldtminor', veldt_tangle: 'veldtminor', veldt_shallows: 'veldtminor',
   veldt_caves: 'veldtminor', veldt_gp: 'veldtminor', veldt_stairs: 'veldtminor',
   vitra: 'vitranull', vitra_mile: 'vitranull', vitra_gp: 'vitranull',
@@ -61,6 +65,7 @@ const PLANET_COMBAT: Record<string, string[]> = {
   veldtminor: ['combat_drums', 'combat_bloom'],
   vitranull: ['combat_glass', 'combat_nullwave'],
   voltholm: ['combat_storm', 'combat_livewire'],
+  auger: ['combat_livewire', 'combat_glass'],
 };
 
 class MusicEngine {

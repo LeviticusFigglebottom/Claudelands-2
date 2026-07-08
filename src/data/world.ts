@@ -1945,7 +1945,8 @@ const VELDT_STAIRS: WorldDef = {
   ],
   pois: [
     { id: 'ft_stairs', kind: 'fast_travel', x: 8, z: 94, data: 'The Paddy Gate' },
-    { id: 'vm_ts', kind: 'vendor_med', x: -10, z: 90, rot: 1.0 },
+    // vendors share a row east of the walkway — the tent got the west side
+    { id: 'vm_ts', kind: 'vendor_med', x: 17, z: 90, rot: -1.9 },
     { id: 'vg_ts', kind: 'vendor_gun', x: 14, z: 84, rot: -1.2 },
     { id: 'sign_ts1', kind: 'sign', x: 0, z: 76, rot: 0.1, data: 'THE TERRACES \u2014 FIVE STEPS UP. THE WATER COMES DOWN. TAKE TURNS.' },
     { id: 'sign_ts2', kind: 'sign', x: 8, z: 2, rot: -0.6, data: 'STEP THREE \u2014 NO SAMPLING THE SACRED PADDIES. (DR. CALLA. YES, YOU.)' },
