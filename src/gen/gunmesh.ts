@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import type { WeaponInstance, WeaponPartDef } from '../game/types';
 import { makerById, type ManufacturerDef } from '../data/manufacturers';
 import { rarityById } from '../data/rarity';
+import { modifierById } from '../data/modifiers';
 import { ELEMENTS } from '../data/elements';
 import { toonMat, glowMat } from '../render/toon';
 import { gunTexture } from '../render/textures';
@@ -207,6 +208,46 @@ export function buildGunMesh(w: WeaponInstance): THREE.Group {
       }
       break;
     }
+    case 'bell': { // blunderbuss flare: the muzzle opens like a trumpet
+      const t = tube(brad * 0.8, blen * 0.75, pal.dark, 10);
+      t.position.z = bz + blen * 0.12;
+      g.add(t);
+      const bellGeo = new THREE.CylinderGeometry(brad * 1.9, brad * 0.85, blen * 0.35, 12, 1, true);
+      bellGeo.rotateX(-Math.PI / 2);
+      const bell = new THREE.Mesh(bellGeo, pal.secondary);
+      bell.position.z = bz - blen * 0.38;
+      bell.castShadow = true;
+      g.add(bell);
+      const lip = new THREE.Mesh(new THREE.TorusGeometry(brad * 1.9, 0.012, 6, 14), pal.accent);
+      lip.position.z = bz - blen * 0.55;
+      g.add(lip);
+      break;
+    }
+    case 'suppressor': { // fat smooth can over the front half, whisper-dark
+      const t = tube(brad * 0.7, blen * 0.55, pal.dark, 10);
+      t.position.z = bz + blen * 0.22;
+      g.add(t);
+      const can = tube(brad * 1.35, blen * 0.55, pal.dark, 12);
+      can.position.z = bz - blen * 0.22;
+      g.add(can);
+      for (const zf of [-0.05, -0.4]) {
+        const groove = new THREE.Mesh(new THREE.TorusGeometry(brad * 1.36, 0.006, 5, 14), pal.accent);
+        groove.position.z = bz + blen * zf;
+        g.add(groove);
+      }
+      break;
+    }
+    case 'split': { // two thin bores riding side by side
+      for (const side of [-1, 1]) {
+        const t = tube(brad * 0.62, blen, pal.dark, 8);
+        t.position.set(side * brad * 0.75, 0, bz);
+        g.add(t);
+      }
+      const yoke = box(brad * 3, brad * 1.1, 0.04, pal.secondary);
+      yoke.position.z = bz - blen * 0.4;
+      g.add(yoke);
+      break;
+    }
     default: { // 'tube'
       const t = tube(brad, blen, pal.dark, 10);
       t.position.z = bz;
@@ -272,6 +313,19 @@ export function buildGunMesh(w: WeaponInstance): THREE.Group {
       nail.position.set(0.004, bh * 0.68, sightZ);
       nail.rotation.z = 0.3;
       g.add(nail);
+      break;
+    }
+    case 'holo': { // a floating glass pane in a thin frame
+      const frame = box(0.05, 0.05, 0.008, pal.dark);
+      frame.position.set(0, bh * 0.78, sightZ);
+      g.add(frame);
+      const pane = new THREE.Mesh(new THREE.PlaneGeometry(0.038, 0.038),
+        new THREE.MeshBasicMaterial({ color: 0x7af0d0, transparent: true, opacity: 0.45, side: THREE.DoubleSide }));
+      pane.position.set(0, bh * 0.78, sightZ - 0.001);
+      g.add(pane);
+      const stem = box(0.012, bh * 0.28, 0.012, pal.dark);
+      stem.position.set(0, bh * 0.6, sightZ);
+      g.add(stem);
       break;
     }
     default: { // 'post'
@@ -355,6 +409,34 @@ export function buildGunMesh(w: WeaponInstance): THREE.Group {
         g.add(br);
         break;
       }
+      case 'bipod': { // folded legs under the barrel
+        for (const side of [-1, 1]) {
+          const leg = box(0.01, 0.09, 0.012, pal.dark);
+          leg.position.set(side * 0.02, -brad * 2 - 0.03, bz + blen * 0.28);
+          leg.rotation.z = side * 0.45;
+          g.add(leg);
+        }
+        break;
+      }
+      case 'fore': { // vertical foregrip mid-barrel
+        const fg = box(0.028, 0.075, 0.035, pal.secondary);
+        fg.position.set(0, -brad * 1.6 - 0.03, bz + blen * 0.3);
+        fg.rotation.x = 0.15;
+        g.add(fg);
+        break;
+      }
+      case 'charm': { // somebody's lucky lantern, swinging under the muzzle
+        const string = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.05, 4), pal.dark);
+        string.position.set(0, -brad * 1.4, bz);
+        g.add(string);
+        const lantern = box(0.024, 0.032, 0.024, pal.accent);
+        lantern.position.set(0, -brad * 1.4 - 0.045, bz);
+        g.add(lantern);
+        const glow = new THREE.Mesh(new THREE.SphereGeometry(0.009, 6, 6), glowMat(0xffd88a, 0.95));
+        glow.position.copy(lantern.position);
+        g.add(glow);
+        break;
+      }
       default: {
         const knob = box(0.03, 0.03, 0.05, pal.accent);
         knob.position.set(0, bh * 0.2, dims.len * 0.42);
@@ -368,6 +450,16 @@ export function buildGunMesh(w: WeaponInstance): THREE.Group {
     const trim = box(bw * 1.05, 0.012, dims.len * 1.02, glowMat(rarity.color, 0.85));
     trim.position.y = bh * 0.52;
     g.add(trim);
+  }
+  // chaos modifier: its own underline, in its own color — reads at a glance
+  const mod = modifierById(w.modifier);
+  if (mod) {
+    const trim = box(bw * 1.12, 0.014, dims.len * 1.05, glowMat(mod.color, 0.9));
+    trim.position.y = -bh * 0.55;
+    g.add(trim);
+    const muzzleRing = new THREE.Mesh(new THREE.TorusGeometry(dims.barrelR * 1.7, 0.008, 6, 14), glowMat(mod.color, 0.9));
+    muzzleRing.position.z = -dims.len / 2 - dims.barrelLen * (w.parts.barrel.look.len ?? 1) * 0.98;
+    g.add(muzzleRing);
   }
 
   g.traverse((o) => { o.castShadow = true; });

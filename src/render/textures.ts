@@ -230,6 +230,20 @@ export function gunTexture(base: string, style: 'brick' | 'sleek' | 'cobbled' | 
       break;
     }
   }
+  // universal wear pass: bright scratch highlights up top where hands and
+  // holsters rub, oily grime pooling along the bottom — every maker's gun
+  // reads carried, not printed
+  ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 7; i++) {
+    const x = Math.random() * 120, y = Math.random() * 30;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 6 + Math.random() * 16, y + (Math.random() - 0.5) * 4); ctx.stroke();
+  }
+  const grimeGrad = ctx.createLinearGradient(0, 88, 0, 128);
+  grimeGrad.addColorStop(0, 'rgba(12,10,8,0)');
+  grimeGrad.addColorStop(1, 'rgba(12,10,8,0.28)');
+  ctx.fillStyle = grimeGrad;
+  ctx.fillRect(0, 88, 128, 40);
   inkSpeckle(ctx, 128, 128, 16, 0.3);
   return tex(c);
 }

@@ -65,6 +65,8 @@ import type { QuestGiver } from './data/quests';
 import { coop } from './net/coop';
 import { remotePlayers, CLASS_TINT_CSS } from './net/remoteplayers';
 import { renderPartyPanel, updatePartyHud } from './ui/party';
+import { daynight } from './game/daynight';
+import { ambience } from './audio/ambience';
 
 // ---------------------------------------------------------------- renderer
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
@@ -191,8 +193,16 @@ setEnemyHooks({
   shovePlayer: (dx, dz, power) => player.shove(dx, dz, power),
   onKilled: (enemy: Enemy, overkill: number) => {
     enemySpawner.gibBurst(enemy);
-    const tier = enemy.badass ? Math.max(2, enemy.def.dropTier) : enemy.def.dropTier;
+    // rares pay out like mini-bosses: boss-tier table + a coin-flip legendary
+    const tier = enemy.rare ? 3 : enemy.badass ? Math.max(2, enemy.def.dropTier) : enemy.def.dropTier;
     loot.dropForTier(tier, enemy.level, enemy.position.clone());
+    if (enemy.rare) {
+      feedText(`<b style="color:#ffd23c">✦ ${enemy.displayName} popped!</b>`, '#ffd23c');
+      if (Math.random() < 0.5) {
+        loot.spawnItem(generateWeapon({ level: enemy.level, rarityId: 'legendary' }), enemy.position.clone().add(new THREE.Vector3(0.6, 0.3, 0.6)), true);
+      }
+      audio.cash();
+    }
     if (questSystem.wantsCollectDrop(enemy)) {
       loot.spawnQuestItem(enemy.position.clone().add(new THREE.Vector3(0.5, 0.3, 0.5)), questSystem.collectItemName());
     }
@@ -300,6 +310,7 @@ function switchMap(mapId: string, toX?: number, toZ?: number): void {
   player.respawnPoint.copy(player.position);
   faceArrival();
   storm.reset();
+  daynight.onMapChanged();
   world.followSun(player.position);
   mapFadeT = 1; // fade-in from the reconstruction flash
   fx.burst(player.position.clone().add(new THREE.Vector3(0, 1, 0)), 0x54d4ff, 40, 6, 0.14, 1, 4);
@@ -981,6 +992,57 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') interact();
 });
 
+// ------------------------------------------------------- SECOND WIND slots
+let slotBusy = false;
+function spinSlot(it: { pos: THREE.Vector3 }): void {
+  if (slotBusy) return;
+  const cost = Math.max(25, Math.round((30 + state.level * 16) / 5) * 5);
+  if (state.money < cost) {
+    feedText(`<b>SECOND WIND SLOTS</b> — needs $${cost}. The machine pities you. Loudly.`, '#ff5a5a');
+    audio.dryFire();
+    return;
+  }
+  state.money -= cost;
+  slotBusy = true;
+  audio.uiClick();
+  feedText(`<b>SECOND WIND SLOTS</b> — $${cost} down. Reels spinning…`, '#ffd23c');
+  const dropAt = it.pos.clone().add(player.position.clone().sub(it.pos).setY(0).normalize().multiplyScalar(1.1));
+  let ticks = 0;
+  const reel = setInterval(() => { audio.uiClick(); if (++ticks >= 3) clearInterval(reel); }, 260);
+  setTimeout(() => {
+    slotBusy = false;
+    const r = Math.random();
+    const lvl = state.level;
+    if (r < 0.40) {
+      feedText('The machine eats it. Rigged? Rigged.', '#8a949e');
+      audio.dryFire();
+    } else if (r < 0.62) {
+      const winnings = Math.round(cost * (1.5 + Math.random() * 2.5));
+      loot.spawnCash(dropAt, winnings);
+      feedText(`<b>CLINK CLINK</b> — $${winnings} pays out!`, '#7dff2a');
+      audio.cash();
+    } else if (r < 0.74) {
+      loot.spawnAmmo(dropAt);
+      loot.spawnAmmo(dropAt.clone().add(new THREE.Vector3(0.4, 0, 0.3)));
+      feedText('AMMO SHOWER. The practical jackpot.', '#c8d24a');
+      audio.pickup();
+    } else if (r < 0.90) {
+      loot.spawnItem(generateWeapon({ level: lvl, minRarity: 'uncommon' }), dropAt, true);
+      feedText('A gun slides out of the tray. Vela winks.', '#54d4ff');
+      audio.cash();
+    } else if (r < 0.975) {
+      loot.spawnItem(generateWeapon({ level: lvl, minRarity: 'epic' }), dropAt, true);
+      feedText('<b>BIG HIT!</b> Something purple in the tray!', '#c06bff');
+      audio.victory();
+    } else {
+      loot.spawnItem(generateWeapon({ level: lvl, rarityId: 'legendary' }), dropAt, true);
+      feedText('<b style="color:#ffa21f">★ JACKPOT ★ THE HOUSE WEEPS ★</b>', '#ffa21f');
+      audio.victory();
+      fx.burst(dropAt.clone().add(new THREE.Vector3(0, 1, 0)), 0xffd23c, 60, 8, 0.16, 1.2, 5);
+    }
+  }, 1000);
+}
+
 function interact(): void {
   if (vehicles.nearBuggy(player.position)) {
     vehicles.enter(camera);
@@ -1020,6 +1082,7 @@ function interact(): void {
         setPanel('dialogue');
         return;
       }
+      case 'slot': spinSlot(it); return;
       case 'fast_travel': setPanel('fasttravel'); return;
       case 'ship': {
         const q14 = questSystem.quests.find((q) => q.def.id === 'q14_signal');
@@ -1202,6 +1265,10 @@ function stepSim(dt: number): void {
   tickCombatClock(dt);
   statsys.update(dt);
   playerVoice.update(dt);
+  // the world clock: time of day + weather fronts + the quiet layer
+  daynight.update(dt);
+  world.applyAtmosphere(scene, daynight.lightLevel, daynight.dusk, daynight.weatherI);
+  ambience.update(dt);
   if (vehicles.driving && vehicles.buggy) {
     // the buggy IS the player while driving: physics owns position + camera
     vehicles.update(dt, { resolveCollision: (p, r) => world.resolveCollision(p, r), arenaHalf: WORLD.size / 2 }, race.frozen);
@@ -1589,7 +1656,7 @@ canvas.addEventListener('click', () => {
   openDialogueDebug: (giver: QuestGiver) => { dialogueGiver = giver; setPanel('dialogue'); },
   get mapId() { return activeMap().id; },
   maps: MAPS,
-  vehicles, race, respawnCine, statsys, bus,
+  vehicles, race, respawnCine, statsys, bus, daynight,
   get pitActive() { return pitActive; },
   enterBuggyDebug: () => {
     if (!vehicles.buggy) return false;

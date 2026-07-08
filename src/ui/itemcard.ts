@@ -8,6 +8,7 @@ import { makerById } from '../data/manufacturers';
 import { ELEMENTS } from '../data/elements';
 import { WEAPON_TYPES } from '../data/weapons';
 import { LEGENDARIES } from '../data/legendaries';
+import { modifierById } from '../data/modifiers';
 import { fmtNum } from '../util/maff';
 
 function esc(s: string): string {
@@ -62,6 +63,7 @@ export function itemCardHTML(item: ItemInstance, compare?: ItemInstance | null):
         ${s.critBonus > 0 ? `<tr><td>Crit Bonus</td><td class="v">+${Math.round(s.critBonus * 100)}%</td></tr>` : ''}
       </table>
       ${item.element !== 'kinetic' ? `<div class="ic-elem" style="color:${elem.css}">◆ ${elem.name} — ${Math.round(s.elemChance * 100)}% chance · ${fmtNum(s.elemDps)}/s ${esc(elem.statusName)}</div>` : ''}
+      ${(() => { const m = modifierById(item.modifier); return m ? `<div class="ic-effect" style="color:${m.css}">✦ ${esc(m.name)} — ${esc(m.blurb)}</div>` : ''; })()}
       <div class="ic-effect">★ ${esc(maker.gimmickLabel)}</div>
       ${leg ? `<div class="ic-effect">★ ${esc(leg.effectLabel)}</div>` : ''}
       ${item.redText ? `<div class="ic-red">${esc(item.redText)}</div>` : ''}

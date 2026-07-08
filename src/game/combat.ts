@@ -119,6 +119,13 @@ export function applyDamage(target: Damageable, baseAmount: number, element: Ele
     }
   }
 
+  // ---- dismemberment bookkeeping: enemies shed limbs under heavy fire,
+  // and a crit killing blow pops the crit zone (see gibBurst)
+  (target as { lastHitCrit?: boolean }).lastHitCrit = !!opts.crit;
+  if (target.flesh > 0) {
+    (target as { onChunk?: (dealt: number) => void }).onChunk?.(total);
+  }
+
   // ---- death ----
   if (target.alive && target.flesh <= 0 && target.maxFlesh > 0) {
     const overkill = -target.flesh;

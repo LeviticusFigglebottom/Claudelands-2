@@ -750,17 +750,21 @@ export class Player implements Damageable {
       ? { ...w, element: 'volt', stats: { ...w.stats, elemChance: Math.min(1, w.stats.elemChance + 0.35), elemDps: Math.max(w.stats.elemDps, w.stats.damage * 0.35) } }
       : w;
 
-    for (let i = 0; i < stats.pellets; i++) {
-      const dir = camDir.clone();
-      const s = THREE.MathUtils.degToRad(spreadDeg);
-      dir.x += (Math.random() - 0.5) * s;
-      dir.y += (Math.random() - 0.5) * s;
-      dir.z += (Math.random() - 0.5) * s;
-      dir.normalize();
-      if (stats.projSpeed > 0) {
-        this.fireProjectile(fireWeapon, muzzle, dir, dmg, leg?.effect.kind === 'meteor');
-      } else {
-        this.fireHitscan(fireWeapon, muzzle, dir, dmg, leg);
+    // Twin Sister: a chance the whole volley fires its free double
+    const volleys = leg?.effect.kind === 'twinshot' && Math.random() < leg.effect.chance ? 2 : 1;
+    for (let v = 0; v < volleys; v++) {
+      for (let i = 0; i < stats.pellets; i++) {
+        const dir = camDir.clone();
+        const s = THREE.MathUtils.degToRad(spreadDeg);
+        dir.x += (Math.random() - 0.5) * s;
+        dir.y += (Math.random() - 0.5) * s;
+        dir.z += (Math.random() - 0.5) * s;
+        dir.normalize();
+        if (stats.projSpeed > 0) {
+          this.fireProjectile(fireWeapon, muzzle, dir, dmg, leg?.effect.kind === 'meteor');
+        } else {
+          this.fireHitscan(fireWeapon, muzzle, dir, dmg, leg);
+        }
       }
     }
 
@@ -789,6 +793,10 @@ export class Player implements Damageable {
     if (hit && (!staticHit || hit.distance < staticHit.distance)) {
       end = hit.point;
       const critMult = this.currentCritMult;
+      // Can Opener: shields are a suggestion
+      if (leg?.effect.kind === 'shield_eater' && ((hit.target as { shield?: number }).shield ?? 0) > 0) {
+        dmg *= leg.effect.mult;
+      }
       const dealt = applyDamage(hit.target, dmg, w.element, {
         crit: hit.isCrit, critMult,
         elemChance: w.stats.elemChance, elemDps: w.stats.elemDps * statsys.mult('elemDamage'),
@@ -868,6 +876,30 @@ export class Player implements Damageable {
         fx.tracer(point, next.position.clone().add(new THREE.Vector3(0, 1.2, 0)), 0xd8b878);
         applyDamage(next, dmg * 0.6, 'kinetic', { source: 'player' });
       }
+    }
+    // Pinball Royale: EVERY hit banks off into somebody else
+    if (leg?.effect.kind === 'ricochet') {
+      const others = enemySpawner.enemies.filter((e) => e.alive && e !== enemy && e.position.distanceTo(enemy.position) < 15);
+      if (others.length) {
+        const next = others[Math.floor(Math.random() * others.length)];
+        fx.tracer(point, next.position.clone().add(new THREE.Vector3(0, 1.2, 0)), 0xffb43c);
+        applyDamage(next, dmg * leg.effect.frac, w.element, { source: 'player', noChain: true });
+      }
+    }
+    // Magnet School: the impact point holds a mandatory assembly
+    if (leg?.effect.kind === 'gravity_well') {
+      for (const e of enemySpawner.enemies) {
+        if (!e.alive || e === enemy) continue;
+        const d = e.position.distanceTo(enemy.position);
+        if (d > 1.4 && d < leg.effect.radius) {
+          const pull = enemy.position.clone().sub(e.position).setY(0).normalize();
+          e.position.addScaledVector(pull, Math.min(2.2, d - 1.2));
+        }
+      }
+    }
+    // Metronome: kills keep the tempo up
+    if (!enemy.alive && leg?.effect.kind === 'chain_kill') {
+      statsys.addTempBuff({ fireRate: leg.effect.bonus }, leg.effect.window);
     }
 
     if (!enemy.alive && statsys.bonus('overkill') > 0) {

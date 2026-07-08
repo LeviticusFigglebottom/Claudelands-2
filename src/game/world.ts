@@ -17,6 +17,7 @@ import { FX_LAYER } from '../render/post';
 import { mulberry32, type Rng } from '../util/rng';
 import { splashDamage, type Damageable, type StatusEffect } from './combat';
 import { audio } from '../audio/synth';
+import { daynight } from './daynight';
 
 interface AABB {
   minX: number; maxX: number; minZ: number; maxZ: number;
@@ -25,7 +26,7 @@ interface AABB {
 }
 
 export interface Interactable {
-  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'ship' | 'wreck' | 'racer' | 'pit' | 'cargo';
+  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'ship' | 'wreck' | 'racer' | 'pit' | 'cargo' | 'slot';
   pos: THREE.Vector3;
   label: string;
   data?: string;
@@ -169,6 +170,75 @@ export class World {
    *  on big maps a fixed dome's far wall drifts past the camera far plane
    *  (700) and clips to raw black — the flickering "black box" horizon. */
   private skyAnchor = new THREE.Group();
+  // ---- day/night handles: base values captured at build, retinted live
+  private skyMesh: THREE.Mesh | null = null;
+  private skyBaseColors: Float32Array | null = null;
+  private sunDisc: THREE.Mesh | null = null;
+  private moonDisc: THREE.Mesh | null = null;
+  private starField: THREE.Points | null = null;
+  private baseSunIntensity = WORLD.sun.intensity;
+  private baseSunColor = new THREE.Color(WORLD.sun.color);
+  private baseHemiIntensity = WORLD.ambient.intensity;
+  private baseFogColor = new THREE.Color(WORLD.fog.color);
+  private lastAppliedLight = -1;
+
+  /** Apply the day/night + weather state to lights, fog, sky, and the night
+   *  furniture. `light` already includes the per-map night floor, so the
+   *  glass worlds never turn to mud. Cheap to call every frame — the heavy
+   *  vertex retint only runs when the light level actually moved. */
+  applyAtmosphere(scene: THREE.Scene, light: number, dusk: number, weatherI: number): void {
+    const wDim = 1 - weatherI * 0.25; // a front dims the world a touch
+    const l = light * wDim;
+    this.sun.intensity = this.baseSunIntensity * (0.25 + 0.75 * l);
+    // dusk warms the sun; night cools it toward moonlight
+    const sunCol = this.baseSunColor.clone();
+    if (dusk > 0.05) sunCol.lerp(new THREE.Color(0xff9a4a), dusk * 0.5);
+    if (light < 0.75) sunCol.lerp(new THREE.Color(0x9ab4e8), (0.75 - light) * 0.9);
+    this.sun.color.copy(sunCol);
+    this.hemi.intensity = this.baseHemiIntensity * (0.35 + 0.65 * l);
+
+    const fog = scene.fog as THREE.Fog | null;
+    if (fog) {
+      fog.color.copy(this.baseFogColor).multiplyScalar(0.35 + 0.65 * l);
+      // weather closes the horizon in
+      fog.near = WORLD.fog.near * (1 - weatherI * 0.45);
+      fog.far = WORLD.fog.far * (1 - weatherI * 0.35);
+    }
+
+    // night furniture: sun disc sets, moon and stars rise
+    if (this.sunDisc) {
+      const m = this.sunDisc.material as THREE.MeshBasicMaterial;
+      m.opacity = Math.max(0, Math.min(1, (light - 0.35) * 2.4));
+      m.transparent = true;
+    }
+    if (this.moonDisc) {
+      (this.moonDisc.material as THREE.MeshBasicMaterial).opacity = Math.max(0, (0.6 - light) * 1.6) * 0.8;
+      (this.moonDisc.material as THREE.MeshBasicMaterial).transparent = true;
+    }
+    if (this.starField) {
+      (this.starField.material as THREE.PointsMaterial).opacity = Math.max(0, (0.55 - light) * 1.7) * (1 - weatherI * 0.7);
+    }
+
+    // sky dome retint — only when the light moved enough to matter
+    const quantized = Math.round((l + dusk * 0.13) * 90);
+    if (this.skyMesh && this.skyBaseColors && quantized !== this.lastAppliedLight) {
+      this.lastAppliedLight = quantized;
+      const attr = this.skyMesh.geometry.getAttribute('color') as THREE.BufferAttribute;
+      const base = this.skyBaseColors;
+      const mul = 0.16 + 0.84 * l;
+      const duskR = dusk * 0.35, duskG = dusk * 0.12;
+      const pos = this.skyMesh.geometry.getAttribute('position');
+      for (let i = 0; i < attr.count; i++) {
+        const y = Math.max(0, pos.getY(i) / 560); // dusk paints the horizon, not the zenith
+        const horizonK = (1 - y) ** 2;
+        attr.setXYZ(i,
+          Math.min(1, base[i * 3] * mul + duskR * horizonK),
+          Math.min(1, base[i * 3 + 1] * mul + duskG * horizonK),
+          base[i * 3 + 2] * mul);
+      }
+      attr.needsUpdate = true;
+    }
+  }
 
   private buildSky(scene: THREE.Scene): void {
     this.group.add(this.skyAnchor);
@@ -186,6 +256,9 @@ export class World {
     const sky = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false }));
     sky.layers.set(FX_LAYER);
     this.skyAnchor.add(sky);
+    // the day/night pass retints these verts in place — keep the originals
+    this.skyMesh = sky;
+    this.skyBaseColors = Float32Array.from(colors);
 
     // sun disc (blooms nicely)
     const sunDisc = new THREE.Mesh(new THREE.CircleGeometry(26, 20), glowMat(0xfff2d0, 0.9));
@@ -194,6 +267,34 @@ export class World {
     sunDisc.layers.set(FX_LAYER);
     (sunDisc.material as THREE.MeshBasicMaterial).fog = false;
     this.skyAnchor.add(sunDisc);
+    this.sunDisc = sunDisc;
+
+    // the night shift: a pale moon opposite the sun, and a bowl of stars —
+    // both invisible at noon, both fade in as the light leaves
+    const moon = new THREE.Mesh(new THREE.CircleGeometry(15, 20), glowMat(0xd8e4f0, 0.75));
+    moon.position.set(-WORLD.sun.dirX, Math.max(0.5, WORLD.sun.dirY), -WORLD.sun.dirZ).multiplyScalar(500);
+    moon.lookAt(0, 0, 0);
+    moon.layers.set(FX_LAYER);
+    (moon.material as THREE.MeshBasicMaterial).fog = false;
+    (moon.material as THREE.MeshBasicMaterial).opacity = 0;
+    this.skyAnchor.add(moon);
+    this.moonDisc = moon;
+
+    const starRng = mulberry32(24601);
+    const starPos: number[] = [];
+    for (let i = 0; i < 220; i++) {
+      const a = starRng() * Math.PI * 2;
+      const h = 0.12 + starRng() * 0.85;
+      const r = 540 * Math.sqrt(1 - h * h);
+      starPos.push(Math.cos(a) * r, 540 * h, Math.sin(a) * r);
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPos, 3));
+    const starMat = new THREE.PointsMaterial({ color: 0xeef4ff, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false });
+    const stars = new THREE.Points(starGeo, starMat);
+    stars.layers.set(FX_LAYER);
+    this.skyAnchor.add(stars);
+    this.starField = stars;
 
     // clouds wear the planet's palette — storm-grey over Voltholm, sea-glass
     // over the Veldt, violet dusk over Vitra — instead of one universal puff
@@ -1578,8 +1679,147 @@ export class World {
     this.addCollider(x, z, hw, hd, hgt);
   }
 
+  /** THE SECOND WIND — Brasshaven's bar. Neon, bottles that glow like sin,
+   *  Miss Vela behind the counter, and a row of slot machines that love you
+   *  the way the house always loves you. */
+  private buildSecondWind(): void {
+    const bx = 48, bz = 14; // east of the plaza, open side facing the square
+    const by = terrainHeight(bx, bz);
+    const wood = toonMat({ color: 0x6a4a38, map: swatch('#5e402e', 60) });
+    const darkWood = toonMat({ color: 0x4a3428, map: swatch('#3e2c20', 50) });
+    const brass = toonMat({ color: 0xb08a3c, map: swatch('#9a7834', 70) });
+
+    // floor slab + back/side walls + roof; the west face stays open
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(14, 0.5, 11), darkWood);
+    slab.position.set(bx, by + 0.25, bz);
+    this.group.add(slab);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.4, 4.4, 11), wood);
+    back.position.set(bx + 6.8, by + 2.2, bz);
+    this.group.add(back);
+    this.staticTargets.push(back);
+    this.addCollider(bx + 6.8, bz, 0.5, 5.5, 4.4);
+    for (const side of [-1, 1]) {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(14, 4.4, 0.4), wood);
+      wall.position.set(bx, by + 2.2, bz + side * 5.3);
+      this.group.add(wall);
+      this.staticTargets.push(wall);
+      this.addCollider(bx, bz + side * 5.3, 7, 0.5, 4.4);
+    }
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(15, 0.4, 12), darkWood);
+    roof.position.set(bx, by + 4.6, bz);
+    roof.castShadow = true;
+    this.group.add(roof);
+
+    // neon: the name in warm pink over the open face, plus a winking heart
+    const sign = World.textSign(9, 2.2, { lines: ['THE SECOND WIND'], style: 'ad', bg: '#241418', fg: '#ff5a86', accent: '#ffd23c' });
+    sign.position.set(bx - 7.2, by + 5.6, bz);
+    sign.rotation.y = -Math.PI / 2;
+    this.group.add(sign);
+    const heart = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), glowMat(0xff5a86, 0.95));
+    heart.position.set(bx - 7.2, by + 5.6, bz - 5.2);
+    heart.name = 'blinker';
+    this.group.add(heart);
+
+    // the bar counter + glowing bottle shelf
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.15, 8.5), brass);
+    counter.position.set(bx + 4.4, by + 0.95, bz);
+    this.group.add(counter);
+    this.staticTargets.push(counter);
+    this.addCollider(bx + 4.4, bz, 0.8, 4.4, 1.4);
+    for (let s = 0; s < 2; s++) {
+      const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 8), wood);
+      shelf.position.set(bx + 6.4, by + 2.2 + s * 0.9, bz);
+      this.group.add(shelf);
+      for (let i = 0; i < 9; i++) {
+        const tint = [0xff5a86, 0x54d4ff, 0xffd23c, 0x7dff2a, 0xc06bff][(i + s * 2) % 5];
+        const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.42, 6), glowMat(tint, 0.55));
+        bottle.position.set(bx + 6.4, by + 2.5 + s * 0.9, bz - 3.6 + i * 0.9);
+        this.group.add(bottle);
+      }
+    }
+    // stools + a couple of tables
+    for (let i = 0; i < 5; i++) {
+      const stool = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.24, 0.85, 8), darkWood);
+      stool.position.set(bx + 3.2, by + 0.9, bz - 3.2 + i * 1.6);
+      this.group.add(stool);
+      this.addCollider(bx + 3.2, bz - 3.2 + i * 1.6, 0.3, 0.3, 1);
+    }
+    for (const [tx, tz] of [[bx - 2, bz - 2.6], [bx - 2.5, bz + 2.4]] as const) {
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.1, 10), wood);
+      top.position.set(tx, by + 1.15, tz);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 1.1, 6), darkWood);
+      leg.position.set(tx, by + 0.6, tz);
+      const candle = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), glowMat(0xffb84a, 0.95));
+      candle.position.set(tx, by + 1.32, tz);
+      candle.name = 'blinker';
+      this.group.add(top, leg, candle);
+      this.addCollider(tx, tz, 0.9, 0.9, 1.3);
+    }
+    // string lights across the ceiling
+    for (let i = 0; i < 8; i++) {
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), glowMat([0xffd23c, 0xff5a86, 0x54d4ff][i % 3], 0.9));
+      bulb.position.set(bx - 4 + i * 1.3, by + 4.2 - Math.sin((i / 7) * Math.PI) * 0.5, bz + (i % 2 === 0 ? -1 : 1) * 2);
+      this.group.add(bulb);
+    }
+
+    // Miss Vela, keeping the counter and every secret in Brasshaven
+    const vela = new THREE.Group();
+    const dress = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.46, 1.15, 8), toonMat({ color: 0x8a2440, map: swatch('#761e36', 60) }));
+    dress.position.y = 0.58;
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.34, 0.55, 8), toonMat({ color: 0xb03050 }));
+    torso.position.y = 1.42;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 10), toonMat({ color: 0xd8a878 }));
+    head.position.y = 1.95;
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.27, 10, 10), toonMat({ color: 0x2a1a2e }));
+    hair.position.set(0, 2.05, 0.06);
+    hair.scale.set(1, 0.85, 1);
+    const armR = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.7, 6), toonMat({ color: 0xb03050 }));
+    armR.position.set(-0.35, 1.45, 0);
+    armR.rotation.z = 0.6;
+    vela.add(dress, torso, head, hair, armR);
+    vela.position.set(bx + 5.6, by + 0.5, bz + 1.2);
+    vela.rotation.y = -Math.PI / 2;
+    vela.traverse((o) => (o.castShadow = true));
+    this.group.add(vela);
+    this.registerNpcRig(vela, head, armR);
+    this.addCollider(bx + 5.6, bz + 1.2, 0.4, 0.4, 2.1);
+
+    // the slot machines: SUCKER'S ROW — three cabinets, three interactables
+    for (let i = 0; i < 3; i++) {
+      const mx = bx - 3.6 + i * 2.4, mz = bz + 4.5;
+      const cab = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.1, 0.8), toonMat({ color: [0xb43a5a, 0x3a6ab4, 0x9a6ab4][i], map: swatch(['#9e3050', '#305a9e', '#885aa0'][i], 70) }));
+      cab.position.set(mx, by + 1.55, mz);
+      this.group.add(cab);
+      this.staticTargets.push(cab);
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.5),
+        new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['7 ★ 7'], style: 'ad', bg: '#181214', fg: '#ffd23c', accent: '#ff5a86' }, 0.8 / 0.5) }));
+      screen.position.set(mx, by + 2.1, mz - 0.42);
+      screen.rotation.y = Math.PI;
+      this.group.add(screen);
+      const lever = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.6, 6), brass);
+      lever.position.set(mx + 0.62, by + 2.15, mz);
+      lever.rotation.z = 0.35;
+      this.group.add(lever);
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 8), glowMat(0xff5a86, 0.9));
+      knob.position.set(mx + 0.72, by + 2.42, mz);
+      this.group.add(knob);
+      const marquee = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), glowMat(0xffd23c, 0.95));
+      marquee.position.set(mx, by + 2.75, mz);
+      marquee.name = 'blinker';
+      this.group.add(marquee);
+      this.addCollider(mx, mz, 0.6, 0.45, 2.2);
+      this.interactables.push({
+        kind: 'slot',
+        pos: new THREE.Vector3(mx, by + 1, mz - 0.9),
+        label: 'SECOND WIND SLOTS — PULL THE LEVER',
+        data: `slot_${i}`,
+      });
+    }
+  }
+
   private buildBrassPlaza(d: DistrictDef): void {
     const rng = mulberry32(7777);
+    this.buildSecondWind();
     // the beached mega-hauler looming over the north edge — the city's roof
     const hullMat = toonMat({ color: 0xffffff, map: swatch('#7a6a58', 90) });
     const teal = toonMat({ color: 0x2ba8a0 });
@@ -6417,6 +6657,24 @@ export class World {
       const r = 4 + Math.random() * 14;
       const p = playerPos.clone().add(new THREE.Vector3(Math.cos(a) * r, 0.5 + Math.random() * 3, Math.sin(a) * r));
       fx.emit(p, new THREE.Vector3(0.4, 0.15, 0.15), 0xd8c8a8, 0.05, 2.5, -0.02);
+    }
+    // weather fronts: rain/snow on TOP of whatever the biome usually does
+    const wI = daynight.weatherI;
+    if (wI > 0.03 && daynight.weatherKind === 'rain' && WORLD.biome.ambientParticle !== 'rain') {
+      if (Math.random() < 160 * wI * dt) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * 22;
+        const p = playerPos.clone().add(new THREE.Vector3(Math.cos(a) * r, 7 + Math.random() * 6, Math.sin(a) * r));
+        fx.emit(p, new THREE.Vector3(1.4, -15, 0.6), 0xaecde0, 0.065, 0.9, 0);
+      }
+    } else if (wI > 0.03 && daynight.weatherKind === 'snow') {
+      // a squall on top of the usual flurry: denser, faster, sideways
+      if (Math.random() < 70 * wI * dt) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.random() * 22;
+        const p = playerPos.clone().add(new THREE.Vector3(Math.cos(a) * r, 6 + Math.random() * 6, Math.sin(a) * r));
+        fx.emit(p, new THREE.Vector3(1.2 + wI, -2.2, 0.5), 0xffffff, 0.075, 5, 0.02);
+      }
     }
     // gale channels made visible: streaks racing along the wind, whatever
     // else the sky is doing (storm rain on Voltholm, dead air in the Becalmed)

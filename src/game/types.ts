@@ -56,6 +56,8 @@ export interface WeaponInstance {
   name: string;
   redText?: string;
   legendaryId?: string;
+  /** Chaos-gear modifier id (see data/modifiers.ts) — stats already include it. */
+  modifier?: string;
   stats: WeaponStats;
   value: number;                  // cash value
 }

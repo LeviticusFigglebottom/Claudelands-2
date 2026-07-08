@@ -9,6 +9,7 @@ import { MANUFACTURERS, makerById } from '../data/manufacturers';
 import { PART_POOLS, WEAPON_TYPES, WEAPON_TYPE_LIST, MULT_KEYS, ADD_KEYS } from '../data/weapons';
 import { COMBAT_ELEMENTS, ELEMENTS } from '../data/elements';
 import { legendaryFor, LEGENDARIES } from '../data/legendaries';
+import { rollModifier, GUN_MODIFIERS } from '../data/modifiers';
 import { QUALITY_PREFIXES, ELEMENT_PREFIXES, EPIC_RED_TEXT } from '../data/flavor';
 import type { ElementId, PartSlot, StatMods, WeaponInstance, WeaponPartDef, WeaponStats, WeaponType } from '../game/types';
 
@@ -45,6 +46,10 @@ export interface GenOpts {
   luck?: number;
   /** Force a specific legendary signature (quest-unique rewards). */
   legendaryId?: string;
+  /** Never roll a chaos modifier (starter gear, fixed quest rewards). */
+  noModifier?: boolean;
+  /** Force a modifier id (slot-machine jackpots, tests). */
+  modifierId?: string;
 }
 
 export function generateWeapon(opts: GenOpts): WeaponInstance {
@@ -143,7 +148,22 @@ export function generateWeapon(opts: GenOpts): WeaponInstance {
     if (rarity.tier === 3 && chance(rng, 0.5)) redText = pick(rng, EPIC_RED_TEXT);
   }
 
-  const value = Math.round((14 + rarity.tier * 30) * levelScale(level) * (0.8 + rng() * 0.4)) * 3;
+  // ---- chaos modifier: any gun can wake up cursed (blessed) ----
+  const modifier = opts.noModifier
+    ? null
+    : opts.modifierId
+      ? GUN_MODIFIERS.find((m) => m.id === opts.modifierId) ?? null
+      : rollModifier(rng, opts.luck ?? 0);
+  if (modifier) {
+    stats.damage *= modifier.mods.damage ?? 1;
+    stats.fireRate *= modifier.mods.fireRate ?? 1;
+    stats.magSize = Math.max(2, Math.round(stats.magSize * (modifier.mods.magSize ?? 1)));
+    stats.reloadTime = Math.max(0.4, stats.reloadTime * (modifier.mods.reloadTime ?? 1));
+    if (modifier.mods.elemChance && element !== 'kinetic') stats.elemChance = Math.min(1, stats.elemChance + modifier.mods.elemChance);
+    name = `${modifier.name} ${name}`;
+  }
+
+  const value = Math.round((14 + rarity.tier * 30) * levelScale(level) * (0.8 + rng() * 0.4) * (modifier?.valueMult ?? 1)) * 3;
 
   return {
     kind: 'weapon',
@@ -156,6 +176,7 @@ export function generateWeapon(opts: GenOpts): WeaponInstance {
     name,
     redText,
     legendaryId: legendary?.id,
+    modifier: modifier?.id,
     stats,
     value,
   };
@@ -163,5 +184,5 @@ export function generateWeapon(opts: GenOpts): WeaponInstance {
 
 /** Convenience: starter peashooter so the player is never unarmed. */
 export function starterWeapon(): WeaponInstance {
-  return generateWeapon({ level: 1, rarityId: 'common', type: 'pistol', makerId: 'cordwood', seed: 1337 });
+  return generateWeapon({ level: 1, rarityId: 'common', type: 'pistol', makerId: 'cordwood', seed: 1337, noModifier: true });
 }

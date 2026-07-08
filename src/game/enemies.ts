@@ -125,14 +125,23 @@ export class Enemy implements Damageable {
   private leashing = false;
   private leashCooldown = 0;
 
-  constructor(def: EnemyDef, level: number, pos: THREE.Vector3, badass = false) {
+  /** Rare spawn: gold-trimmed walking loot piñata (see spawnOne). */
+  rare = false;
+  rareName = 'GILDED';
+
+  constructor(def: EnemyDef, level: number, pos: THREE.Vector3, badass = false, rare = false) {
     this.def = def;
     this.level = level;
     this.badass = badass;
+    this.rare = rare;
+    if (rare) {
+      this.rareName = pick(Math.random as never, ['GILDED', 'IRIDESCENT', 'MIDAS-TOUCHED', 'LOOT-STUFFED', 'AUREATE']);
+      this.badass = true; // rares fight at badass weight; the shine is extra
+    }
     this.position.copy(pos);
     this.homeDistrict = districtAt(pos.x, pos.z);
 
-    const hpBudget = 55 * def.hpMult * levelScale(level) * (badass ? BADASS_HP_MULT : 1) * difficulty().enemyHp * COOP_SCALE.hp;
+    const hpBudget = 55 * def.hpMult * levelScale(level) * (this.badass ? BADASS_HP_MULT : 1) * (rare ? 1.5 : 1) * difficulty().enemyHp * COOP_SCALE.hp;
     this.coopHpApplied = COOP_SCALE.hp;
     this.maxFlesh = Math.max(1, hpBudget * def.flesh);
     this.maxShield = hpBudget * def.shield;
@@ -144,13 +153,27 @@ export class Enemy implements Damageable {
     // buildBody assigns critZone explicitly; fall back to last part if not
     if (!this.critZone) this.critZone = this.bodyParts[this.bodyParts.length - 1];
 
+    // rare dressing: a gold halo ring at the feet and a beacon spark — you
+    // should clock a walking jackpot from across the district
+    if (rare) {
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.95 * def.scale, 0.06, 8, 22), glowMat(0xffd23c, 0.9));
+      halo.rotation.x = Math.PI / 2;
+      halo.position.y = 0.22;
+      halo.name = 'blinker';
+      this.group.add(halo);
+      const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 8), glowMat(0xffd23c, 1));
+      beacon.position.y = 2.8 * def.scale;
+      beacon.name = 'blinker';
+      this.group.add(beacon);
+    }
+
     const c = document.createElement('canvas'); c.width = 128; c.height = 20;
     this.healthCtx = c.getContext('2d')!;
     this.healthTex = new THREE.CanvasTexture(c);
     const mat = new THREE.SpriteMaterial({ map: this.healthTex, transparent: true, depthWrite: false });
     this.healthBar = new THREE.Sprite(mat);
     this.healthBar.scale.set(1.4, 0.22, 1);
-    this.healthBar.position.y = 2.5 * def.scale * (badass ? BADASS_SCALE : 1);
+    this.healthBar.position.y = 2.5 * def.scale * (this.badass ? BADASS_SCALE : 1);
     this.healthBar.layers.set(1);
     this.group.add(this.healthBar);
     this.group.position.copy(pos);
@@ -161,6 +184,36 @@ export class Enemy implements Damageable {
 
   protected addLimb(mesh: THREE.Mesh, swing: number): void {
     this.limbs.push({ mesh, baseY: mesh.position.y, baseX: mesh.rotation.x, swing });
+  }
+
+  // ---- dismemberment: heavy fire tears pieces OFF a living enemy ----
+  private chunkDamage = 0;
+  private partsLost = 0;
+  /** Set by combat on every hit; gibBurst reads it for the crit head-pop. */
+  lastHitCrit = false;
+
+  /** Called by combat with every damage chunk while still alive. Bank the
+   *  damage; past a threshold a non-critical limb rips free and keeps the
+   *  fight going uglier. Two limbs max — past that they're just dying. */
+  onChunk(dealt: number): void {
+    if (!this.alive || this.partsLost >= 2) return;
+    this.chunkDamage += dealt;
+    const threshold = (this.maxFlesh + this.maxShield + this.maxArmor) * 0.34;
+    if (this.chunkDamage < threshold) return;
+    this.chunkDamage = 0;
+    const candidates = this.limbs.filter((l) => l.mesh !== this.critZone && l.mesh.parent === this.group);
+    if (!candidates.length) return;
+    const limb = candidates[Math.floor(Math.random() * candidates.length)];
+    this.partsLost++;
+    const world = limb.mesh.position.clone().add(this.group.position);
+    this.group.remove(limb.mesh);
+    this.limbs.splice(this.limbs.indexOf(limb), 1);
+    const bi = this.bodyParts.indexOf(limb.mesh);
+    if (bi >= 0) this.bodyParts.splice(bi, 1);
+    limb.mesh.position.copy(world);
+    enemySpawner.addGib(limb.mesh, new THREE.Vector3((Math.random() - 0.5) * 6, 4 + Math.random() * 3, (Math.random() - 0.5) * 6));
+    fx.burst(world, 0xe04040, 14, 4, 0.11, 0.6, 8);
+    audio.hit(true);
   }
 
   private mat(color: number, hexSwatch?: string): THREE.MeshToonMaterial {
@@ -546,6 +599,7 @@ export class Enemy implements Damageable {
   }
 
   get displayName(): string {
+    if (this.rare) return `✦ ${this.rareName} ${this.def.name}`;
     return this.badass ? this.def.badassName : this.def.name;
   }
 
@@ -1275,12 +1329,16 @@ export class EnemySpawner {
 
   spawnOne(def: EnemyDef, pos: THREE.Vector3, forceBadass?: boolean, levelOffset = 0): Enemy {
     const level = Math.max(1, state.level + levelOffset + Math.floor(Math.random() * 2) - 1);
-    const badass = forceBadass ?? Math.random() < BADASS_CHANCE;
-    const e = new Enemy(def, level, pos, badass);
+    // rare roll first: a gilded walking jackpot, tougher than a badass and
+    // paid out accordingly (see main's onKilled)
+    const rare = forceBadass === undefined && Math.random() < 0.025;
+    const badass = rare || (forceBadass ?? Math.random() < BADASS_CHANCE);
+    const e = new Enemy(def, level, pos, badass, rare);
     this.scene.add(e.group);
     this.enemies.push(e);
-    fx.burst(pos.clone().add(new THREE.Vector3(0, 1, 0)), def.faction === 'helix' ? 0x54d4ff : 0xff8438, 14, 4, 0.12, 0.5, 5);
-    if (badass) enemyHooks().bark(e.displayName, 'A BADASS APPROACHES.');
+    fx.burst(pos.clone().add(new THREE.Vector3(0, 1, 0)), rare ? 0xffd23c : def.faction === 'helix' ? 0x54d4ff : 0xff8438, rare ? 30 : 14, 4, 0.12, 0.5, 5);
+    if (rare) enemyHooks().bark(e.displayName, 'ooh, shiny. VIOLENTLY shiny.');
+    else if (badass) enemyHooks().bark(e.displayName, 'A BADASS APPROACHES.');
     return e;
   }
 
@@ -1365,9 +1423,31 @@ export class EnemySpawner {
       this.launchGibs(e, 1, 10);
       return;
     }
+    // crit killing blow: the crit zone pops FIRST, hard, with its own burst
+    if (e.lastHitCrit && e.critZone && e.critZone.parent === e.group) {
+      const world = e.critZone.position.clone().add(e.group.position);
+      e.group.remove(e.critZone);
+      const bi = e.bodyParts.indexOf(e.critZone);
+      if (bi >= 0) e.bodyParts.splice(bi, 1);
+      e.critZone.position.copy(world);
+      this.addGib(e.critZone, new THREE.Vector3((Math.random() - 0.5) * 5, 9 + Math.random() * 4, (Math.random() - 0.5) * 5), 2.4);
+      fx.burst(world, 0xe04040, 20, 5, 0.13, 0.7, 9);
+      fx.burst(world, 0xffd23c, 8, 3, 0.08, 0.4, 4);
+    }
     // kinetic / blast: the full gib fountain
     this.launchGibs(e, 1, 8);
     fx.burst(center, 0xe04040, 22, 6, 0.14, 0.7, 9);
+  }
+
+  /** Adopt a REAL mesh (a torn-off limb, a popped head) as a physics gib. */
+  addGib(mesh: THREE.Mesh, vel: THREE.Vector3, life = 2): void {
+    this.scene.add(mesh);
+    this.gibs.push({
+      mesh, vel,
+      spin: new THREE.Vector3(Math.random() * 10, Math.random() * 10, Math.random() * 10),
+      life: life + Math.random() * 0.6,
+      frozen: false,
+    });
   }
 
   private launchGibs(e: Enemy, keepFraction: number, force: number): void {

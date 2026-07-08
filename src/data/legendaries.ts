@@ -22,7 +22,12 @@ export interface LegendaryDef {
     | { kind: 'vampire'; leech: number }               // heal % of damage
     | { kind: 'money_shot'; multPerMissing: number }   // more damage the emptier the mag
     | { kind: 'meteor'; radius: number }               // impacts rain a second explosion
-    | { kind: 'echo_round'; delay: number };           // every hit repeats itself once
+    | { kind: 'echo_round'; delay: number }            // every hit repeats itself once
+    | { kind: 'twinshot'; chance: number }             // chance to fire a free duplicate volley
+    | { kind: 'chain_kill'; bonus: number; window: number } // kills grant fire rate for a beat
+    | { kind: 'shield_eater'; mult: number }           // bonus damage vs shields
+    | { kind: 'ricochet'; frac: number }               // every hit bounces to a neighbour
+    | { kind: 'gravity_well'; radius: number };        // hits drag nearby enemies together
   forceElement?: ElementId;
 }
 
@@ -75,6 +80,54 @@ export const LEGENDARIES: LegendaryDef[] = [
     redText: '“So. Cold enough for ya?”',
     effectLabel: 'Volt hits chain twice instead of once.',
     effect: { kind: 'bouncing_orbs' }, forceElement: 'volt',
+  },
+  {
+    id: 'leg_twin_sister', name: 'The Twin Sister', maker: 'briskco', type: 'smg',
+    redText: '“There were always two of her.”',
+    effectLabel: '35% chance every shot fires its twin for free.',
+    effect: { kind: 'twinshot', chance: 0.35 },
+  },
+  {
+    id: 'leg_magnet_school', name: 'Magnet School', maker: 'aetheric', type: 'ar',
+    redText: '“Attendance is MANDATORY.”',
+    effectLabel: 'Hits drag nearby enemies toward the point of impact.',
+    effect: { kind: 'gravity_well', radius: 7 }, forceElement: 'volt',
+  },
+  {
+    id: 'leg_can_opener', name: 'Can Opener', maker: 'ratworks', type: 'shotgun',
+    redText: '“Evrithing is a can if yor brave.”',
+    effectLabel: 'Deals double damage to shields.',
+    effect: { kind: 'shield_eater', mult: 2 },
+  },
+  {
+    id: 'leg_pinball', name: 'Pinball Royale', maker: 'briskco', type: 'pistol',
+    redText: '“TILT. TILT. TILT.”',
+    effectLabel: 'Every hit ricochets to another enemy for 40% damage.',
+    effect: { kind: 'ricochet', frac: 0.4 },
+  },
+  {
+    id: 'leg_metronome', name: 'Metronome', maker: 'lumen', type: 'smg',
+    redText: '“Keep. The. Tempo.”',
+    effectLabel: 'Kills grant +35% fire rate for 4 seconds.',
+    effect: { kind: 'chain_kill', bonus: 0.35, window: 4 },
+  },
+  {
+    id: 'leg_long_goodbye', name: 'The Long Goodbye', maker: 'vulkram', type: 'sniper',
+    redText: '“She waves. The glacier waves back.”',
+    effectLabel: 'Freezing impacts call a second, delayed burst.',
+    effect: { kind: 'meteor', radius: 4.5 }, forceElement: 'rime',
+  },
+  {
+    id: 'leg_committee', name: 'The Committee', maker: 'ratworks', type: 'launcher',
+    redText: '“All in favor of KABOOM say nothing.”',
+    effectLabel: 'Fires a quorum of extra rockets.',
+    effect: { kind: 'pellet_storm', pellets: 3 }, forceElement: 'blast',
+  },
+  {
+    id: 'leg_heirloom', name: 'Family Heirloom', maker: 'cordwood', type: 'ar',
+    redText: '“Your grandmother shot straighter than you.”',
+    effectLabel: 'Heals you for 3% of damage dealt. Grandma provides.',
+    effect: { kind: 'vampire', leech: 0.03 },
   },
   // ---- boss signatures (dedicated drops; never in the world pool)
   {

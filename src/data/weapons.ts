@@ -80,6 +80,9 @@ export const BARREL_PARTS: WeaponPartDef[] = [
   { id: 'brl_coil', name: 'Flux Coil', maker: 'aetheric', slot: 'barrel', types: ALL, grade: 1, mods: { elemChance: 0.15, damage: 1.05 }, look: { len: 1.2, fat: 1.0, shape: 'coil' } },
   { id: 'brl_cluster', name: 'Hydra Cluster', maker: 'ratworks', slot: 'barrel', types: ['shotgun', 'launcher'], grade: 2, mods: { pellets: 2, accuracy: 0.8, damage: 0.9 }, look: { len: 0.9, fat: 1.4, shape: 'cluster' }, tip: 'Fires extra projectiles.' },
   { id: 'brl_railspine', name: 'Rail Spine', maker: 'lumen', slot: 'barrel', types: ['sniper', 'ar', 'pistol'], grade: 2, mods: { damage: 1.18, accuracy: 1.3, critBonus: 0.15, fireRate: 0.9 }, look: { len: 1.6, fat: 0.7, shape: 'rail' } },
+  { id: 'brl_bell', name: 'Blunder Bell', maker: 'cordwood', slot: 'barrel', types: ['shotgun', 'launcher'], grade: 1, mods: { damage: 1.12, accuracy: 0.82, pellets: 1 }, look: { len: 0.85, fat: 1.3, shape: 'bell' }, tip: 'A wider hello.' },
+  { id: 'brl_hush', name: 'Hushed Pipe', maker: 'lumen', slot: 'barrel', types: ['pistol', 'smg', 'sniper'], grade: 2, mods: { critBonus: 0.12, accuracy: 1.1, damage: 0.95 }, look: { len: 1.25, fat: 1.0, shape: 'suppressor' } },
+  { id: 'brl_split', name: 'Split Bore', maker: 'briskco', slot: 'barrel', types: ['smg', 'ar'], grade: 2, mods: { pellets: 1, damage: 0.85, accuracy: 0.92 }, look: { len: 1.05, fat: 0.9, shape: 'split' }, tip: 'One trigger, two opinions.' },
 ];
 
 // ---------------------------------------------------------------------------
@@ -113,6 +116,7 @@ export const SIGHT_PARTS: WeaponPartDef[] = [
   { id: 'sgt_prism', name: 'Prism Optic', maker: 'lumen', slot: 'sight', types: ALL, grade: 1, mods: { accuracy: 1.12, zoom: 0.8, critBonus: 0.08 }, look: { shape: 'scope' } },
   { id: 'sgt_longeye', name: 'Longeye Scope', maker: 'vulkram', slot: 'sight', types: ['sniper', 'ar', 'launcher'], grade: 2, mods: { zoom: 1.8, accuracy: 1.15 }, look: { shape: 'bigscope' } },
   { id: 'sgt_third_eye', name: 'Third Eye', maker: 'aetheric', slot: 'sight', types: ALL, grade: 2, mods: { zoom: 0.6, elemChance: 0.08, critBonus: 0.1 }, look: { shape: 'orb' } },
+  { id: 'sgt_holo', name: 'Ghost Plane', maker: 'briskco', slot: 'sight', types: ALL, grade: 2, mods: { accuracy: 1.1, zoom: 0.5, fireRate: 1.04 }, look: { shape: 'holo' } },
 ];
 
 // ---------------------------------------------------------------------------
@@ -135,6 +139,9 @@ export const ACCESSORY_PARTS: WeaponPartDef[] = [
   { id: 'acc_hair_trigger', name: 'Hair Trigger', maker: 'cordwood', slot: 'accessory', types: ALL, grade: 1, mods: { fireRate: 1.18 }, look: { shape: 'trigger' } },
   { id: 'acc_catalyst', name: 'Catalyst Bead', maker: 'aetheric', slot: 'accessory', types: ALL, grade: 2, mods: { elemChance: 0.2 }, look: { shape: 'bead' } },
   { id: 'acc_double_tap', name: 'Double-Tap Cam', maker: 'briskco', slot: 'accessory', types: ['pistol', 'smg', 'ar'], grade: 2, mods: { pellets: 1, damage: 0.82, magSize: 1.1 }, look: { shape: 'cam' }, tip: 'Two for the price of 1.4.' },
+  { id: 'acc_bipod', name: 'Field Bipod', maker: 'vulkram', slot: 'accessory', types: ['sniper', 'ar', 'launcher'], grade: 1, mods: { accuracy: 1.25, fireRate: 0.92 }, look: { shape: 'bipod' } },
+  { id: 'acc_foregrip', name: 'Forward Grip', maker: 'briskco', slot: 'accessory', types: ['smg', 'ar', 'shotgun'], grade: 0, mods: { recoil: 0.85 }, look: { shape: 'fore' } },
+  { id: 'acc_lantern', name: 'Lucky Lantern', maker: 'ratworks', slot: 'accessory', types: ALL, grade: 2, mods: { critBonus: 0.06, elemChance: 0.06 }, look: { shape: 'charm' }, tip: 'Sumwun luvd this gun.' },
 ];
 
 export const PART_POOLS: Record<string, WeaponPartDef[]> = {

@@ -51,6 +51,12 @@ class StatSystem {
     if (this.rawBonus('anarchy') > 0) this.addStack('scrap', 1, this.scrapCap);
   }
 
+  /** External timed buff (legendary procs like Metronome) — same pipeline
+   *  as kill skills, so the HUD counter and stacking rules come free. */
+  addTempBuff(stats: Record<string, number>, duration: number): void {
+    this.killBuffs.push({ stats, expires: this.now + duration });
+  }
+
   update(dt: number): void {
     this.now += dt;
     this.killBuffs = this.killBuffs.filter((b) => b.expires > this.now);
