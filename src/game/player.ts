@@ -33,7 +33,7 @@ const PLAYER_RADIUS = 0.45;
 export interface WorldQuery {
   groundHeight: (x: number, z: number) => number;
   /** Shimmer vents (Vitra Null): standing in one rides the exhale. */
-  updrafts?: () => { x: number; z: number; r: number; power: number }[];
+  updrafts?: () => { x: number; z: number; r: number; power: number; top: number }[];
   resolveCollision: (pos: THREE.Vector3, radius: number) => void;
   raycastStatics: (ray: THREE.Raycaster) => StaticHit | null;
   barrels: () => ExplosiveBarrel[];
@@ -297,11 +297,15 @@ export class Player implements Damageable {
     }
     const moving = move.lengthSq() > 0;
     if (moving) move.normalize().multiplyScalar(speed * dt);
-    // slope blocking: ridge walls and steep terrain reject uphill movement
+    // slope blocking: ridge walls and steep terrain reject uphill movement.
+    // Airborne too — a steep face that rises above your feet is a WALL, and
+    // jump-spamming into it must not ratchet you up it. (Gentle slopes and
+    // ledges below your feet stay jumpable.)
     if (moving) {
       const hBefore = this.world.groundHeight(this.position.x, this.position.z);
       const hAfter = this.world.groundHeight(this.position.x + move.x, this.position.z + move.z);
-      if (this.grounded && hAfter - hBefore > move.length() * 1.1) {
+      const steep = hAfter - hBefore > move.length() * 1.1;
+      if (steep && (this.grounded || hAfter > this.position.y + 0.4)) {
         // try sliding along each axis before rejecting outright
         const hX = this.world.groundHeight(this.position.x + move.x, this.position.z);
         const hZ = this.world.groundHeight(this.position.x, this.position.z + move.z);
@@ -340,8 +344,17 @@ export class Player implements Damageable {
     // shimmer vents: the ground exhales and you go with it
     for (const u of this.world.updrafts?.() ?? []) {
       if (Math.hypot(this.position.x - u.x, this.position.z - u.z) < u.r) {
-        this.velY = Math.min(this.velY + u.power * dt, 21);
-        this.grounded = false;
+        // lift fades over the last 6m of the column and dies at the ceiling —
+        // low gravity no longer means a one-way trip to the skybox
+        const lift = Math.max(0, Math.min(1, (u.top - this.position.y) / 6));
+        if (lift > 0) {
+          this.velY = Math.min(this.velY + u.power * lift * dt, 16);
+          this.grounded = false;
+        } else if (this.velY > 0) {
+          // above the ceiling the exhale is spent — bleed the leftover
+          // momentum so low gravity can't turn a vent into a space program
+          this.velY = Math.max(0, this.velY - 40 * dt);
+        }
       }
     }
     this.position.y += this.velY * dt;

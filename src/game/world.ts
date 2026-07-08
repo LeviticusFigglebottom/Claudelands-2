@@ -509,6 +509,20 @@ export class World {
   }
 
   /** Scatter keep-out: too close to a collider, POI, or road = don't place. */
+  /** Registered pond/paddy circles — nothing organic or loose gets placed
+   *  IN the water (palms, tufts, lanterns, crates...). */
+  private ponds: { x: number; z: number; r: number }[] = [];
+
+  /** True when the ground around a spot is close to level — random prop
+   *  placement must never decorate a canyon wall or a terrace ramp. */
+  private flatEnough(x: number, z: number, spread = 1.8, maxRise = 1.3): boolean {
+    const h0 = terrainHeight(x, z);
+    for (const [dx, dz] of [[spread, 0], [-spread, 0], [0, spread], [0, -spread]] as [number, number][]) {
+      if (Math.abs(terrainHeight(x + dx, z + dz) - h0) > maxRise) return false;
+    }
+    return true;
+  }
+
   private clearOfAssets(x: number, z: number, margin = 1.6): boolean {
     if (roadFactor(x, z) > 0.12) return false;
     for (const c of this.colliders) {
@@ -517,7 +531,12 @@ export class World {
     for (const p of WORLD.pois) {
       if (Math.hypot(x - p.x, z - p.z) < 5.5) return false;
     }
+    for (const pd of this.ponds) {
+      if (Math.hypot(x - pd.x, z - pd.z) < pd.r + margin) return false;
+    }
     if (!this.clearOfExits(x, z)) return false;
+    // a lenient global slope gate: random scatter never climbs the walls
+    if (!this.flatEnough(x, z, 1.8, 2.2)) return false;
     return true;
   }
 
@@ -1700,9 +1719,10 @@ export class World {
         const x = (rng() - 0.5) * WORLD.size * 1.05;
         const z = (rng() - 0.5) * WORLD.size * 1.05;
         const d = districtAt(x, z);
-        if (d && (d.dress === 'porttown' || d.dress === 'castaway' || d.dress === 'anchorage')) continue;
+        if (d && (d.dress === 'porttown' || d.dress === 'castaway' || d.dress === 'anchorage' || d.dress === 'paddygate')) continue;
         if (WORLD.terrain.lake && Math.hypot(x - WORLD.terrain.lake.x, z - WORLD.terrain.lake.z) < WORLD.terrain.lake.r * 0.85) continue;
         if (!this.clearOfAssets(x, z, 2.4) || !this.clearOfExits(x, z)) continue;
+        if (!this.flatEnough(x, z, 2.0, 1.5)) continue; // no palms up the canyon walls
         this.palm(x, z, 0.7 + rng() * 0.9);
         if (rng() < 0.5) this.fern(x + 1.5, z + 1, 0.6 + rng());
         placed++;
@@ -2243,16 +2263,29 @@ export class World {
       banner.rotation.y = flip;
       this.group.add(banner);
     }
-    // checkered start line painted on the road
-    const lineTex = posterTexture({ lines: ['▚▚▚▚▚▚▚▚'], style: 'warning', bg: '#f0e8d8', fg: '#181818', accent: '#181818' }, 9);
-    const line = new THREE.Mesh(new THREE.PlaneGeometry(18, 2), new THREE.MeshBasicMaterial({ map: lineTex, transparent: true, opacity: 0.85 }));
-    line.rotation.x = -Math.PI / 2;
-    line.position.set(archX, gy + 0.06, archZ);
-    this.group.add(line);
+    // checkered start line painted on the road — laid as short segments,
+    // each seated on ITS OWN patch of ground, so a cambered grid can't
+    // leave any part of the stripe floating in mid-air
+    const lineTex = posterTexture({ lines: ['▚▚'], style: 'warning', bg: '#f0e8d8', fg: '#181818', accent: '#181818' }, 1.5);
+    const lineMat = new THREE.MeshBasicMaterial({ map: lineTex, transparent: true, opacity: 0.85 });
+    for (let s = 0; s < 6; s++) {
+      const sx = archX - 7.5 + s * 3;
+      const seg = new THREE.Mesh(new THREE.PlaneGeometry(3.06, 2), lineMat);
+      const sn = terrainNormal(sx, archZ);
+      seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(sn.x, sn.y, sn.z).normalize());
+      seg.position.set(sx, terrainHeight(sx, archZ) + 0.1, archZ);
+      this.group.add(seg);
+    }
 
-    // Rita's garage: lean-to + workbench + a work lamp so the inside reads
-    const gx = d.cx + 10, gz = d.cz + 28;
+    // Rita's garage: lean-to + workbench + a work lamp so the inside reads.
+    // On the GP paddocks the default spot can land on a corridor wall — the
+    // garage shops around for level ground before pouring a slab
+    let gx = d.cx + 10, gz = d.cz + 28;
+    if (!this.flatEnough(gx, gz, 3.4, 1.6)) { gx = d.cx - 12; gz = d.cz - 8; }
+    if (!this.flatEnough(gx, gz, 3.4, 1.6)) { gx = d.cx + 12; gz = d.cz - 10; }
+    const garageOk = this.flatEnough(gx, gz, 3.4, 1.8);
     const gyy = terrainHeight(gx, gz);
+    if (garageOk) {
     const shack = new THREE.Group();
     const wallMat = toonMat({ color: 0x9a7a58, map: corrugatedTexture('#8a6a4c') });
     const back = new THREE.Mesh(new THREE.BoxGeometry(7, 3.4, 0.3), wallMat);
@@ -2289,6 +2322,7 @@ export class World {
     this.addCollider(swx, swz, 0.6, 2.2);        // side wall
     const [bx2, bz2] = wallSpot(-1.8, -1.6);
     this.addCollider(bx2, bz2, 1.4, 0.6);        // bench
+    }
 
     // tire stacks + oil drums scattered around pit row
     const tireMat = toonMat({ color: 0x22221f, map: swatch('#1d1d1a', 40) });
@@ -2298,6 +2332,7 @@ export class World {
       const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
       if (Math.abs(x - archX) < 10) continue; // keep the whole start straight clear
       if (roadFactor(x, z) > 0.15) continue;  // never on any racing line
+      if (!this.flatEnough(x, z, 1.2, 0.9)) continue; // never up the paddock walls
       const stackH = 1 + Math.floor(rng() * 3);
       for (let s = 0; s < stackH; s++) {
         const tire = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.22, 8, 14), tireMat);
@@ -2309,18 +2344,20 @@ export class World {
       this.addCollider(x, z, 0.75, 0.75);
     }
 
-    // plank bleachers facing the straight
+    // plank bleachers facing the straight (only where the ground allows)
     const bleachX = archX + 16, bleachZ = archZ - 8;
-    for (let row = 0; row < 3; row++) {
-      const plank = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.22, 10), toonMat({ color: 0x8a6a4a, map: swatch('#7a5a3e', 60) }));
-      plank.position.set(bleachX + row * 1.1, terrainHeight(bleachX, bleachZ) + 0.5 + row * 0.55, bleachZ);
-      plank.castShadow = true;
-      this.group.add(plank);
+    if (this.flatEnough(bleachX, bleachZ, 3, 1.4)) {
+      for (let row = 0; row < 3; row++) {
+        const plank = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.22, 10), toonMat({ color: 0x8a6a4a, map: swatch('#7a5a3e', 60) }));
+        plank.position.set(bleachX + row * 1.1, terrainHeight(bleachX, bleachZ) + 0.5 + row * 0.55, bleachZ);
+        plank.castShadow = true;
+        this.group.add(plank);
+      }
+      this.addCollider(bleachX + 1, bleachZ, 2.2, 5.2);
     }
-    this.addCollider(bleachX + 1, bleachZ, 2.2, 5.2);
 
     // string lights from the arch to the garage
-    for (let i = 0; i < 6; i++) {
+    if (garageOk) for (let i = 0; i < 6; i++) {
       const t = i / 5;
       const lx = archX + 11 + (gx - archX - 11) * t, lz = archZ + (gz - archZ) * t;
       const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 6), glowMat([0xffd23c, 0xff5a86, 0x54d4ff][i % 3], 0.9));
@@ -2503,6 +2540,24 @@ export class World {
   /** Still water: toon disc + drifting glint texture; ponds get lilies + reeds. */
   private water(x: number, z: number, r: number, opts: { lilies?: boolean; level?: number } = {}): void {
     const level = opts.level ?? terrainHeight(x, z) + 0.18;
+    this.ponds.push({ x, z, r });
+    // pond-sized water gets an earthen berm hugging the shoreline so the
+    // disc never reads as a bare blue circle laid on open grass — each berm
+    // segment sits on ITS OWN terrain height, sealing gaps on slopes
+    if (r <= 12) {
+      const berm = toonMat({ color: 0xffffff, map: swatch(WORLD.biome.ground.dark, 50) });
+      const n = Math.max(10, Math.round(r * 2.2));
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        const bx = x + Math.cos(a) * (r + 0.5), bz = z + Math.sin(a) * (r + 0.5);
+        const by = terrainHeight(bx, bz);
+        const seg = new THREE.Mesh(new THREE.BoxGeometry((2 * Math.PI * r) / n * 1.35, 0.9, 1.7), berm);
+        seg.position.set(bx, Math.max(by, level - 0.55) + 0.18, bz);
+        seg.rotation.y = -a + Math.PI / 2;
+        seg.rotation.z = (Math.sin(i * 3.7) * 0.06);
+        this.group.add(seg);
+      }
+    }
     const tex = waterTexture();
     const pool = new THREE.Mesh(new THREE.CircleGeometry(r, 28),
       new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.88 }));
@@ -3770,7 +3825,7 @@ export class World {
   // ------------------------------------------------------------ VITRA NULL
   /** Shimmer vents — the planet exhales and you ride it. Player physics
    *  reads this list every frame; the visual is a glowing throat + motes. */
-  updrafts: { x: number; z: number; r: number; power: number }[] = [];
+  updrafts: { x: number; z: number; r: number; power: number; top: number }[] = [];
   private ventMotes: THREE.Vector3[] = [];
 
   private buildVent(poi: WorldPoi): void {
@@ -3796,7 +3851,9 @@ export class World {
     g.add(halo);
     g.position.set(poi.x, y, poi.z);
     this.group.add(g);
-    this.updrafts.push({ x: poi.x, z: poi.z, r: 2.4, power: 46 });
+    // the column has a CEILING — lift fades out near the top so riders
+    // crest and drift instead of ascending into orbit on low-g worlds
+    this.updrafts.push({ x: poi.x, z: poi.z, r: 2.4, power: 46, top: y + 15 });
     this.ventMotes.push(new THREE.Vector3(poi.x, y + 0.4, poi.z));
   }
 
@@ -4495,11 +4552,20 @@ export class World {
     const hy = terrainHeight(hx, hz);
     const hut = new THREE.Mesh(new THREE.BoxGeometry(5, 3, 4), toonMat({ color: 0x4a5450, map: rockTexture('#424c48') }));
     hut.position.set(hx, hy + 1.5, hz);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.3, 4.6), iron);
+    // a stone foundation skirt seats the box INTO the ground
+    const skirt = new THREE.Mesh(new THREE.BoxGeometry(5.6, 1.0, 4.6), toonMat({ color: 0x38423e, map: rockTexture('#323c38') }));
+    skirt.position.set(hx, hy + 0.25, hz);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(5.8, 0.3, 4.8), iron);
     roof.position.set(hx, hy + 3.15, hz);
+    const eave = new THREE.Mesh(new THREE.BoxGeometry(5.8, 0.16, 1.3), iron);
+    eave.position.set(hx, hy + 3.0, hz + 2.7);
     const win = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.8, 0.1), glowMat(0xffd88a, 0.95));
     win.position.set(hx + 1.2, hy + 1.7, hz + 2.02);
-    this.group.add(hut, roof, win);
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.9, 0.12), toonMat({ color: 0x2c3834 }));
+    door.position.set(hx - 1.1, hy + 0.95, hz + 2.02);
+    const porch = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 6), glowMat(0xffd88a, 0.95));
+    porch.position.set(hx - 1.1, hy + 2.25, hz + 2.2);
+    this.group.add(hut, skirt, roof, eave, win, door, porch);
     this.staticTargets.push(hut);
     this.addCollider(hx, hz, 2.8, 2.3, 3.4);
     // instrument masts: cup anemometers that have not turned in twenty years
@@ -4664,12 +4730,21 @@ export class World {
       rock.rotation.set(rng() * 3, rng() * 3, rng() * 3);
       this.group.add(rock);
     }
-    // the centre: a swirl-worn dais where the wind sits when it's home
+    // the centre: a swirl-worn dais SEATED into the bowl — wide buried base,
+    // low profile, a skirt of tumbled stones sealing the seam with the dirt
     const cy = terrainHeight(d.cx, d.cz);
-    for (let s = 0; s < 2; s++) {
-      const step = new THREE.Mesh(new THREE.CylinderGeometry(4.6 - s * 1.6, 5.0 - s * 1.6, 0.4, 14), slate);
-      step.position.set(d.cx, cy + 0.2 + s * 0.4, d.cz);
-      this.group.add(step);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(5.2, 6.4, 1.2, 14), slate);
+    base.position.set(d.cx, cy - 0.25, d.cz);
+    const step = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 4.4, 0.5, 14), slate);
+    step.position.set(d.cx, cy + 0.55, d.cz);
+    this.group.add(base, step);
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2 + 0.3;
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5 + (i % 3) * 0.22, 0), slate);
+      const rx = d.cx + Math.cos(a) * 6.0, rz = d.cz + Math.sin(a) * 6.0;
+      rock.position.set(rx, terrainHeight(rx, rz) + 0.25, rz);
+      rock.rotation.set(i, i * 0.7, i * 0.4);
+      this.group.add(rock);
     }
   }
 
@@ -4713,13 +4788,14 @@ export class World {
     const hook = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 4.5, 4), toonMat({ color: 0x22262a }));
     hook.position.set(d.cx - 8, ty + 7, d.cz);
     this.group.add(cross, wheel, hook);
-    // spoil heaps: cones of what came out of the hole
+    // spoil heaps: cones of what came out of the hole — sun-dried tailings,
+    // parked on the pad's rim so they never swallow the vendors
     for (let i = 0; i < 4; i++) {
-      const a = rng() * Math.PI * 2, r = 8 + rng() * 12;
+      const a = rng() * Math.PI * 2, r = 14 + rng() * 7;
       const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
-      if (!this.clearOfAssets(x, z, 3)) continue;
+      if (!this.clearOfAssets(x, z, 3) || !this.flatEnough(x, z, 2.2, 1.2)) continue;
       const hh = 1.6 + rng() * 1.8;
-      const heap = new THREE.Mesh(new THREE.ConeGeometry(hh * 1.4, hh, 8), toonMat({ map: rockTexture('#4e3e2c') }));
+      const heap = new THREE.Mesh(new THREE.ConeGeometry(hh * 1.4, hh, 8), toonMat({ color: 0xb89a74, map: rockTexture('#8a7050') }));
       heap.position.set(x, terrainHeight(x, z) + hh * 0.45, z);
       this.group.add(heap);
       this.staticTargets.push(heap);
@@ -4746,10 +4822,20 @@ export class World {
   private buildThreadway(d: DistrictDef): void {
     const rng = mulberry32(919000 + Math.floor(d.cx));
     const iron = toonMat({ color: 0x4a4440, map: swatch('#423c38', 60) });
-    // a dead hauler parked mid-turn, forever
-    const hx = d.cx + (rng() - 0.5) * 8, hz = d.cz + (rng() - 0.5) * 8;
-    if (this.clearOfAssets(hx, hz, 4)) {
-      const hy = terrainHeight(hx, hz);
+    // a dead hauler parked mid-turn, forever — it hunts for level ground
+    // like a real driver would have
+    let hx = d.cx, hz = d.cz;
+    let parked = false;
+    for (let t = 0; t < 8 && !parked; t++) {
+      hx = d.cx + (rng() - 0.5) * 12;
+      hz = d.cz + (rng() - 0.5) * 12;
+      parked = this.clearOfAssets(hx, hz, 4) && this.flatEnough(hx, hz, 2.6, 0.9);
+    }
+    if (parked) {
+      // the chassis rests ON its wheels: use the highest wheel contact
+      const hy = Math.max(
+        terrainHeight(hx - 1.6, hz - 1.2), terrainHeight(hx - 1.6, hz + 1.2),
+        terrainHeight(hx + 1.6, hz - 1.2), terrainHeight(hx + 1.6, hz + 1.2));
       const bed = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.4, 2.2), toonMat({ color: 0xe8e4da, map: swatch('#d8d4ca', 60) }));
       bed.position.set(hx, hy + 1.1, hz);
       const cab = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 2.0), iron);
@@ -4768,7 +4854,7 @@ export class World {
     for (let i = 0; i < 3; i++) {
       const a = rng() * Math.PI * 2, r = 6 + rng() * (d.radius * 0.5);
       const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
-      if (!this.clearOfAssets(x, z, 2)) continue;
+      if (!this.clearOfAssets(x, z, 2) || !this.flatEnough(x, z, 1.6, 0.8)) continue;
       const y = terrainHeight(x, z);
       const cradle = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.5, 1.0), iron);
       cradle.position.set(x, y + 0.25, z);
@@ -4792,6 +4878,16 @@ export class World {
     marker.position.set(d.cx, my + 1.8, d.cz + 8);
     marker.rotation.y = rng() * Math.PI * 2;
     this.group.add(marker);
+    // the board stands on posts, not on air
+    for (const sd of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 2.4, 5), iron);
+      post.position.set(
+        d.cx + Math.cos(marker.rotation.y) * sd * 1.0,
+        my + 1.2,
+        d.cz + 8 - Math.sin(marker.rotation.y) * sd * 1.0);
+      this.group.add(post);
+    }
+    this.addCollider(d.cx, d.cz + 8, 1.2, 0.5, 2.6);
     for (let i = 0; i < 3; i++) {
       const a = rng() * Math.PI * 2, r = 8 + rng() * (d.radius * 0.6);
       this.boreBollard(d.cx + Math.cos(a) * r, d.cz + Math.sin(a) * r);
@@ -4833,21 +4929,36 @@ export class World {
     this.group.add(drill);
     this.staticTargets.push(drill);
     this.addCollider(d.cx, d.cz, 2.6, 2.6, 13);
-    // the gantry ring around the drill, half-collapsed
+    // the gantry ring around the drill: pale service steel that READS
+    // against the pit, with the two collapsed spans lying where they fell
+    const steel = toonMat({ color: 0xb8b0a4, map: swatch('#a89f92', 60) });
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2;
-      if (i === 2 || i === 5) continue; // the collapsed spans
       const x = d.cx + Math.cos(a) * 8, z = d.cz + Math.sin(a) * 8;
       const y = terrainHeight(x, z);
-      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.4, 4.5, 0.4), iron);
+      if (i === 2 || i === 5) {
+        // this bay came DOWN: the walkway span lies tilted in the dirt
+        const fallen = new THREE.Mesh(new THREE.BoxGeometry(8, 0.28, 1.1), steel);
+        fallen.position.set(d.cx + Math.cos(a + 0.3) * 9.5, terrainHeight(d.cx + Math.cos(a + 0.3) * 9.5, d.cz + Math.sin(a + 0.3) * 9.5) + 0.5, d.cz + Math.sin(a + 0.3) * 9.5);
+        fallen.rotation.set(0.16, -(a + 0.3) + Math.PI / 2, 0.3);
+        this.group.add(fallen);
+        this.staticTargets.push(fallen);
+        continue;
+      }
+      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.55, 4.5, 0.55), steel);
       strut.position.set(x, y + 2.25, z);
-      this.group.add(strut);
+      const brace = new THREE.Mesh(new THREE.BoxGeometry(0.16, 3.4, 0.16), steel);
+      brace.position.set(x * 0.98 + d.cx * 0.02, y + 2.1, z * 0.98 + d.cz * 0.02);
+      brace.rotation.z = 0.4;
+      this.group.add(strut, brace);
       this.staticTargets.push(strut);
-      this.addCollider(x, z, 0.5, 0.5, 4.5);
-      const span = new THREE.Mesh(new THREE.BoxGeometry(8 * Math.PI / 3, 0.25, 1.1), iron);
-      span.position.set(d.cx + Math.cos(a + Math.PI / 6) * 8, y + 4.4, d.cz + Math.sin(a + Math.PI / 6) * 8);
-      span.rotation.y = -(a + Math.PI / 6) + Math.PI / 2;
-      this.group.add(span);
+      this.addCollider(x, z, 0.6, 0.6, 4.5);
+      if (i !== 1 && i !== 4) { // spans skip the collapsed bays' far posts
+        const span = new THREE.Mesh(new THREE.BoxGeometry(8, 0.25, 1.1), steel);
+        span.position.set(d.cx + Math.cos(a + Math.PI / 6) * 8, y + 4.4, d.cz + Math.sin(a + Math.PI / 6) * 8);
+        span.rotation.y = -(a + Math.PI / 6) + Math.PI / 2;
+        this.group.add(span);
+      }
     }
     // abandoned kit: crates, a toppled light rig still burning
     for (let i = 0; i < 5; i++) {
@@ -4902,14 +5013,25 @@ export class World {
     const rng = mulberry32(929001);
     const canvasMat = toonMat({ color: 0x3a8a5a, map: swatch('#328050', 60) });
     // the tent: an open A-frame with a workbench under it
-    const tx = d.cx - 9, tz = d.cz - 2;
+    const tx = d.cx - 11, tz = d.cz + 4; // NW of the paddy so the canvas never shades the water
     const ty = terrainHeight(tx, tz);
+    const polesMat = toonMat({ color: 0x8a6a4a, map: swatch('#7a5c3e', 50) });
     for (const sd of [-1, 1]) {
       const panel = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.12, 3.2), canvasMat);
       panel.position.set(tx, ty + 2.5, tz + sd * 1.1);
       panel.rotation.x = sd * 0.72;
       this.group.add(panel);
+      // the tent stands on POLES, not on faith
+      for (const sx of [-1, 1]) {
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.9, 5), polesMat);
+        pole.position.set(tx + sx * 2.1, ty + 0.95, tz + sd * 2.1);
+        this.group.add(pole);
+      }
     }
+    const ridge = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 4.8, 5), polesMat);
+    ridge.rotation.z = Math.PI / 2;
+    ridge.position.set(tx, ty + 3.05, tz);
+    this.group.add(ridge);
     const bench = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.9, 0.9), toonMat({ color: 0x8a6a4a, map: swatch('#7a5c3e', 50) }));
     bench.position.set(tx, ty + 0.45, tz);
     this.group.add(bench);
@@ -4928,7 +5050,7 @@ export class World {
     }
     // the first paddy: a shallow flooded square behind a low stone lip,
     // set east of the walkway so arrivals don't wade through it
-    this.water(d.cx + 14, d.cz - 8, 6.5, { level: terrainHeight(d.cx + 14, d.cz - 8) + 0.18 });
+    this.water(d.cx - 16, d.cz - 10, 6.5, { level: terrainHeight(d.cx - 16, d.cz - 10) + 0.18 });
     for (let i = 0; i < 4; i++) this.terraceLantern(d.cx - 14 + i * 9, d.cz + 10, i % 2 === 0);
   }
 
@@ -4949,17 +5071,22 @@ export class World {
       this.group.add(seg);
       this.staticTargets.push(seg);
     }
-    // the fall: this step's water pouring over the lip
-    this.waterfall(d.cx + (rng() - 0.5) * 10, lipZ + 4.5, Math.PI, 5.5, 4);
-    // the paddy: flooded pool with planted rows marching across it
-    const px = d.cx + (rng() - 0.5) * 8, pz = d.cz - 4;
+    // the fall SPANS the actual step: top of the sheet at this terrace's
+    // level, splash pool on the terrace below — measured, not guessed
+    const fallX = d.cx + (rng() - 0.5) * 6;
+    const hTop = terrainHeight(fallX, lipZ - 3);
+    const baseZ = lipZ + 9;
+    const hBase = terrainHeight(fallX, baseZ);
+    this.waterfall(fallX, baseZ, Math.PI, Math.max(4, hTop - hBase + 1.2), 4);
+    // the paddy: flooded pool with planted rows, kept ON the flat plateau
+    const px = d.cx + (rng() - 0.5) * 6, pz = d.cz - 2;
     const level = terrainHeight(px, pz) + 0.2;
-    this.water(px, pz, 9, { level });
+    this.water(px, pz, 7.5, { level });
     for (let row = 0; row < 4; row++) {
       for (let i = 0; i < 7; i++) {
         const sx = px - 6 + i * 2.0 + (rng() - 0.5) * 0.4;
         const sz = pz - 4.5 + row * 3.0 + (rng() - 0.5) * 0.4;
-        if (Math.hypot(sx - px, sz - pz) > 8) continue;
+        if (Math.hypot(sx - px, sz - pz) > 6.6) continue;
         const shoot = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.7 + rng() * 0.3, 4), toonMat({ color: 0x4a9a3a }));
         shoot.position.set(sx, level + 0.3, sz);
         this.group.add(shoot);
@@ -4969,7 +5096,7 @@ export class World {
     for (let i = 0; i < 3; i++) {
       const a = rng() * Math.PI * 2, r = 10 + rng() * (d.radius * 0.5);
       const x = d.cx + Math.cos(a) * r, z = d.cz + Math.sin(a) * r;
-      if (!this.clearOfAssets(x, z, 1.4)) continue;
+      if (!this.clearOfAssets(x, z, 1.4) || !this.flatEnough(x, z, 1.2, 0.9)) continue;
       this.terraceLantern(x, z, rng() < 0.7);
     }
   }
@@ -4982,7 +5109,7 @@ export class World {
     const heads: THREE.Vector3[] = [];
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2 + 0.26;
-      const x = d.cx + Math.cos(a) * (d.radius - 8), z = d.cz + Math.sin(a) * (d.radius - 8);
+      const x = d.cx + Math.cos(a) * (d.radius - 14), z = d.cz + Math.sin(a) * (d.radius - 14);
       const y = terrainHeight(x, z);
       const g = new THREE.Group();
       const brow = new THREE.Mesh(new THREE.BoxGeometry(2.2, 3.4, 1.8), stone);

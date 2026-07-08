@@ -1719,7 +1719,7 @@ const VOLT_STILL: WorldDef = {
     { id: 'sign_st2', kind: 'sign', x: -40, z: -16, rot: 0.6, data: '← HANG FIELDS · BARROW LINE → · BREATHE SOFT' },
     { id: 'chest_st1', kind: 'chest', x: -80, z: -14, rot: 0.7 },
     { id: 'chest_st2', kind: 'chest', x: 76, z: -30, rot: -1.2 },
-    { id: 'chest_st3', kind: 'chest', x: 10, z: -70, rot: 2.0 },
+    { id: 'chest_st3', kind: 'chest', x: 8, z: -74, rot: 2.0 },
     { id: 'log_st1', kind: 'wirelog', x: -54, z: 4, data: 'log_still1' },
     { id: 'log_st2', kind: 'wirelog', x: 52, z: -8, data: 'log_still2' },
   ],
@@ -1768,7 +1768,12 @@ const AUGER: WorldDef = {
   terrain: {
     duneAmp: 0.7,
     roughAmp: 0.7,
-    roads: [],
+    // the thread itself is a graded haul ROAD — a visible dirt band winding
+    // down the spiral (subsampled so the height pass stays cheap)
+    roads: AUGER_SPIRAL.slice(0, -1).filter((_, i) => i % 2 === 0).map((pt, i, arr) => {
+      const next = AUGER_SPIRAL[Math.min(AUGER_SPIRAL.indexOf(pt) + 2, AUGER_SPIRAL.length - 1)];
+      return { x0: pt.x, z0: pt.z, x1: next.x, z1: next.z };
+    }),
     corridor: {
       pts: AUGER_SPIRAL,
       width: 10,
@@ -1944,11 +1949,11 @@ const VELDT_STAIRS: WorldDef = {
     { id: 'vg_ts', kind: 'vendor_gun', x: 14, z: 84, rot: -1.2 },
     { id: 'sign_ts1', kind: 'sign', x: 0, z: 76, rot: 0.1, data: 'THE TERRACES \u2014 FIVE STEPS UP. THE WATER COMES DOWN. TAKE TURNS.' },
     { id: 'sign_ts2', kind: 'sign', x: 8, z: 2, rot: -0.6, data: 'STEP THREE \u2014 NO SAMPLING THE SACRED PADDIES. (DR. CALLA. YES, YOU.)' },
-    { id: 'chest_ts1', kind: 'chest', x: -18, z: 42, rot: 0.8 },
-    { id: 'chest_ts2', kind: 'chest', x: 20, z: -2, rot: -1.0 },
-    { id: 'chest_ts3', kind: 'chest', x: -10, z: -70, rot: 2.2 },
-    { id: 'log_ts1', kind: 'wirelog', x: 16, z: 40, data: 'log_stairs1' },
-    { id: 'log_ts2', kind: 'wirelog', x: -14, z: -32, data: 'log_stairs2' },
+    { id: 'chest_ts1', kind: 'chest', x: -10, z: 54, rot: 0.8 },
+    { id: 'chest_ts2', kind: 'chest', x: 10, z: -2, rot: -1.0 },
+    { id: 'chest_ts3', kind: 'chest', x: -8, z: -68, rot: 2.2 },
+    { id: 'log_ts1', kind: 'wirelog', x: -12, z: 52, data: 'log_stairs1' },
+    { id: 'log_ts2', kind: 'wirelog', x: -10, z: -34, data: 'log_stairs2' },
   ],
   spawn: { x: 0, z: 96 },
   exits: [],
