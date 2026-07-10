@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { state, xpForLevel } from '../game/state';
 import { statsys } from '../game/stats';
+import { worldEvents } from '../game/worldevents';
 import { actionSkill } from '../game/actionskill';
 import type { Player } from '../game/player';
 import { PLAYER_CLASS } from '../data/classes';
@@ -186,7 +187,9 @@ export class Hud {
       scrap > 0 ? `⚙ SCRAP ×${scrap}` : '',
       salt > 0 ? `✚ SALT ×${salt}` : '',
     ].filter(Boolean);
-    e['hud-killskill'].textContent = chips.join('   ');
+    // the world-event banner rides above the stack chips, in its own color
+    const evt = worldEvents.bannerHTML();
+    e['hud-killskill'].innerHTML = (evt ? evt + (chips.length ? '<br>' : '') : '') + chips.join('   ');
 
     // dynamic crosshair spread + ADS reticle morphing
     const px = 6 + player.lastSpreadDeg * 9;

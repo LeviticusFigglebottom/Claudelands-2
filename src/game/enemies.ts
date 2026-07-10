@@ -16,6 +16,7 @@ import { debris } from './debris';
 import { tickStatuses, slowFactor, splashDamage, type Damageable, type StatusEffect } from './combat';
 import { projectiles } from './projectiles';
 import { state } from './state';
+import { worldEvents } from './worldevents';
 import { weightedPick, pick, chance } from '../util/rng';
 import { ELEMENTS } from '../data/elements';
 import { difficulty } from './settings';
@@ -1231,6 +1232,28 @@ export class EnemySpawner {
     }
   }
 
+  /** World-event guard wave: pull n enemies from whatever spawn table is
+   *  nearest the point, and ring them around it. Used by supply drops. */
+  spawnEventWave(center: THREE.Vector3, n: number): void {
+    const tables = WORLD.districts.filter((d) => d.spawnTable.length > 0);
+    if (!tables.length) return;
+    tables.sort((a, b) => Math.hypot(a.cx - center.x, a.cz - center.z) - Math.hypot(b.cx - center.x, b.cz - center.z));
+    const d = tables[0];
+    for (let i = 0; i < n; i++) {
+      const entry = weightedPick(Math.random as never, d.spawnTable.map((s) => ({ item: s, w: s.weight })));
+      const def = ENEMIES[entry.enemyId];
+      if (!def) continue;
+      for (let tries = 0; tries < 12; tries++) {
+        const a = (i / n) * Math.PI * 2 + Math.random() * 0.6;
+        const r = 8 + Math.random() * 6;
+        const pos = new THREE.Vector3(center.x + Math.cos(a) * r, 0, center.z + Math.sin(a) * r);
+        if (enemyHooks().spawnBlocked?.(pos.x, pos.z)) continue;
+        this.spawnOne(def, pos, i === 0 ? true : undefined, d.levelOffset);
+        break;
+      }
+    }
+  }
+
   update(dt: number): void {
     const playerPos = enemyHooks().playerPos();
 
@@ -1330,8 +1353,8 @@ export class EnemySpawner {
   spawnOne(def: EnemyDef, pos: THREE.Vector3, forceBadass?: boolean, levelOffset = 0): Enemy {
     const level = Math.max(1, state.level + levelOffset + Math.floor(Math.random() * 2) - 1);
     // rare roll first: a gilded walking jackpot, tougher than a badass and
-    // paid out accordingly (see main's onKilled)
-    const rare = forceBadass === undefined && Math.random() < 0.025;
+    // paid out accordingly (see main's onKilled). GILDED RUSH multiplies it.
+    const rare = forceBadass === undefined && Math.random() < 0.025 * worldEvents.rareMult;
     const badass = rare || (forceBadass ?? Math.random() < BADASS_CHANCE);
     const e = new Enemy(def, level, pos, badass, rare);
     this.scene.add(e.group);

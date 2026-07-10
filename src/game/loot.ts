@@ -19,6 +19,7 @@ import { swatch } from '../render/textures';
 import { chance, pick } from '../util/rng';
 import { CHEST_LINES } from '../data/flavor';
 import { difficulty } from './settings';
+import { worldEvents } from './worldevents';
 
 export type PickupKind = 'item' | 'cash' | 'ammo' | 'health' | 'quest';
 
@@ -54,11 +55,13 @@ export class LootSystem {
   /** Enemy died: roll the table for its tier. Trash drops lean; badasses
    *  and bosses are the ceremony (bosses also floor at rare+). */
   dropForTier(tier: number, level: number, pos: THREE.Vector3): void {
-    if (chance(Math.random as never, 0.85)) this.spawnCash(pos, Math.round((6 + level * 3) * (1 + tier) * statsys.mult('cashBonus')));
+    // world events juice the fountain: SCRAP STORM = more cash + more guns
+    const em = worldEvents.lootMult;
+    if (chance(Math.random as never, 0.85)) this.spawnCash(pos, Math.round((6 + level * 3) * (1 + tier) * statsys.mult('cashBonus') * em));
     if (chance(Math.random as never, 0.5)) this.spawnAmmo(pos);
     if (chance(Math.random as never, 0.12)) this.spawnHealth(pos);
 
-    const gunChance = [0.11, 0.32, 0.9, 1.0][Math.min(tier, 3)];
+    const gunChance = Math.min(1, [0.11, 0.32, 0.9, 1.0][Math.min(tier, 3)] * em);
     const rolls = tier >= 3 ? 3 : tier >= 2 ? 2 : 1;
     for (let i = 0; i < rolls; i++) {
       if (!chance(Math.random as never, gunChance)) continue;

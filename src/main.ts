@@ -67,6 +67,7 @@ import { remotePlayers, CLASS_TINT_CSS } from './net/remoteplayers';
 import { renderPartyPanel, updatePartyHud } from './ui/party';
 import { daynight } from './game/daynight';
 import { ambience } from './audio/ambience';
+import { worldEvents } from './game/worldevents';
 
 // ---------------------------------------------------------------- renderer
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
@@ -311,6 +312,7 @@ function switchMap(mapId: string, toX?: number, toZ?: number): void {
   faceArrival();
   storm.reset();
   daynight.onMapChanged();
+  worldEvents.onMapChanged();
   world.followSun(player.position);
   mapFadeT = 1; // fade-in from the reconstruction flash
   fx.burst(player.position.clone().add(new THREE.Vector3(0, 1, 0)), 0x54d4ff, 40, 6, 0.14, 1, 4);
@@ -992,6 +994,36 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') interact();
 });
 
+// ------------------------------------------------------- THE SECOND WIND
+const VELA_LINES = [
+  'first one’s on the house. the second one’s $40 and a bad decision.',
+  'you look like a legendary-or-nothing type. i respect it. i also charge extra.',
+  'the slots are rigged, sugar. rigged in FAVOR of the brave.',
+  'heard you cracked a supply pod. drinks taste better when Helix is crying.',
+  'careful out there. i hate breaking in new regulars.',
+  'that gun on your back? saw its cousin lose a bar fight. tragic.',
+  'money’s no good here. …i’m kidding. the money is EXACTLY good here.',
+];
+
+function crackSupplyPod(it: { data?: string; pos: THREE.Vector3 }): void {
+  if (!it.data) return;
+  world.consumeCargo(it.data);
+  world.removeInteractable(it as never);
+  const at = it.pos.clone();
+  audio.victory();
+  fx.burst(at.clone().add(new THREE.Vector3(0, 1, 0)), 0x54d4ff, 50, 7, 0.16, 1, 4);
+  feedText('<b style="color:#54d4ff">HELIX SUPPLY POD CRACKED</b> — help yourself.', '#54d4ff');
+  const lvl = state.level;
+  loot.spawnCash(at, Math.round((60 + lvl * 22)));
+  loot.spawnAmmo(at.clone().add(new THREE.Vector3(0.6, 0, -0.4)));
+  const rolls = 3 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < rolls; i++) {
+    const off = new THREE.Vector3((Math.random() - 0.5) * 2.4, 0.3, (Math.random() - 0.5) * 2.4);
+    const floor = i === rolls - 1 ? 'epic' : 'uncommon'; // last one's always juicy
+    loot.spawnItem(generateWeapon({ level: lvl, minRarity: floor }), at.clone().add(off), true);
+  }
+}
+
 // ------------------------------------------------------- SECOND WIND slots
 let slotBusy = false;
 function spinSlot(it: { pos: THREE.Vector3 }): void {
@@ -1083,6 +1115,15 @@ function interact(): void {
         return;
       }
       case 'slot': spinSlot(it); return;
+      case 'barkeep': {
+        feedText(`<b>MISS VELA</b> — ${pick(Math.random as never, VELA_LINES)}`, '#ff8ab0');
+        audio.uiClick();
+        return;
+      }
+      case 'supplypod': {
+        crackSupplyPod(it);
+        return;
+      }
       case 'fast_travel': setPanel('fasttravel'); return;
       case 'ship': {
         const q14 = questSystem.quests.find((q) => q.def.id === 'q14_signal');
@@ -1269,6 +1310,16 @@ function stepSim(dt: number): void {
   daynight.update(dt);
   world.applyAtmosphere(scene, daynight.lightLevel, daynight.dusk, daynight.weatherI);
   ambience.update(dt);
+  // the world-event director: dynamic loot surges, rare rushes, supply drops
+  worldEvents.update(dt, {
+    active: !player.paused && !cinema.active && !vehicles.driving && !race.active,
+    combat: WORLD.districts.some((d) => d.spawnTable.length > 0) && !WORLD.id.endsWith('_gp') && WORLD.id !== 'crucible',
+    playerPos: player.position,
+    spawnPod: (pos) => world.spawnSupplyPod(pos.x, pos.z),
+    spawnGuards: (pos, n) => enemySpawner.spawnEventWave(pos, n),
+    groundHeight: (x, z) => world.groundHeight(x, z),
+    feed: (html, color) => feedText(html, color),
+  });
   if (vehicles.driving && vehicles.buggy) {
     // the buggy IS the player while driving: physics owns position + camera
     vehicles.update(dt, { resolveCollision: (p, r) => world.resolveCollision(p, r), arenaHalf: WORLD.size / 2 }, race.frozen);
@@ -1656,7 +1707,7 @@ canvas.addEventListener('click', () => {
   openDialogueDebug: (giver: QuestGiver) => { dialogueGiver = giver; setPanel('dialogue'); },
   get mapId() { return activeMap().id; },
   maps: MAPS,
-  vehicles, race, respawnCine, statsys, bus, daynight,
+  vehicles, race, respawnCine, statsys, bus, daynight, worldEvents,
   get pitActive() { return pitActive; },
   enterBuggyDebug: () => {
     if (!vehicles.buggy) return false;

@@ -26,7 +26,7 @@ interface AABB {
 }
 
 export interface Interactable {
-  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'ship' | 'wreck' | 'racer' | 'pit' | 'cargo' | 'slot';
+  kind: 'chest' | 'vendor_gun' | 'vendor_med' | 'fast_travel' | 'wirelog' | 'npc' | 'ship' | 'wreck' | 'racer' | 'pit' | 'cargo' | 'slot' | 'barkeep' | 'supplypod';
   pos: THREE.Vector3;
   label: string;
   data?: string;
@@ -1689,26 +1689,36 @@ export class World {
     const darkWood = toonMat({ color: 0x4a3428, map: swatch('#3e2c20', 50) });
     const brass = toonMat({ color: 0xb08a3c, map: swatch('#9a7834', 70) });
 
-    // floor slab + back/side walls + roof; the west face stays open
-    const slab = new THREE.Mesh(new THREE.BoxGeometry(14, 0.5, 11), darkWood);
-    slab.position.set(bx, by + 0.25, bz);
+    // floor: a THIN plank slab flush with the ground — the player walks at
+    // terrain height, so a raised slab left them wading knee-deep in the boards
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(14, 0.14, 11), darkWood);
+    slab.position.set(bx, by + 0.02, bz);
+    slab.receiveShadow = true;
     this.group.add(slab);
+    // back/side walls + roof; the west face stays open. Colliders run the FULL
+    // wall span with no corner gaps, and the counter/props all block too.
     const back = new THREE.Mesh(new THREE.BoxGeometry(0.4, 4.4, 11), wood);
-    back.position.set(bx + 6.8, by + 2.2, bz);
+    back.position.set(bx + 6.9, by + 2.2, bz);
     this.group.add(back);
     this.staticTargets.push(back);
-    this.addCollider(bx + 6.8, bz, 0.5, 5.5, 4.4);
+    this.addCollider(bx + 6.9, bz, 0.4, 5.7, 4.4);
     for (const side of [-1, 1]) {
       const wall = new THREE.Mesh(new THREE.BoxGeometry(14, 4.4, 0.4), wood);
-      wall.position.set(bx, by + 2.2, bz + side * 5.3);
+      wall.position.set(bx, by + 2.2, bz + side * 5.4);
       this.group.add(wall);
       this.staticTargets.push(wall);
-      this.addCollider(bx, bz + side * 5.3, 7, 0.5, 4.4);
+      this.addCollider(bx, bz + side * 5.4, 7.1, 0.4, 4.4);
     }
     const roof = new THREE.Mesh(new THREE.BoxGeometry(15, 0.4, 12), darkWood);
     roof.position.set(bx, by + 4.6, bz);
     roof.castShadow = true;
     this.group.add(roof);
+    // ceiling beams for depth
+    for (let b = -1; b <= 1; b++) {
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(14, 0.3, 0.4), darkWood);
+      beam.position.set(bx, by + 4.3, bz + b * 3.4);
+      this.group.add(beam);
+    }
 
     // neon: the name in warm pink over the open face, plus a winking heart
     const sign = World.textSign(9, 2.2, { lines: ['THE SECOND WIND'], style: 'ad', bg: '#241418', fg: '#ff5a86', accent: '#ffd23c' });
@@ -1783,6 +1793,94 @@ export class World {
     this.group.add(vela);
     this.registerNpcRig(vela, head, armR);
     this.addCollider(bx + 5.6, bz + 1.2, 0.4, 0.4, 2.1);
+    // talk to the barkeep: a rotating one-liner, no quest strings attached
+    this.interactables.push({ kind: 'barkeep', pos: new THREE.Vector3(bx + 4.4, by + 1, bz + 1.2), label: 'CHAT WITH MISS VELA', data: 'vela' });
+
+    // glasses + a peanut bowl on the bar top
+    for (let i = 0; i < 4; i++) {
+      const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.14, 6), glowMat(0xffd88a, 0.4));
+      glass.position.set(bx + 4.4, by + 1.6, bz - 3 + i * 1.7);
+      this.group.add(glass);
+    }
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.1, 0.1, 10), toonMat({ color: 0x3a2e26 }));
+    bowl.position.set(bx + 4.4, by + 1.58, bz + 3.4);
+    this.group.add(bowl);
+
+    // a passed-out regular, face down on the near table — living proof the
+    // drinks are strong and the night was long
+    const drunk = new THREE.Group();
+    const dTorso = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.4, 0.7), toonMat({ color: 0x4a6a5a, map: swatch('#3e5a4c', 50) }));
+    dTorso.position.set(0, 1.28, 0);
+    dTorso.rotation.x = 1.15; // slumped forward onto the table
+    const dHead = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 10), toonMat({ color: 0xc89868 }));
+    dHead.position.set(0, 1.2, -0.45);
+    const dHat = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.1, 8), toonMat({ color: 0x6a4a30 }));
+    dHat.position.set(0.06, 1.34, -0.5);
+    drunk.add(dTorso, dHead, dHat);
+    drunk.position.set(bx - 2, by, bz - 2.6);
+    drunk.rotation.y = -0.6;
+    drunk.traverse((o) => (o.castShadow = true));
+    this.group.add(drunk);
+    // a snore Z drifting up (blinker so it winks)
+    const zzz = new THREE.Mesh(new THREE.SphereGeometry(0.06, 5, 5), glowMat(0x9ad8ff, 0.7));
+    zzz.position.set(bx - 2, by + 2, bz - 2.9);
+    zzz.name = 'blinker';
+    this.group.add(zzz);
+
+    // JUKEBOX in the front-left corner: glowing arch, spinning-record glint
+    const jx = bx - 5.4, jz = bz - 4.2;
+    const juke = new THREE.Mesh(new THREE.BoxGeometry(1.3, 2, 0.8), toonMat({ color: 0x7a3a5a, map: swatch('#6a3050', 60) }));
+    juke.position.set(jx, by + 1, jz);
+    this.group.add(juke);
+    this.staticTargets.push(juke);
+    const arch = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.04, 6, 16, Math.PI), toonMat({ color: 0xffd23c }));
+    arch.position.set(jx, by + 2, jz + 0.42);
+    this.group.add(arch);
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.6),
+      new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['NOW', 'PLAYING'], style: 'ad', bg: '#241018', fg: '#ff5a86', accent: '#54d4ff' }, 0.9 / 0.6) }));
+    face.position.set(jx, by + 1.3, jz + 0.42);
+    this.group.add(face);
+    for (const c of [0xff5a86, 0x54d4ff, 0xffd23c]) {
+      const note = new THREE.Mesh(new THREE.SphereGeometry(0.045, 5, 5), glowMat(c, 0.55));
+      note.position.set(jx + (Math.random() - 0.5), by + 2.4 + Math.random() * 0.4, jz + 0.3);
+      note.name = 'blinker';
+      this.group.add(note);
+    }
+    this.addCollider(jx, jz, 0.75, 0.5, 2);
+
+    // dartboard on the near side wall, with a couple of stuck darts
+    const dbx = bx - 3, dbz = bz - 5.1;
+    const board = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.08, 16), toonMat({ color: 0xe8e0d0 }));
+    board.rotation.x = Math.PI / 2;
+    board.position.set(dbx, by + 2.4, dbz + 0.25);
+    this.group.add(board);
+    const bull = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.09, 12), toonMat({ color: 0xb43a2a }));
+    bull.rotation.x = Math.PI / 2;
+    bull.position.set(dbx, by + 2.4, dbz + 0.27);
+    this.group.add(bull);
+    for (let i = 0; i < 3; i++) {
+      const dart = new THREE.Mesh(new THREE.ConeGeometry(0.02, 0.16, 5), toonMat({ color: [0x54d4ff, 0xffd23c, 0x7dff2a][i] }));
+      dart.position.set(dbx + (Math.random() - 0.5) * 0.5, by + 2.4 + (Math.random() - 0.5) * 0.5, dbz + 0.34);
+      dart.rotation.x = Math.PI / 2;
+      this.group.add(dart);
+    }
+
+    // TODAY'S POUR chalkboard by the entrance
+    const chalk = World.textSign(2.4, 1.6, { lines: ['TODAY’S POUR', 'ROCKET FUEL', '— $12 —'], style: 'graffiti', bg: '#1a2420', fg: '#e8e0c8', accent: '#7dff2a' });
+    chalk.position.set(bx - 6.6, by + 2, bz - 3);
+    chalk.rotation.y = -Math.PI / 2 + 0.15;
+    this.group.add(chalk);
+
+    // interior pennant bunting strung corner to corner under the beams
+    const pcolors = [0xff5a86, 0x54d4ff, 0xffd23c, 0x7dff2a];
+    for (let i = 1; i < 10; i++) {
+      const t = i / 10;
+      const flag = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.34, 3),
+        new THREE.MeshToonMaterial({ color: pcolors[i % 4], side: THREE.DoubleSide }));
+      flag.position.set(bx - 5.5 + t * 11, by + 3.9 - Math.sin(t * Math.PI) * 0.35, bz - 3.6);
+      flag.rotation.x = Math.PI;
+      this.group.add(flag);
+    }
 
     // the slot machines: SUCKER'S ROW — three cabinets, three interactables
     for (let i = 0; i < 3; i++) {
@@ -3128,6 +3226,49 @@ export class World {
     const ci = this.colliders.indexOf(c.box);
     if (ci >= 0) this.colliders.splice(ci, 1);
     this.cargoCrates.delete(id);
+  }
+
+  // ---- world-event supply pods (Helix drops) reuse the cargo bookkeeping ----
+  private podCount = 0;
+  /** A Helix supply pod slams down at (x,z): scorched skirt, strobing
+   *  beacon, a smoke column, and a crackable interactable. Returns its id. */
+  spawnSupplyPod(x: number, z: number): string {
+    const y = terrainHeight(x, z);
+    const id = `pod_${this.podCount++}`;
+    const g = new THREE.Group();
+    const steel = toonMat({ color: 0x9aa4ac, map: swatch('#8a949c', 70) });
+    const hazard = toonMat({ color: 0xffd23c, map: swatch('#e0b820', 60) });
+    // the pod: a stubby capsule half-buried, hazard band round the middle
+    const shell = new THREE.Mesh(new THREE.CapsuleGeometry(0.9, 0.9, 4, 12), steel);
+    shell.position.y = 1.1;
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 0.92, 0.4, 14), hazard);
+    band.position.y = 1.1;
+    const fin = new THREE.Group();
+    for (let i = 0; i < 4; i++) {
+      const f = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.8, 0.5), steel);
+      f.position.set(Math.cos(i * Math.PI / 2) * 0.9, 0.5, Math.sin(i * Math.PI / 2) * 0.9);
+      f.lookAt(0, 0.5, 0);
+      fin.add(f);
+    }
+    const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), glowMat(0xffd23c, 1));
+    beacon.position.y = 2.3;
+    beacon.name = 'blinker';
+    g.add(shell, band, fin, beacon);
+    // scorched skirt where it landed
+    const skirt = new THREE.Mesh(new THREE.CircleGeometry(2.2, 20), toonMat({ color: 0x241c18 }));
+    skirt.rotation.x = -Math.PI / 2;
+    skirt.position.y = 0.05;
+    g.add(skirt);
+    g.position.set(x, y, z);
+    g.traverse((o) => { o.castShadow = true; });
+    this.group.add(g);
+    this.staticTargets.push(g);
+    this.addCollider(x, z, 1, 1, 2.4);
+    this.cargoCrates.set(id, { group: g, box: this.colliders[this.colliders.length - 1] });
+    this.interactables.push({ kind: 'supplypod', pos: new THREE.Vector3(x, y, z), label: 'CRACK THE HELIX SUPPLY POD', data: id, range: 4 });
+    // ambient smoke column
+    this.barrelFlames.push(new THREE.Vector3(x, y + 1.4, z));
+    return id;
   }
 
   /** The Crucible's street entrance (Brasshaven) / exit tunnel (pit side):
