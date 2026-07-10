@@ -8,7 +8,7 @@
 import * as THREE from 'three';
 import { WORLD, terrainHeight, terrainNormal, meshHeight, roadFactor, districtAt, galeAt, TERRAIN_SEGS, TERRAIN_SPAN_FACTOR, type WorldPoi, type DistrictDef } from '../data/world';
 import { toonMat, glowMat, flatMat } from '../render/toon';
-import { groundTexture, rockTexture, corrugatedTexture, posterTexture, swatch, cloudTexture, waterTexture, fallTexture } from '../render/textures';
+import { groundTexture, rockTexture, corrugatedTexture, posterTexture, swatch, cloudTexture, waterTexture, fallTexture, slotStripTexture } from '../render/textures';
 import { buildScrapship } from '../render/scrapship';
 import { POSTERS, GRAFFITI } from '../data/flavor';
 import { LootChest } from './loot';
@@ -23,6 +23,21 @@ interface AABB {
   minX: number; maxX: number; minZ: number; maxZ: number;
   /** Vertical extent (absolute Y) — bullets/arcs clear a crate but not a wall. */
   bottom: number; top: number;
+}
+
+/** SLOT symbols in reel order (index -> meaning); see slotStripTexture. */
+export const SLOT_SYMBOLS = { SEVEN: 0, STAR: 1, BAR: 2, HEART: 3, NOTE: 4, SKULL: 5 } as const;
+
+interface SlotReel {
+  tex: THREE.Texture;
+  offset: number;      // current V scroll (0..1)
+  spinT: number;       // > 0 while free-spinning
+  settling: boolean;
+  settleT: number;
+  settleFrom: number;
+  settleTo: number;
+  settleTarget: number; // V the reel lands on
+  vy: number;
 }
 
 export interface Interactable {
@@ -99,6 +114,8 @@ export class World {
   private npcRigs: { group: THREE.Group; head: THREE.Object3D | null; armR: THREE.Object3D | null; baseY: number; phase: number; fidgetT: number; fidgetK: number }[] = [];
   private hemi!: THREE.HemisphereLight;
   private raycaster = new THREE.Raycaster();
+  // slot-machine reels: keyed by machine id, animated in update()
+  private slotMachines = new Map<string, SlotReel[]>();
 
   constructor(scene: THREE.Scene) {
     // GP maps race down the corridor floor: the centerline is a keep-out
@@ -1772,27 +1789,82 @@ export class World {
       this.group.add(bulb);
     }
 
-    // Miss Vela, keeping the counter and every secret in Brasshaven
+    // MISS VELA — the Second Wind's proprietor, cut from the sultry-casino-
+    // barkeep cloth: hourglass corset, top hat with a playing card, a
+    // two-tone updo, choker with a heart pendant, long gloves, beauty mark.
     const vela = new THREE.Group();
-    const dress = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.46, 1.15, 8), toonMat({ color: 0x8a2440, map: swatch('#761e36', 60) }));
-    dress.position.y = 0.58;
-    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.34, 0.55, 8), toonMat({ color: 0xb03050 }));
-    torso.position.y = 1.42;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 10, 10), toonMat({ color: 0xd8a878 }));
-    head.position.y = 1.95;
-    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.27, 10, 10), toonMat({ color: 0x2a1a2e }));
-    hair.position.set(0, 2.05, 0.06);
-    hair.scale.set(1, 0.85, 1);
-    const armR = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.7, 6), toonMat({ color: 0xb03050 }));
-    armR.position.set(-0.35, 1.45, 0);
-    armR.rotation.z = 0.6;
-    vela.add(dress, torso, head, hair, armR);
+    const skin = toonMat({ color: 0xd8a878 });
+    const wine = toonMat({ color: 0x7a1836, map: swatch('#6a1430', 60) });
+    const corsetMat = toonMat({ color: 0x2a0f1a, map: swatch('#220c16', 50) });
+    const gloveMat = toonMat({ color: 0x2a0f1a });
+    const hairDark = toonMat({ color: 0x2a1622 });
+    const hairStreak = toonMat({ color: 0xc0286a });
+    const gold = toonMat({ color: 0xd8b44a });
+    // flared skirt = hips; cinched waist; a fuller bust — the hourglass
+    const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.56, 1.0, 10), wine);
+    skirt.position.y = 0.52;
+    const waist = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.32, 10), corsetMat);
+    waist.position.y = 1.05;
+    const bust = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.26, 0.34, 10), wine);
+    bust.position.y = 1.35;
+    // corset lacing: pale cross-ties up the front
+    for (let l = 0; l < 4; l++) {
+      const tie = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.02, 0.02), toonMat({ color: 0xe8d8b0 }));
+      tie.position.set(0, 1.0 + l * 0.09, 0.24);
+      tie.rotation.z = (l % 2 ? 1 : -1) * 0.5;
+      vela.add(tie);
+    }
+    // shoulders + long opera gloves in a confident stance: right hand on hip
+    const shoulders = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.28, 0.16, 10), skin);
+    shoulders.position.y = 1.56;
+    const armR = new THREE.Group(); // hand-on-hip (the idle-rig fidget arm)
+    const upperR = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.42, 6), gloveMat);
+    upperR.position.set(-0.34, 1.42, 0.02); upperR.rotation.z = -0.9;
+    const foreR = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.06, 0.36, 6), gloveMat);
+    foreR.position.set(-0.24, 1.18, 0.04); foreR.rotation.z = 0.3;
+    armR.add(upperR, foreR);
+    const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.075, 0.72, 6), gloveMat);
+    armL.position.set(0.34, 1.28, 0.04); armL.rotation.z = 0.25;
+    // neck + choker + heart pendant
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.18, 8), skin);
+    neck.position.y = 1.68;
+    const choker = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.02, 6, 14), gold);
+    choker.position.y = 1.7; choker.rotation.x = Math.PI / 2;
+    const pendant = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), glowMat(0xff3a6a, 0.9));
+    pendant.position.set(0, 1.62, 0.11); pendant.scale.set(1, 0.9, 0.6);
+    // head + lips + beauty mark
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.23, 12, 12), skin);
+    head.position.y = 1.92;
+    const lips = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), toonMat({ color: 0xc0284a }));
+    lips.position.set(0, 1.85, 0.21); lips.scale.set(1.4, 0.6, 0.6);
+    const mole = new THREE.Mesh(new THREE.SphereGeometry(0.014, 5, 5), toonMat({ color: 0x2a1a14 }));
+    mole.position.set(0.11, 1.89, 0.19);
+    // two-tone swept updo + a bun
+    const hairBack = new THREE.Mesh(new THREE.SphereGeometry(0.27, 12, 12), hairDark);
+    hairBack.position.set(0, 1.98, -0.03); hairBack.scale.set(1, 1.05, 1);
+    const bun = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 10), hairDark);
+    bun.position.set(0, 2.22, -0.16);
+    const streak = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.34, 0.12), hairStreak);
+    streak.position.set(0.19, 1.96, 0.08); streak.rotation.z = 0.25;
+    // top hat: brim disc, stack, red band, and a playing card tucked in
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.04, 14), corsetMat);
+    brim.position.y = 2.24;
+    const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.36, 12), corsetMat);
+    stack.position.y = 2.44;
+    const hatband = new THREE.Mesh(new THREE.CylinderGeometry(0.245, 0.245, 0.08, 12), toonMat({ color: 0x9a1838 }));
+    hatband.position.y = 2.3;
+    const card = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.19, 0.02), toonMat({ color: 0xf0e8e0 }));
+    card.position.set(0.16, 2.36, 0.18); card.rotation.set(0.2, 0, 0.3);
+    const pip = new THREE.Mesh(new THREE.SphereGeometry(0.02, 5, 5), toonMat({ color: 0xc0284a }));
+    pip.position.set(0.16, 2.36, 0.2); pip.scale.set(1, 1.3, 0.5);
+    vela.add(skirt, waist, bust, shoulders, armR, armL, neck, choker, pendant, head, lips, mole,
+      hairBack, bun, streak, brim, stack, hatband, card, pip);
     vela.position.set(bx + 5.6, by + 0.5, bz + 1.2);
     vela.rotation.y = -Math.PI / 2;
     vela.traverse((o) => (o.castShadow = true));
     this.group.add(vela);
     this.registerNpcRig(vela, head, armR);
-    this.addCollider(bx + 5.6, bz + 1.2, 0.4, 0.4, 2.1);
+    this.addCollider(bx + 5.6, bz + 1.2, 0.45, 0.45, 2.4);
     // talk to the barkeep: a rotating one-liner, no quest strings attached
     this.interactables.push({ kind: 'barkeep', pos: new THREE.Vector3(bx + 4.4, by + 1, bz + 1.2), label: 'CHAT WITH MISS VELA', data: 'vela' });
 
@@ -1889,11 +1961,33 @@ export class World {
       cab.position.set(mx, by + 1.55, mz);
       this.group.add(cab);
       this.staticTargets.push(cab);
-      const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.5),
-        new THREE.MeshBasicMaterial({ map: posterTexture({ lines: ['7 ★ 7'], style: 'ad', bg: '#181214', fg: '#ffd23c', accent: '#ff5a86' }, 0.8 / 0.5) }));
-      screen.position.set(mx, by + 2.1, mz - 0.42);
-      screen.rotation.y = Math.PI;
-      this.group.add(screen);
+      // the reel window: a dark bezel + 3 scrolling symbol reels behind glass
+      const bezel = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.62, 0.06), toonMat({ color: 0x161016 }));
+      bezel.position.set(mx, by + 2.06, mz - 0.4);
+      this.group.add(bezel);
+      const reels: SlotReel[] = [];
+      for (let r = 0; r < 3; r++) {
+        const rx = mx - 0.28 + r * 0.28;
+        const strip = slotStripTexture();
+        strip.offset.y = [0, 0.5, 0.83][r]; // start on different symbols
+        const face = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.5),
+          new THREE.MeshBasicMaterial({ map: strip }));
+        face.position.set(rx, by + 2.06, mz - 0.43);
+        face.rotation.y = Math.PI;
+        this.group.add(face);
+        // thin divider between reels
+        if (r < 2) {
+          const div = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.5, 0.02), toonMat({ color: 0x0c080c }));
+          div.position.set(rx + 0.14, by + 2.06, mz - 0.44);
+          this.group.add(div);
+        }
+        reels.push({ tex: strip, offset: strip.offset.y, spinT: 0, settling: false, settleT: 0, settleFrom: 0, settleTo: 0, settleTarget: 0, vy: 0 });
+      }
+      this.slotMachines.set(`slot_${i}`, reels);
+      // "pay line" glow across the middle
+      const payline = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.02, 0.02), glowMat(0xff5a86, 0.7));
+      payline.position.set(mx, by + 2.06, mz - 0.44);
+      this.group.add(payline);
       const lever = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.6, 6), brass);
       lever.position.set(mx + 0.62, by + 2.15, mz);
       lever.rotation.z = 0.35;
@@ -3214,6 +3308,53 @@ export class World {
     this.addCollider(poi.x, poi.z, 0.85, 0.7, 1.4);
     this.cargoCrates.set(poi.id, { group: g, box: this.colliders[this.colliders.length - 1] });
     this.interactables.push({ kind: 'cargo', pos: new THREE.Vector3(poi.x, y, poi.z), label: 'RECOVER EXPEDITION CRATE (HELIX-9)', data: poi.id, range: 3.8 });
+  }
+
+  /** Kick a slot machine's three reels into a staggered spin that settles on
+   *  the given symbol indices (see SLOT_SYMBOLS). Returns the total spin time
+   *  so the caller can reveal the payout the moment the reels land. */
+  spinSlotReels(id: string, symbols: [number, number, number]): number {
+    const reels = this.slotMachines.get(id);
+    if (!reels) return 0;
+    reels.forEach((r, i) => {
+      r.vy = 7.5 + Math.random() * 1.5;
+      r.spinT = 0.9 + i * 0.5;   // reels stop left-to-right
+      r.settling = false;
+      r.settleTarget = symbols[i] / 6;
+    });
+    return 0.9 + 2 * 0.5 + 0.55; // last reel's spin + settle
+  }
+
+  private advanceSlots(dt: number): void {
+    for (const reels of this.slotMachines.values()) {
+      for (const r of reels) {
+        if (r.spinT > 0) {
+          r.spinT -= dt;
+          r.offset = (r.offset + r.vy * dt) % 1;
+          r.tex.offset.y = r.offset;
+          if (r.spinT <= 0) {
+            r.settling = true;
+            r.settleT = 0;
+            r.settleFrom = r.offset;
+            // land on the target a rotation or two ahead for a clean spin-down
+            let to = r.settleTarget;
+            while (to < r.settleFrom + 1.4) to += 1;
+            r.settleTo = to;
+          }
+        } else if (r.settling) {
+          r.settleT += dt;
+          const t = Math.min(1, r.settleT / 0.55);
+          const e = 1 - Math.pow(1 - t, 3); // easeOutCubic
+          r.offset = r.settleFrom + (r.settleTo - r.settleFrom) * e;
+          r.tex.offset.y = r.offset % 1;
+          if (t >= 1) {
+            r.settling = false;
+            r.offset = r.settleTarget % 1;
+            r.tex.offset.y = r.offset;
+          }
+        }
+      }
+    }
   }
 
   /** Haul a crate away: mesh, collider, and target all leave the world. */
@@ -6683,6 +6824,7 @@ export class World {
 
     // blinking beacons + drifting clouds + quest marker bob
     this.blinkT += dt;
+    if (this.slotMachines.size) this.advanceSlots(dt);
     const blinkOn = Math.sin(this.blinkT * 4) > 0;
     this.group.traverse((o) => {
       if (o.name === 'cloud') o.position.x += dt * 0.8;

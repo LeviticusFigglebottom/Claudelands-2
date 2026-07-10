@@ -286,6 +286,40 @@ export function fallTexture(): THREE.CanvasTexture {
   return t;
 }
 
+/** Slot-reel strip: 6 casino symbols stacked, wrapped so a reel window can
+ *  scroll it. Order (V from bottom): 7, ★, BAR, ❤, ♪, ☠ — see SLOT_SYMBOLS. */
+export function slotStripTexture(): THREE.CanvasTexture {
+  const band = 96;
+  const [c, ctx] = canvas(96, band * 6);
+  // canvas y=0 is TOP; WebGL V=0 is BOTTOM. Draw index 0 at the BOTTOM band.
+  const glyphs = [
+    { s: '7', fg: '#ffd23c', bg: '#241018' },
+    { s: '★', fg: '#54d4ff', bg: '#101c24' },
+    { s: 'BAR', fg: '#f0e8d8', bg: '#1a1a1a' },
+    { s: '❤', fg: '#ff5a86', bg: '#241018' },
+    { s: '♪', fg: '#7dff2a', bg: '#14200f' },
+    { s: '☠', fg: '#9aa4ac', bg: '#181818' },
+  ];
+  glyphs.forEach((g, i) => {
+    const yTop = band * (5 - i); // index 0 lands on the bottom band
+    ctx.fillStyle = g.bg;
+    ctx.fillRect(0, yTop, 96, band);
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(2, yTop + 2, 92, band - 4);
+    ctx.fillStyle = g.fg;
+    ctx.font = `bold ${g.s.length > 1 ? 40 : 66}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(g.s, 48, yTop + band / 2 + 2);
+  });
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(1, 1 / 6); // the window shows exactly one symbol
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 // ---------------------------------------------------------------------------
 // Signage / graffiti / posters — original world flavor, drawn at runtime.
 

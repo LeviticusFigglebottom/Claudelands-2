@@ -1025,8 +1025,9 @@ function crackSupplyPod(it: { data?: string; pos: THREE.Vector3 }): void {
 }
 
 // ------------------------------------------------------- SECOND WIND slots
+// SLOT symbols mirror world.ts SLOT_SYMBOLS: 0=7 1=★ 2=BAR 3=❤ 4=♪ 5=☠
 let slotBusy = false;
-function spinSlot(it: { pos: THREE.Vector3 }): void {
+function spinSlot(it: { pos: THREE.Vector3; data?: string }): void {
   if (slotBusy) return;
   const cost = Math.max(25, Math.round((30 + state.level * 16) / 5) * 5);
   if (state.money < cost) {
@@ -1039,40 +1040,60 @@ function spinSlot(it: { pos: THREE.Vector3 }): void {
   audio.uiClick();
   feedText(`<b>SECOND WIND SLOTS</b> — $${cost} down. Reels spinning…`, '#ffd23c');
   const dropAt = it.pos.clone().add(player.position.clone().sub(it.pos).setY(0).normalize().multiplyScalar(1.1));
-  let ticks = 0;
-  const reel = setInterval(() => { audio.uiClick(); if (++ticks >= 3) clearInterval(reel); }, 260);
-  setTimeout(() => {
-    slotBusy = false;
-    const r = Math.random();
-    const lvl = state.level;
-    if (r < 0.40) {
-      feedText('The machine eats it. Rigged? Rigged.', '#8a949e');
-      audio.dryFire();
-    } else if (r < 0.62) {
+  const lvl = state.level;
+
+  // roll the outcome UP FRONT, so the reels can land on the matching symbols
+  const r = Math.random();
+  let symbols: [number, number, number];
+  let reveal: () => void;
+  if (r < 0.40) {
+    // a loss: two matching, third a near-miss (never a full triple)
+    const a = 1 + Math.floor(Math.random() * 4);
+    symbols = [a, a, 5];
+    reveal = () => { feedText('The machine eats it. Rigged? Rigged.', '#8a949e'); audio.dryFire(); };
+  } else if (r < 0.62) {
+    symbols = [3, 3, 3]; // ❤❤❤ cash
+    reveal = () => {
       const winnings = Math.round(cost * (1.5 + Math.random() * 2.5));
       loot.spawnCash(dropAt, winnings);
-      feedText(`<b>CLINK CLINK</b> — $${winnings} pays out!`, '#7dff2a');
-      audio.cash();
-    } else if (r < 0.74) {
-      loot.spawnAmmo(dropAt);
-      loot.spawnAmmo(dropAt.clone().add(new THREE.Vector3(0.4, 0, 0.3)));
-      feedText('AMMO SHOWER. The practical jackpot.', '#c8d24a');
-      audio.pickup();
-    } else if (r < 0.90) {
+      feedText(`<b>CLINK CLINK</b> — $${winnings} pays out!`, '#7dff2a'); audio.cash();
+    };
+  } else if (r < 0.74) {
+    symbols = [4, 4, 4]; // ♪♪♪ ammo
+    reveal = () => {
+      loot.spawnAmmo(dropAt); loot.spawnAmmo(dropAt.clone().add(new THREE.Vector3(0.4, 0, 0.3)));
+      feedText('AMMO SHOWER. The practical jackpot.', '#c8d24a'); audio.pickup();
+    };
+  } else if (r < 0.90) {
+    symbols = [2, 2, 2]; // BAR BAR BAR gun
+    reveal = () => {
       loot.spawnItem(generateWeapon({ level: lvl, minRarity: 'uncommon' }), dropAt, true);
-      feedText('A gun slides out of the tray. Vela winks.', '#54d4ff');
-      audio.cash();
-    } else if (r < 0.975) {
+      feedText('A gun slides out of the tray. Vela winks.', '#54d4ff'); audio.cash();
+    };
+  } else if (r < 0.975) {
+    symbols = [1, 1, 1]; // ★★★ epic
+    reveal = () => {
       loot.spawnItem(generateWeapon({ level: lvl, minRarity: 'epic' }), dropAt, true);
-      feedText('<b>BIG HIT!</b> Something purple in the tray!', '#c06bff');
-      audio.victory();
-    } else {
+      feedText('<b>BIG HIT!</b> Something purple in the tray!', '#c06bff'); audio.victory();
+    };
+  } else {
+    symbols = [0, 0, 0]; // 777 JACKPOT
+    reveal = () => {
       loot.spawnItem(generateWeapon({ level: lvl, rarityId: 'legendary' }), dropAt, true);
-      feedText('<b style="color:#ffa21f">★ JACKPOT ★ THE HOUSE WEEPS ★</b>', '#ffa21f');
-      audio.victory();
+      feedText('<b style="color:#ffa21f">★ JACKPOT ★ THE HOUSE WEEPS ★</b>', '#ffa21f'); audio.victory();
       fx.burst(dropAt.clone().add(new THREE.Vector3(0, 1, 0)), 0xffd23c, 60, 8, 0.16, 1.2, 5);
-    }
-  }, 1000);
+    };
+  }
+
+  const spinDur = it.data ? world.spinSlotReels(it.data, symbols) : 2.4;
+  // reel ticks while it spins
+  let ticks = 0;
+  const reel = setInterval(() => { audio.uiClick(); if (++ticks >= 5) clearInterval(reel); }, spinDur * 1000 / 6);
+  setTimeout(() => {
+    clearInterval(reel);
+    slotBusy = false;
+    reveal();
+  }, spinDur * 1000 + 120);
 }
 
 function interact(): void {
